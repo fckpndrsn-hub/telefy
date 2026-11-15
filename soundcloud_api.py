@@ -9,8 +9,8 @@ import threading
 import time
 import unicodedata
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode, quote, urlsplit
-from urllib.request import Request, urlopen
+from urllib.parse import urlencode, quote, urlsplit, urljoin, parse_qs
+from urllib.request import Request, urlopen, HTTPRedirectHandler, build_opener
 
 DATA = Path(os.environ.get('TELEFY_PRIVATE_DIR', str(Path(__file__).resolve().parent.parent / '.telefy-private')))
 LOCK = threading.RLock()
@@ -181,15 +181,53 @@ def resolve_track(data):
     if not ranked: raise APIError(404,'matching_track_not_found')
     return max(ranked,key=lambda pair:pair[0])[1]
 
+class NoStreamRedirect(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+def resolve_stream_url(url):
+    # /streams returns an authenticated API hop, not necessarily a signed CDN URL.
+    # SoundCloud recommends following that hop with an authenticated HEAD request.
+    # Never forward OAuth credentials to a CDN or expose them to the browser.
+    opener=build_opener(NoStreamRedirect())
+    token=None
+    for _ in range(5):
+        parsed=urlsplit(url);host=parsed.hostname or ''
+        if parsed.scheme!='https' or parsed.username or parsed.password or parsed.port not in (None,443):
+            raise APIError(502,'unexpected_stream_host')
+        if host!='api.soundcloud.com':
+            if not any(host.endswith(suffix) for suffix in ('.sndcdn.com','.soundcloud.cloud','.cloudfront.net')):
+                raise APIError(502,'unexpected_stream_host')
+            if {'access_token','oauth_token','client_secret'} & set(parse_qs(parsed.query)):
+                raise APIError(502,'unexpected_stream_credentials')
+            return url
+        if not parsed.path.startswith('/tracks/') or '/streams/' not in parsed.path:
+            raise APIError(502,'unexpected_stream_path')
+        if token is None:token=access_token()
+        request=Request(url,method='HEAD',headers={'Authorization':'OAuth '+token,'Accept':'*/*'})
+        try:
+            with opener.open(request,timeout=18):
+                raise APIError(502,'stream_redirect_missing')
+        except HTTPError as error:
+            if error.code in (301,302,303,307,308):
+                location=error.headers.get('Location')
+                error.close()
+                if not location:raise APIError(502,'stream_redirect_missing')
+                url=urljoin(url,location)
+                continue
+            if error.code==401:
+                error.close();token=access_token(invalidate=token);continue
+            status=error.code;error.close()
+            raise APIError(status if status in (403,404,429) else 502,'stream_authorization_failed') from None
+        except (URLError,TimeoutError,OSError):raise APIError(502,'stream_resolution_failed') from None
+    raise APIError(502,'stream_redirect_limit')
+
 def stream(data):
     track=resolve_track(data)
     streams=api('/tracks/'+quote(track['soundcloudUrn'],safe='')+'/streams')
     url=safe_url(streams.get('hls_aac_160_url') or streams.get('hls_mp3_128_url'))
     if not url: raise APIError(403,'full_stream_unavailable')
-    # Return only the signed CDN URL, never OAuth credentials or API response dumps.
-    host=urlsplit(url).hostname or ''
-    if not (host.endswith('.sndcdn.com') or host.endswith('.soundcloud.com') or host.endswith('.cloudfront.net')):
-        raise APIError(502,'unexpected_stream_host')
+    url=resolve_stream_url(url)
     return {'url':url,'protocol':'hls','track':track}
 
 if __name__=='__main__':
