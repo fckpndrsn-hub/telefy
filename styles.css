@@ -912,3 +912,51 @@ nav.liquid-glass { isolation:isolate; gap:0; }
 .flow-mode-pattern span:nth-child(3) { left:57%; top:-10px; transform:rotate(-18deg); }
 .flow-mode-pattern span:nth-child(4) { right:26%; bottom:-8px; transform:rotate(20deg); }
 .flow-mode-pattern span:nth-child(5) { right:-5px; top:8px; transform:rotate(25deg); width:46px; height:46px; }
+
+/* Safari: explicitly clip oversized filtered layers to the visible artwork. */
+.flow-discovery { border-radius:22px; corner-shape:round; overflow:hidden; isolation:isolate; clip-path:inset(0 round 22px); -webkit-mask-image:linear-gradient(#fff,#fff); }
+#full-cover { border-radius:48px; corner-shape:round; overflow:hidden; isolation:isolate; clip-path:inset(0 round 48px); -webkit-mask-image:linear-gradient(#fff,#fff); }
+#full-lyrics-box { border-radius:inherit; corner-shape:round; overflow:hidden; clip-path:inset(0 round 48px); }
+#mini-player-card { border-radius:26px; corner-shape:round; overflow:hidden; isolation:isolate; clip-path:inset(0 round 26px); -webkit-mask-image:linear-gradient(#fff,#fff); }
+#mini-progress-bar { top:auto; bottom:0; height:2px; border-radius:2px; background:#2AABEE; opacity:.65; transition:none; }
+/* Reserve actual Telegram and system UI insets, without forcing fullscreen. */
+:root { --telefy-device-top:0px; --telefy-device-bottom:0px; --telefy-controls-top:0px; --telefy-controls-bottom:0px;
+ --telefy-safe-top:calc(max(env(safe-area-inset-top,0px),var(--telefy-device-top)) + var(--telefy-controls-top));
+ --telefy-safe-bottom:calc(max(env(safe-area-inset-bottom,0px),var(--telefy-device-bottom)) + var(--telefy-controls-bottom)); }
+#app-shell { padding-top:var(--telefy-safe-top); padding-bottom:calc(170px + var(--telefy-safe-bottom)); min-height:var(--telefy-viewport,100svh); }
+#app-shell > header { top:var(--telefy-safe-top); }
+#mini-player { bottom:calc(86px + var(--telefy-safe-bottom)); }
+nav.liquid-glass { bottom:calc(12px + var(--telefy-safe-bottom)); }
+#full-player-modal { padding-top:calc(16px + var(--telefy-safe-top)); padding-bottom:calc(24px + var(--telefy-safe-bottom)); }
+html.in-telegram .tg-sheet-modal { padding-top:var(--telefy-safe-top); padding-bottom:var(--telefy-safe-bottom); }
+
+/* State styles take precedence over Tailwind hover colors and text utilities. */
+#btn-full-repeat[aria-pressed], #btn-full-lyrics[aria-pressed], #btn-full-shuffle[aria-pressed] {
+ position:relative; color:var(--text-muted); background-color:var(--bg-card);
+ transition:color .18s ease;
+}
+#btn-full-repeat[aria-pressed="true"], #btn-full-lyrics[aria-pressed="true"], #btn-full-shuffle[aria-pressed="true"] {
+ color:#2AABEE;
+}
+#btn-full-repeat[aria-pressed] > *, #btn-full-lyrics[aria-pressed] > *, #btn-full-shuffle[aria-pressed] > * { color:inherit; }
+#btn-full-repeat[aria-pressed="true"]::after, #btn-full-shuffle[aria-pressed="true"]::after {
+ content:''; position:absolute; bottom:4px; left:50%; width:3px; height:3px; border-radius:50%; background:currentColor; transform:translateX(-50%);
+}
+@media (prefers-reduced-motion:reduce) {
+ #btn-full-repeat[aria-pressed], #btn-full-lyrics[aria-pressed], #btn-full-shuffle[aria-pressed] { transition:none; }
+}
+
+/* Fullscreen: keep the centered brand in its original top row. Place actions
+   and the document flow below Telegram's close/menu controls. */
+html.telefy-fullscreen #app-shell { padding-top:0; }
+html.telefy-fullscreen #app-shell > header {
+ top:0; grid-template-rows:36px 36px;
+ row-gap:max(8px,calc(max(var(--telefy-safe-top),88px) - 40px));
+ padding-top:12px; padding-bottom:10px;
+ padding-left:max(14px,var(--telefy-device-left,0px),var(--telefy-controls-left,0px));
+ padding-right:max(14px,var(--telefy-device-right,0px),var(--telefy-controls-right,0px));
+}
+html.telefy-fullscreen #app-shell > header > :nth-child(2) { grid-column:2; grid-row:1; }
+html.telefy-fullscreen #app-shell > header > :first-child { grid-column:1; grid-row:2; }
+html.telefy-fullscreen #app-shell > header > :last-child { grid-column:3; grid-row:2; }
+html.in-telegram, html.in-telegram body { overscroll-behavior-y:none; }

@@ -584,7 +584,9 @@
       if (!state.hapticEnabled) return;
       try {
         if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.HapticFeedback) {
-          window.Telegram.WebApp.HapticFeedback.impactOccurred(style);
+          const feedback=window.Telegram.WebApp.HapticFeedback;
+          if(style==='selection' && typeof feedback.selectionChanged==='function')feedback.selectionChanged();
+          else feedback.impactOccurred(style==='selection'?'light':style);
         } else if (navigator && typeof navigator.vibrate === 'function') {
           navigator.vibrate(style === 'heavy' ? 22 : style === 'light' ? 8 : 14);
         }
@@ -1084,7 +1086,7 @@
           }
         });
       }
-      triggerHaptic('light');
+      if (prevTab !== tab) triggerHaptic('selection');
       const idx = Math.max(0, order.indexOf(tab));
       const lens = document.getElementById('tab-active-lens');
       if (lens) lens.style.transform = `translateX(${idx * 100}%)`;
