@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: telefy-soundcloud-bridge
+    runtime: docker
+    plan: free
+    region: frankfurt
+    healthCheckPath: /health
+    envVars:
+      - key: SOUNDCLOUD_CLIENT_ID
+        sync: false
+      - key: SOUNDCLOUD_CLIENT_SECRET
+        sync: false
+      - key: TELEFY_BRIDGE_TOKEN
+        generateValue: true

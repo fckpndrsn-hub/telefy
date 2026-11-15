@@ -1,0 +1,210 @@
+"""Official SoundCloud public API. Credentials and tokens never enter frontend code."""
+import base64
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import threading
+import time
+import unicodedata
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode, quote, urlsplit
+from urllib.request import Request, urlopen
+
+DATA = Path(os.environ.get('TELEFY_PRIVATE_DIR', str(Path(__file__).resolve().parent.parent / '.telefy-private')))
+LOCK = threading.RLock()
+SEARCH_CACHE = {}
+
+class APIError(Exception):
+    def __init__(self, status, code):
+        self.status, self.code = status, code
+
+def read_json(path):
+    try: return json.loads(path.read_text(encoding='utf-8'))
+    except (OSError, ValueError): return {}
+
+def write_json(path, data):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    ignore = path.parent / '.gitignore'
+    if not ignore.exists(): ignore.write_text('*\n!.gitignore\n', encoding='utf-8')
+    temp = path.with_suffix('.tmp')
+    temp.write_text(json.dumps(data), encoding='utf-8')
+    temp.replace(path)
+
+def settings():
+    saved = read_json(DATA / 'soundcloud.json')
+    return {'client_id':os.environ.get('SOUNDCLOUD_CLIENT_ID') or saved.get('client_id',''),
+            'client_secret':os.environ.get('SOUNDCLOUD_CLIENT_SECRET') or saved.get('client_secret','')}
+
+def configured():
+    cfg = settings()
+    return bool(cfg['client_id'] and cfg['client_secret'])
+
+def json_request(url, data=None, headers=None):
+    request = Request(url, data=data, headers={'Accept':'application/json; charset=utf-8', **(headers or {})})
+    try:
+        with urlopen(request, timeout=18) as response: return json.load(response)
+    except HTTPError as error:
+        if error.code == 403:
+            body = error.read(6000).decode('utf-8','replace')
+            if 'block access from your country' in body.lower():
+                raise APIError(403,'soundcloud_geo_blocked') from None
+        code = {400:'soundcloud_bad_request',401:'soundcloud_auth_failed',403:'soundcloud_forbidden',404:'soundcloud_not_found',429:'soundcloud_rate_limited'}.get(error.code,'soundcloud_unavailable')
+        raise APIError(error.code if error.code in (400,401,403,404,429) else 502, code) from None
+    except (URLError, TimeoutError, ValueError, OSError):
+        raise APIError(502, 'soundcloud_unavailable') from None
+
+def access_token(invalidate=None, credentials=None):
+    with LOCK:
+        cfg = credentials or settings()
+        if not cfg['client_id'] or not cfg['client_secret']:
+            raise APIError(503,'soundcloud_not_configured')
+        fingerprint = hashlib.sha256((cfg['client_id']+'\0'+cfg['client_secret']).encode()).hexdigest()
+        path = DATA / 'soundcloud-session.json'
+        session = read_json(path)
+        if session.get('fingerprint') != fingerprint: session = {}
+        if session.get('access_token') and session.get('expires_at',0) > time.time()+60 and session['access_token'] != invalidate:
+            return session['access_token']
+        if session.get('refresh_token'):
+            try:
+                token = json_request('https://secure.soundcloud.com/oauth/token',
+                    urlencode({'grant_type':'refresh_token', **cfg,'refresh_token':session['refresh_token']}).encode(),
+                    {'Content-Type':'application/x-www-form-urlencoded'})
+            except APIError as error:
+                if error.status not in (400,401,403): raise
+                token = None
+        else: token = None
+        if token is None:
+            basic = base64.b64encode((cfg['client_id']+':'+cfg['client_secret']).encode()).decode()
+            token = json_request('https://secure.soundcloud.com/oauth/token',
+                b'grant_type=client_credentials', {'Content-Type':'application/x-www-form-urlencoded','Authorization':'Basic '+basic})
+        if not token.get('access_token'): raise APIError(502,'soundcloud_invalid_token')
+        write_json(path, {'fingerprint':fingerprint, **token,'expires_at':time.time()+int(token.get('expires_in',3600))})
+        return token['access_token']
+
+def connect(data):
+    if not isinstance(data,dict): raise APIError(400,'invalid_credentials')
+    cfg = {k:str(data.get(k) or '').strip() for k in ('client_id','client_secret')}
+    if not all(cfg.values()) or any(len(v)>1024 for v in cfg.values()):
+        raise APIError(400,'invalid_credentials')
+    with LOCK:
+        access_token(credentials=cfg)
+        write_json(DATA/'soundcloud.json',cfg)
+        SEARCH_CACHE.clear()
+    try:
+        search('PHARAOH',0,1)
+        return {'connected':True,'catalogAvailable':True}
+    except APIError as error:
+        return {'connected':True,'catalogAvailable':False,'catalogError':error.code}
+
+def api(path, params=None):
+    token = access_token()
+    url = 'https://api.soundcloud.com'+path+('?' + urlencode(params) if params else '')
+    try: return json_request(url, headers={'Authorization':'OAuth '+token})
+    except APIError as error:
+        if error.status != 401: raise
+        token = access_token(invalidate=token)
+        return json_request(url, headers={'Authorization':'OAuth '+token})
+
+def track_urn(value):
+    value = str(value or '')
+    if value.isdigit(): value = 'soundcloud:tracks:'+value
+    if not re.fullmatch(r'soundcloud:tracks:\d+',value): raise APIError(400,'invalid_track')
+    return value
+
+def safe_url(value):
+    return value if isinstance(value,str) and value.startswith('https://') else ''
+
+def normalize_track(raw):
+    urn = track_urn(raw.get('urn') or raw.get('id'))
+    user = raw.get('user') or {}
+    title = str(raw.get('title') or '').strip()
+    artist = str(raw.get('metadata_artist') or '').strip()
+    if not artist:
+        parts = re.split(r'\s+[-–—]\s+',title,maxsplit=1)
+        if len(parts)==2 and 0<len(parts[0])<80: artist,title = parts
+        else: artist = str(user.get('username') or 'Unknown artist')
+    artwork = safe_url(raw.get('artwork_url'))
+    if artwork: artwork = artwork.replace('-large.','-t500x500.')
+    return {'soundcloudUrn':urn, 'soundcloudUrl':safe_url(raw.get('permalink_url')),
+            'uploader':str(user.get('username') or ''), 'uploaderUrl':safe_url(user.get('permalink_url')),
+            'title':title, 'artist':artist, 'primaryArtist':artist, 'album':'',
+            'duration':max(1, float(raw.get('duration') or 0)/1000), 'coverImg':artwork or safe_url(user.get('avatar_url')),
+            'artistImg':safe_url(user.get('avatar_url')), 'genre':str(raw.get('genre') or ''),
+            'uncensored':False, 'mood':'all', 'releaseYear':str(raw.get('release_year') or ''),
+            'access':raw.get('access'), 'source':'soundcloud'}
+
+def search(query, offset=0, limit=25):
+    query = str(query or '').strip()[:180]
+    try: offset=max(0,min(int(offset),10000)); limit=max(1,min(int(limit),50))
+    except (TypeError,ValueError): raise APIError(400,'invalid_pagination')
+    if len(query)<2: raise APIError(400,'query_too_short')
+    key=(query.casefold(),offset,limit)
+    with LOCK:
+        cached=SEARCH_CACHE.get(key)
+        if cached and cached[0]>time.time(): return cached[1]
+    raw=api('/tracks',{'q':query,'access':'playable','limit':limit,'offset':offset,'linked_partitioning':'true'})
+    items=raw.get('collection',[]) if isinstance(raw,dict) else raw
+    collection=[]
+    for item in items:
+        if item.get('access')!='playable' or not item.get('streamable'): continue
+        try: collection.append(normalize_track(item))
+        except APIError: continue
+    result={'tracks':collection,'nextOffset':offset+limit,'hasMore':bool(raw.get('next_href')) if isinstance(raw,dict) else len(items)==limit}
+    with LOCK:
+        if len(SEARCH_CACHE)>200: SEARCH_CACHE.clear()
+        SEARCH_CACHE[key]=(time.time()+60,result)
+    return result
+
+def tokens(value):
+    return set(re.findall(r'[a-zа-яё0-9]+',unicodedata.normalize('NFKC',str(value)).casefold()))
+
+def resolve_track(data):
+    if not isinstance(data,dict): raise APIError(400,'invalid_track')
+    if data.get('soundcloudUrn'):
+        raw=api('/tracks/'+quote(track_urn(data['soundcloudUrn']),safe=''))
+        if raw.get('access')!='playable' or not raw.get('streamable'): raise APIError(403,'track_not_playable')
+        return normalize_track(raw)
+    title=tokens(data.get('title','')); artist=tokens(data.get('artist',''))
+    if not title or not artist: raise APIError(400,'invalid_track')
+    candidates=search(str(data.get('artist',''))+' '+str(data.get('title','')),0,25)['tracks']
+    ranked=[]
+    for candidate in candidates:
+        ct=tokens(candidate['title']); ca=tokens(candidate['artist'])|ct|tokens(candidate['uploader'])
+        title_score=len(title & ct)/len(title); artist_score=len(artist & ca)/len(artist)
+        variants={'remix','slowed','sped','speed','instrumental','cover','live','karaoke'}
+        wrong_variant=bool((ct-title)&variants)
+        score=.75*title_score+.25*artist_score
+        if title_score>=.75 and artist_score>=.5 and score>=.8 and not wrong_variant:
+            ranked.append((score,candidate))
+    if not ranked: raise APIError(404,'matching_track_not_found')
+    return max(ranked,key=lambda pair:pair[0])[1]
+
+def stream(data):
+    track=resolve_track(data)
+    streams=api('/tracks/'+quote(track['soundcloudUrn'],safe='')+'/streams')
+    url=safe_url(streams.get('hls_aac_160_url') or streams.get('hls_mp3_128_url'))
+    if not url: raise APIError(403,'full_stream_unavailable')
+    # Return only the signed CDN URL, never OAuth credentials or API response dumps.
+    host=urlsplit(url).hostname or ''
+    if not (host.endswith('.sndcdn.com') or host.endswith('.soundcloud.com') or host.endswith('.cloudfront.net')):
+        raise APIError(502,'unexpected_stream_host')
+    return {'url':url,'protocol':'hls','track':track}
+
+if __name__=='__main__':
+    import getpass
+    print('SoundCloud setup. Keys are stored outside the website and ZIP.')
+    client_id=getpass.getpass('Client ID (hidden, empty to cancel): ').strip()
+    if not client_id: raise SystemExit(0)
+    secret=getpass.getpass('Client Secret (hidden): ').strip()
+    if not secret: raise SystemExit('Cancelled')
+    os.environ['SOUNDCLOUD_CLIENT_ID']=client_id
+    os.environ['SOUNDCLOUD_CLIENT_SECRET']=secret
+    try:
+        access_token()
+        write_json(DATA/'soundcloud.json',{'client_id':client_id,'client_secret':secret})
+        print('SUCCESS: SoundCloud accepted the credentials. Refresh Telefy.')
+    except APIError as error:
+        print('Connection not confirmed: '+error.code+'. Keys were not saved.')
+        raise SystemExit(1)
