@@ -194,12 +194,12 @@
       100% { opacity: 0; }
     }
     @keyframes tgSheetIn {
-      0% { opacity: 0; transform: translate3d(0, 100%, 0) scale(0.985); }
+      0% { opacity: 1; transform: translate3d(0, 100%, 0); }
       100% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
     }
     @keyframes tgSheetOut {
       0% { opacity: 1; transform: translate3d(0, var(--sheet-drag-y, 0px), 0) scale(1); }
-      100% { opacity: 0; transform: translate3d(0, 100%, 0) scale(0.985); }
+      100% { opacity: 1; transform: translate3d(0, 100%, 0); }
     }
     .tg-sheet-modal {
       will-change: opacity;
@@ -229,7 +229,7 @@
     #mytelefy-upsell-modal.is-open .col-sheet-panel,
     #create-playlist-modal.is-open .col-sheet-panel,
     #album-modal.is-open .col-sheet-panel {
-      animation: tgSheetIn 0.36s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+      animation: tgSheetIn 0.42s cubic-bezier(0.32, 0.72, 0, 1) forwards;
     }
     .tg-sheet-modal.is-closing,
     #profile-bg-modal.is-closing,
@@ -240,7 +240,7 @@
     #mytelefy-upsell-modal.is-closing,
     #create-playlist-modal.is-closing,
     #album-modal.is-closing {
-      animation: tgBackdropOut 0.24s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+      animation: tgBackdropOut 0.30s cubic-bezier(0.32, 0.72, 0, 1) forwards;
       pointer-events: none;
     }
     .tg-sheet-modal.is-closing .col-sheet-panel,
@@ -252,7 +252,7 @@
     #mytelefy-upsell-modal.is-closing .col-sheet-panel,
     #create-playlist-modal.is-closing .col-sheet-panel,
     #album-modal.is-closing .col-sheet-panel {
-      animation: tgSheetOut 0.26s cubic-bezier(0.32, 0.72, 0, 1) forwards;
+      animation: tgSheetOut 0.28s cubic-bezier(0.32, 0.72, 0, 1) forwards;
     }
 
     @keyframes coverShimmer {
@@ -946,17 +946,27 @@ html.in-telegram .tg-sheet-modal { padding-top:var(--telefy-safe-top); padding-b
  #btn-full-repeat[aria-pressed], #btn-full-lyrics[aria-pressed], #btn-full-shuffle[aria-pressed] { transition:none; }
 }
 
-/* Fullscreen: keep the centered brand in its original top row. Place actions
-   and the document flow below Telegram's close/menu controls. */
+
+/* A single action row below Telegram's fullscreen controls. */
 html.telefy-fullscreen #app-shell { padding-top:0; }
 html.telefy-fullscreen #app-shell > header {
- top:0; grid-template-rows:36px 36px;
- row-gap:max(8px,calc(max(var(--telefy-safe-top),88px) - 40px));
- padding-top:12px; padding-bottom:10px;
+ top:0; padding-top:calc(max(var(--telefy-safe-top),88px) + 8px);
  padding-left:max(14px,var(--telefy-device-left,0px),var(--telefy-controls-left,0px));
  padding-right:max(14px,var(--telefy-device-right,0px),var(--telefy-controls-right,0px));
 }
-html.telefy-fullscreen #app-shell > header > :nth-child(2) { grid-column:2; grid-row:1; }
-html.telefy-fullscreen #app-shell > header > :first-child { grid-column:1; grid-row:2; }
-html.telefy-fullscreen #app-shell > header > :last-child { grid-column:3; grid-row:2; }
+/* Background reaches the bottom edge; only content avoids the home indicator. */
+html.in-telegram .tg-sheet-modal { padding-bottom:0; }
+:is(#settings-modal,#profile-bg-modal,#library-modal,#collection-modal,#create-playlist-modal,#in-dev-modal,#artist-modal,#album-modal,#mytelefy-upsell-modal) > .col-sheet-panel {
+ border-bottom-left-radius:0; border-bottom-right-radius:0; corner-shape:round;
+ padding-bottom:calc(20px + var(--telefy-safe-bottom));
+ max-height:calc(100dvh - var(--telefy-safe-top) - 12px);
+ -webkit-overflow-scrolling:touch; overscroll-behavior-y:contain;
+}
+.tg-sheet-modal .overflow-y-auto { -webkit-overflow-scrolling:touch; overscroll-behavior-y:contain; }
+.sheet-drag-handle { touch-action:none; user-select:none; -webkit-user-select:none; }
 html.in-telegram, html.in-telegram body { overscroll-behavior-y:none; }
+html.telefy-sheet-open, html.telefy-sheet-open body { overflow:hidden; }
+@media (prefers-reduced-motion:reduce) {
+ .tg-sheet-modal.is-open, .tg-sheet-modal.is-closing,
+ .tg-sheet-modal.is-open .col-sheet-panel, .tg-sheet-modal.is-closing .col-sheet-panel { animation-duration:.01ms !important; }
+}

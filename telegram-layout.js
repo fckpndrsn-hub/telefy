@@ -10,8 +10,16 @@
     const root=document.documentElement;
     root.classList.add('in-telegram');
     const px=value=>Math.max(0,Math.min(200,Number(value)||0))+'px';
+    let exitingFullscreen=false;
     function sync(){
-      root.classList.toggle('telefy-fullscreen',tg.isFullscreen===true);
+      const android=tg.platform==='android';
+      root.classList.toggle('telefy-android',android);
+      root.classList.toggle('telefy-fullscreen',!android && tg.isFullscreen===true);
+      // Android uses Telegram's ordinary expanded viewport, not fullscreen.
+      if(android && tg.isFullscreen && !exitingFullscreen){
+        try{if(tg.exitFullscreen && (!tg.isVersionAtLeast || tg.isVersionAtLeast('8.0'))){exitingFullscreen=true;tg.exitFullscreen();}}catch(_){exitingFullscreen=false;}
+      }
+      if(!tg.isFullscreen)exitingFullscreen=false;
       // Native content scrolling stays available. Telegram retains its own
       // header close/minimize gestures; only competing content swipes stop.
       try{
@@ -31,6 +39,7 @@
     for(const event of ['safeAreaChanged','contentSafeAreaChanged','viewportChanged','fullscreenChanged'])tg.onEvent?.(event,sync);
     new MutationObserver(sync).observe(document.body,{attributes:true,attributeFilter:['class']});
     tg.ready?.();sync();
+    if(tg.platform==='android'){try{tg.expand?.();}catch(_){}}
   }
   if(window.Telegram?.WebApp){initialize();return;}
   const existing=document.querySelector('script[src^="https://telegram.org/js/telegram-web-app.js"]');

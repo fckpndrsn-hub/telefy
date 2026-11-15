@@ -647,7 +647,7 @@
         m.style.transition = '';
         m._closeTimer = null;
         if (typeof onClosed === 'function') onClosed();
-      }, 250);
+      }, 320);
     }
 
     function updateSettingsUI() {
@@ -4328,59 +4328,53 @@
       'album-modal': closeAlbumModal
     };
 
-    document.querySelectorAll('.tg-sheet-modal').forEach(modal => {
-      const panel = modal.querySelector('.col-sheet-panel');
-      if (!panel) return;
-      let startY = 0;
-      let currentDy = 0;
-      let dragging = false;
 
-      panel.addEventListener('pointerdown', (e) => {
-        if (e.target.closest('input, textarea, select')) return;
-        const scroller = e.target.closest('.overflow-y-auto');
-        if (scroller && scroller !== panel && scroller.scrollTop > 0) return;
-        if (panel.scrollTop > 0) return;
-        const rect = panel.getBoundingClientRect();
-        if (e.clientY - rect.top > 68) return;
-        startY = e.clientY;
-        currentDy = 0;
-        dragging = true;
-      });
-
-      window.addEventListener('pointermove', (e) => {
-        if (!dragging) return;
-        const dy = Math.max(0, e.clientY - startY);
-        if (dy <= 4) return;
-        currentDy = dy;
-        panel.style.animation = 'none';
-        panel.style.transition = 'none';
-        panel.style.transform = `translate3d(0, ${dy.toFixed(1)}px, 0)`;
-        panel.style.setProperty('--sheet-drag-y', `${dy.toFixed(1)}px`);
-      });
-
-      const endSheetDrag = () => {
-        if (!dragging) return;
-        dragging = false;
-        if (currentDy > 72) {
-          panel.style.animation = '';
-          const closer = modalCloseMap[modal.id];
-          if (closer) closer();
-          else closeSheetModal(modal);
-        } else if (currentDy > 0) {
-          panel.style.transition = 'transform 0.28s cubic-bezier(0.32, 0.72, 0, 1)';
-          panel.style.transform = 'translate3d(0, 0, 0)';
-          panel.style.setProperty('--sheet-drag-y', '0px');
-          setTimeout(() => {
-            panel.style.transition = '';
-            panel.style.animation = '';
-          }, 280);
-        }
-        currentDy = 0;
+    const sheetModals=[...document.querySelectorAll('.tg-sheet-modal')];
+    const syncSheetScrollLock=()=>document.documentElement.classList.toggle('telefy-sheet-open',sheetModals.some(m=>!m.classList.contains('hidden')));
+    const sheetObserver=new MutationObserver(syncSheetScrollLock);
+    sheetModals.forEach(modal=>{
+      sheetObserver.observe(modal,{attributes:true,attributeFilter:['class']});
+      const panel=modal.querySelector('.col-sheet-panel');if(!panel)return;
+      const handle=panel.firstElementChild;
+      if(handle)handle.classList.add('sheet-drag-handle');
+      let gesture=null,settleTimer;
+      const settle=()=>{
+        panel.style.transition='transform .34s cubic-bezier(.22,1,.36,1)';
+        panel.style.transform='translate3d(0,0,0)';panel.style.setProperty('--sheet-drag-y','0px');
+        clearTimeout(settleTimer);settleTimer=setTimeout(()=>{panel.style.transition='';panel.style.animation='';},350);
       };
-
-      window.addEventListener('pointerup', endSheetDrag);
-      window.addEventListener('pointercancel', endSheetDrag);
+      panel.addEventListener('pointerdown',e=>{
+        if(gesture||!e.isPrimary||e.button!==0||e.target.closest('button,a,input,textarea,select'))return;
+        // Only the handle owns the gesture; lists retain native momentum scrolling.
+        if(!handle?.contains(e.target))return;
+        clearTimeout(settleTimer);
+        gesture={id:e.pointerId,y:e.clientY,lastY:e.clientY,time:performance.now(),speed:0,dy:0};
+        panel.style.animation='none';panel.style.transition='none';
+        panel.setPointerCapture?.(e.pointerId);
+      });
+      panel.addEventListener('pointermove',e=>{
+        if(!gesture||gesture.id!==e.pointerId)return;
+        const now=performance.now();gesture.speed=(e.clientY-gesture.lastY)/Math.max(1,now-gesture.time);
+        gesture.lastY=e.clientY;gesture.time=now;
+        gesture.dy=Math.max(0,e.clientY-gesture.y);
+        panel.style.transform=`translate3d(0,${gesture.dy}px,0)`;
+        panel.style.setProperty('--sheet-drag-y',gesture.dy+'px');
+      });
+      const finish=(e,cancelled=false)=>{
+        if(!gesture||gesture.id!==e.pointerId)return;
+        const g=gesture;gesture=null;
+        if(panel.hasPointerCapture?.(e.pointerId))panel.releasePointerCapture(e.pointerId);
+        const speed=performance.now()-g.time<100?g.speed:0;
+        if(!cancelled&&(g.dy>Math.min(120,panel.offsetHeight*.23)||(g.dy>28&&speed>.55))){
+          panel.style.animation='';panel.style.transition='';
+          (modalCloseMap[modal.id]||(()=>closeSheetModal(modal)))();
+        }else settle();
+      };
+      panel.addEventListener('pointerup',e=>finish(e));
+      panel.addEventListener('pointercancel',e=>finish(e,true));
+      panel.addEventListener('lostpointercapture',e=>finish(e,true));
     });
+    syncSheetScrollLock();
 
     if (btnEditProfileBg) btnEditProfileBg.addEventListener('click', openProfileBgModal);
     if (btnCloseProfileBg) btnCloseProfileBg.addEventListener('click', closeProfileBgModal);
