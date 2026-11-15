@@ -41,7 +41,7 @@
   const mood=state.activeMood;if(!mood||mood==='all')return original(autoPlay);
   const key='mode:'+mood;if(pending.has(key))return;
   const task=(async()=>{try{
-   const offset=modeOffsets.get(mood)||0;const data=await fetchBatch(mood,offset);modeOffsets.set(mood,data.hasMore?data.nextOffset:0);importBatch(data.tracks);if(state.activeMood!==mood)return;
+   let offset=modeOffsets.get(mood)||0,data;for(let attempt=0;attempt<8;attempt++){data=await fetchBatch(mood,offset);if(state.activeMood!==mood)return;if(data.tracks.length||!data.hasMore)break;offset=data.nextOffset;}modeOffsets.set(mood,data.hasMore?data.nextOffset:0);importBatch(data.tracks);if(state.activeMood!==mood)return;
    const old=new Set(state.queueIds);
    state.queueIds=(state.queueIds||[]).filter(id=>{const t=tracks.find(t=>t.id===id);return t&&doesTrackMatchMood(t,mood);});const candidates=interleaveByArtist(tracks.filter(t=>doesTrackMatchMood(t,mood)&&isFlowTrackUnplayed(t)&&!old.has(t.id)));
    state.queueIds.push(...candidates.map(t=>t.id));if(autoPlay&&state.queueIds.length)playTrack(state.queueIds.shift(),getMoodText(mood).streamTitle);else renderAll();

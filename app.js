@@ -199,7 +199,7 @@
       return [];
     })();
 
-    const COLLECTIONS = [{"id": "hits", "title": "250 хитов русского рэпа", "tag": "2017–2026", "shortDesc": "Хиты русского рэпа разных лет", "artists": "", "targetArtists": [], "cover": "#2450A4", "icon": "<span class=\"tg-ico text-[22px]\" aria-hidden=\"true\">&#xF06C;</span>", "trackIds": [], "curated": true}, {"id": "legends", "title": "Легенды хип-хопа", "tag": "Классика жанра", "shortDesc": "Артисты, которые сформировали звук", "artists": "", "targetArtists": [], "cover": "#6B4BA2", "icon": "<span class=\"tg-ico text-[22px]\" aria-hidden=\"true\">&#xF114;</span>", "trackIds": [], "curated": true}, {"id": "premiere", "title": "Премьера", "tag": "Свежие релизы", "shortDesc": "Новые релизы популярных артистов", "artists": "", "targetArtists": [], "cover": "#B84363", "icon": "<span class=\"tg-ico text-[22px]\" aria-hidden=\"true\">&#xF01B;</span>", "trackIds": [], "curated": true}, {"id": "telescope", "title": "Teleскоп", "tag": "Выбор Telefy", "shortDesc": "Редакционная подборка", "artists": "", "targetArtists": [], "cover": "#197D86", "icon": "<span class=\"tg-ico text-[22px]\" aria-hidden=\"true\">&#xF15B;</span>", "trackIds": [], "curated": true}];
+    const COLLECTIONS = [{"id": "hits", "title": "250 хитов русского рэпа", "tag": "2017–2026", "shortDesc": "Хиты русского рэпа разных лет", "artists": "", "targetArtists": [], "cover": "#2450A4", "icon": "<span class=\"tg-ico text-[22px]\" aria-hidden=\"true\">&#xF06C;</span>", "trackIds": [], "curated": true}, {"id": "legends", "title": "Легенды русского рэпа", "tag": "Классика жанра", "shortDesc": "Артисты, которые сформировали звук", "artists": "", "targetArtists": [], "cover": "#6B4BA2", "icon": "<span class=\"tg-ico text-[22px]\" aria-hidden=\"true\">&#xF114;</span>", "trackIds": [], "curated": true}, {"id": "premiere", "title": "Премьера", "tag": "Свежие релизы", "shortDesc": "Новые релизы популярных артистов", "artists": "", "targetArtists": [], "cover": "#B84363", "icon": "<span class=\"tg-ico text-[22px]\" aria-hidden=\"true\">&#xF01B;</span>", "trackIds": [], "curated": true}, {"id": "telescope", "title": "Teleскоп", "tag": "Выбор Telefy", "shortDesc": "Редакционная подборка", "artists": "", "targetArtists": [], "cover": "#197D86", "icon": "<span class=\"tg-ico text-[22px]\" aria-hidden=\"true\">&#xF15B;</span>", "trackIds": [], "curated": true}];
 
     const I18N = {
       ru: {
@@ -1133,6 +1133,7 @@
           playTrack(pool[0].id, modeText.streamTitle);
         }
       } else if (autoPlay) {
+        if(mode.id!=='all'&&!doesTrackMatchMood(getTrack(state.currentTrackId),mode.id)){document.getElementById('telefy-audio')?.pause();state.isPlaying=false;}
         const fallback = pickLeastRecentMoodFallback(mode.id);
         if (fallback) playTrack(fallback.id, modeText.streamTitle);
       }

@@ -400,6 +400,8 @@ def scene_artist(artist):
         if any(tokens(a) and tokens(a).issubset(words) for a in [cfg['name']]+cfg['aliases']):return cfg
     return None
 
+LEGENDS_ARTISTS=['PHARAOH', 'Boulevard Depo', 'ЛСП', 'Markul', 'OG Buda', 'SODA LUV', 'KIZARU', 'Big Baby Tape', 'Morgenshtern', 'Kai Angel', 'Mnogoznaal', 'Jeembo', 'TVETH', 'BATO']
+HITS_ADDITIONS=['Miyagi', 'PHARAOH', 'Boulevard Depo', 'FRIENDLY THUG 52 NGG', 'Whole Lotta Swag']
 DISCOVERY_CACHE={}
 def discovery_metadata(raw):
     from datetime import datetime,timezone
@@ -418,8 +420,9 @@ def discovery_metadata(raw):
     def age(value):
         try:return (datetime.now(timezone.utc)-datetime.fromisoformat(str(value).replace('Z','+00:00')).astimezone(timezone.utc)).days
         except (ValueError,TypeError):return 99999
-    fresh=0<=age(created)<=60
-    russian=bool(re.search('[а-яё]',text))
+    fresh=0<=age(date or created)<=90
+    credit=raw.get('metadata_artist') or ''
+    russian=bool(re.search('[а-яё]',text)) or bool(scene_artist(credit)) or any(tokens(a).issubset(tokens(credit)) for a in LEGENDS_ARTISTS+HITS_ADDITIONS+['9mice','FRIENDLY THUG 52 NGG','BUSHIDO ZHO','ALBLAK 52','MAYOT','SALUKI','OBLADAET','GONE.Fludd','Toxi$','Aarne'])
     modes=[]
     if energy:modes.append('energy')
     if chill:modes.append('night')
@@ -437,19 +440,32 @@ def discovery(kind,offset=0):
     artists=['PHARAOH','ЛСП','Big Baby Tape','KIZARU','Скриптонит','fortune 812','Markul','OG Buda','SALUKI','9mice','Kai Angel','madk1d','Boulevard Depo','GONE.Fludd','BUSHIDO ZHO','ALBLAK 52','FRIENDLY THUG 52 NGG','MAYOT','Aarne','Toxi$','SODA LUV','OBLADAET','FEDUK','темный принц','Платина','LIL KRYSTALLL','ATL','Хаски']
     scene_queries=[c['name'] for c in SCENE_ROSTER]
     telescope_queries=scene_queries+[a for a in artists if not scene_artist(a)]
+    hits_queries=list(dict.fromkeys(HITS_ADDITIONS+telescope_queries))
+    trends_queries=list(dict.fromkeys(scene_queries+artists))
     queries={
       'scene':scene_queries[offset*4:offset*4+4],
       'energy':(scene_queries+['russian drill','русский фонк','BUSHIDO ZHO','ALBLAK 52'])[offset*4:offset*4+4],
       'night':['русский chill','russian lofi rap','русский rnb','jazz rap русский'],
       'uncensored':([c['name'] for c in SCENE_ROSTER if c['style']=='hard']+['russian rage'])[offset*4:offset*4+4],
-      'underground':['русский рэп','russian trap','9mice','Kai Angel'],
-      'legends':(scene_queries+['PHARAOH','KIZARU','Big Baby Tape','Boulevard Depo','ЛСП'])[offset*4:offset*4+4],
+      'underground':trends_queries[offset*4:offset*4+4],
+      'legends':LEGENDS_ARTISTS[offset*4:offset*4+4],
+      'hits':hits_queries[offset*4:offset*4+4],
       'telescope':telescope_queries[offset*4:offset*4+4],
     }.get(kind,telescope_queries[offset*4:offset*4+4])
     if not queries:return {'tracks':[],'hasMore':False,'nextOffset':0}
     def get(q):
         try:
-            found=search(q,0,50)['tracks']
+            if kind=='underground':
+                from datetime import timedelta
+                since=(datetime.now(timezone.utc)-timedelta(days=90)).strftime('%Y-%m-%d %H:%M:%S')
+                raw=api('/tracks',{'q':q,'access':'playable','limit':50,'created_at[from]':since,'linked_partitioning':'true'})
+                found=[]
+                for item in (raw.get('collection',[]) if isinstance(raw,dict) else raw):
+                    if item.get('access')!='playable' or not item.get('streamable'):continue
+                    try:track=normalize_track(item)
+                    except APIError:continue
+                    if tokens(q).issubset(tokens(track.get('artist',''))):found.append(track)
+            else:found=search(q,0,50)['tracks']
             if kind in ('scene','telescope','energy','uncensored'):
                 cfg=scene_artist(q);artist=tokens(q)
                 found=[t for t in found if ((cfg and scene_matches(t.get('artist',''),cfg)) or (not cfg and kind in ('energy','uncensored')) or (not cfg and artist.issubset(tokens(t.get('artist',''))))) and not re.search(r'remix|sped|slowed|reupload|cover|instrumental',t.get('title',''),re.I)]
@@ -462,10 +478,10 @@ def discovery(kind,offset=0):
         if recommendation_blocked(t) or not rap_candidate(t):continue
         # Filter credited performers and collabs, not only seed search queries.
         credit=' '.join(str(t.get(k) or '') for k in ('artist','title')).casefold()
-        if kind in ('hits','legends') and re.search(r'(?<![\w])(?:miyagi|miyage|мияги|мияджи|баста|basta|ноггано|ногано|noggano|naggano)(?![\w])',credit):continue
+        if kind=='legends' and re.search(r'(?<![\w])(?:miyagi|miyage|мияги|мияджи|баста|basta|ноггано|ногано|noggano|naggano)(?![\w])',credit):continue
         if kind=='legends' and re.search(r'(?<![\w])(?:каста|kasta|гуф|guf|кравц|kravz)(?![\w])',credit):continue
         if t['soundcloudUrn'] in seen:continue
-        if kind in ('hits','legends','premiere') and not tokens(t.get('artist','')).intersection(tokens(' '.join(queries))):continue
+        if kind in ('hits','legends','premiere') and not any(tokens(q).issubset(tokens(t.get('artist',''))) for q in queries):continue
         if kind in ('energy','night','uncensored','underground') and kind not in t.get('modes',[]):continue
         if kind in ('hits','premiere'):
             try:date=datetime.fromisoformat(str(t.get('releaseDate')).replace('Z','+00:00')).date()
@@ -474,7 +490,7 @@ def discovery(kind,offset=0):
             if kind=='premiere' and not 0<=(today-date).days<=90:continue
         seen.add(t['soundcloudUrn']);result.append(t)
     result.sort(key=lambda t:t.get('releaseDate') or '',reverse=True) if kind=='premiere' else result.sort(key=lambda t:t.get('playbackCount',0)+t.get('likesCount',0)*30,reverse=True)
-    data={'tracks':result[:250],'hasMore':((offset+1)*4<len(queries if False else (scene_queries if kind=='scene' else scene_queries+['russian rage'] if kind in ('energy','uncensored') else scene_queries+['PHARAOH','KIZARU','Big Baby Tape','Boulevard Depo','ЛСП'] if kind=='legends' else telescope_queries)) and kind!='night' and kind!='underground'),'nextOffset':offset+1,'source':'soundcloud','selection':'metadata-and-editorial'}
+    data={'tracks':result[:250],'hasMore':((offset+1)*4<len(LEGENDS_ARTISTS if kind=='legends' else hits_queries if kind=='hits' else trends_queries if kind=='underground' else scene_queries if kind=='scene' else scene_queries+['russian rage'] if kind in ('energy','uncensored') else telescope_queries) and kind!='night'),'nextOffset':offset+1,'source':'soundcloud','selection':'metadata-and-editorial'}
     DISCOVERY_CACHE[key]=(time.time()+600,data)
     return data
 
@@ -532,7 +548,7 @@ def smart_search(query,offset=0,limit=25):
 def welcome_track():
     import secrets
     # No personal history or preference weights affect this selection.
-    hit_pages=max(1,(len(SCENE_ROSTER)+27+3)//4)
+    hit_pages=max(1,(len(set([c['name'] for c in SCENE_ROSTER]+HITS_ADDITIONS+LEGENDS_ARTISTS))+3)//4)
     candidates=discovery('hits',secrets.randbelow(hit_pages)).get('tracks',[])
     if not candidates:candidates=discovery('scene',secrets.randbelow(max(1,(len(SCENE_ROSTER)+3)//4))).get('tracks',[])
     candidates=[t for t in candidates if rap_candidate(t) and not re.search(r'remix|slowed|sped|cover|karaoke',t.get('title',''),re.I)]
