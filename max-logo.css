@@ -1,0 +1,5 @@
+﻿#max-3d-stage, #modal-max-3d-stage { perspective: none; }
+#max-3d-logo, #modal-max-3d-logo { position:relative; animation:none; transform:none; touch-action:none; cursor:grab; user-select:none; }
+#max-3d-logo:active, #modal-max-3d-logo:active { cursor:grabbing; }
+.max-metal-canvas { display:block; width:100%; height:100%; touch-action:none; }
+.max-metal-ready > svg { display:none; }
