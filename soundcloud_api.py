@@ -45,14 +45,29 @@ def configured():
 def json_request(url, data=None, headers=None):
     request = Request(url, data=data, headers={'Accept':'application/json; charset=utf-8', **(headers or {})})
     try:
-        with urlopen(request, timeout=18) as response: return json.load(response)
+        with urlopen(request, timeout=18) as response:
+            observe_rate(url,response.headers,response.status)
+            return json.load(response)
     except HTTPError as error:
+        observe_rate(url,error.headers,error.code)
         if error.code == 403:
             body = error.read(6000).decode('utf-8','replace')
             if 'block access from your country' in body.lower():
                 raise APIError(403,'soundcloud_geo_blocked') from None
         code = {400:'soundcloud_bad_request',401:'soundcloud_auth_failed',403:'soundcloud_forbidden',404:'soundcloud_not_found',429:'soundcloud_rate_limited'}.get(error.code,'soundcloud_unavailable')
-        raise APIError(error.code if error.code in (400,401,403,404,429) else 502, code) from None
+        failure=APIError(error.code if error.code in (400,401,403,404,429) else 502,code)
+        if error.code==429:
+            from email.utils import parsedate_to_datetime
+            retry=error.headers.get('Retry-After','')
+            try:seconds=float(retry)
+            except ValueError:
+                try:seconds=parsedate_to_datetime(retry).timestamp()-time.time()
+                except (ValueError,TypeError,OverflowError):
+                    try:seconds=float(error.headers.get('X-Ratelimit-Reset','0'))-time.time()
+                    except ValueError:seconds=60
+                    if seconds<=0:seconds=60
+            failure.retry_after=max(1,min(seconds,86400))
+        raise failure from None
     except (URLError, TimeoutError, ValueError, OSError):
         raise APIError(502, 'soundcloud_unavailable') from None
 
@@ -122,7 +137,7 @@ def normalize_track(raw):
     urn = track_urn(raw.get('urn') or raw.get('id'))
     user = raw.get('user') or {}
     title = str(raw.get('title') or '').strip()
-    artist = str(raw.get('metadata_artist') or '').strip()
+    artist = str(raw.get('metadata_artist') or (raw.get('publisher_metadata') or {}).get('artist') or '').strip()
     if not artist:
         parts = re.split(r'\s+[-–—]\s+',title,maxsplit=1)
         if len(parts)==2 and 0<len(parts[0])<80: artist,title = parts
@@ -462,6 +477,7 @@ def discovery(kind,offset=0):
       'telescope':telescope_queries[offset*4:offset*4+4],
     }.get(kind,telescope_queries[offset*4:offset*4+4])
     if not queries:return {'tracks':[],'hasMore':False,'nextOffset':0}
+    source_errors=[]
     def get(q):
         try:
             if kind=='underground':
@@ -480,8 +496,9 @@ def discovery(kind,offset=0):
                 found=[t for t in found if ((cfg and scene_matches(t.get('artist',''),cfg)) or (not cfg and kind in ('energy','uncensored')) or (not cfg and artist.issubset(tokens(t.get('artist',''))))) and not re.search(r'remix|sped|slowed|reupload|cover|instrumental',t.get('title',''),re.I)]
                 return sorted(found,key=lambda t:t.get('playbackCount',0),reverse=True)[:15]
             return found
-        except APIError:return []
+        except APIError as e:source_errors.append(e);return []
     with ThreadPoolExecutor(max_workers=4) as pool:items=[t for batch in pool.map(get,queries) for t in batch]
+    if not items and source_errors:raise source_errors[0]
     result=[];seen=set();today=datetime.now(timezone.utc).date()
     for t in items:
         if recommendation_blocked(t) or not rap_candidate(t):continue
@@ -494,10 +511,16 @@ def discovery(kind,offset=0):
         if kind in ('energy','night','uncensored','underground') and kind not in t.get('modes',[]):continue
         if kind in ('hits','premiere'):
             try:date=datetime.fromisoformat(str(t.get('releaseDate')).replace('Z','+00:00')).date()
-            except (ValueError,TypeError):continue
+            except (ValueError,TypeError):
+                if kind!='hits':continue
+                try:date=datetime.fromisoformat(str(t.get('createdAt')).replace('Z','+00:00')).date()
+                except (ValueError,TypeError):
+                    try:date=datetime.strptime(str(t.get('createdAt')),'%Y/%m/%d %H:%M:%S %z').date()
+                    except (ValueError,TypeError):continue
             if kind=='hits' and not (2017<=date.year<=2026 and (t.get('playbackCount',0)>=100000 or t.get('likesCount',0)>=1000)):continue
             if kind=='premiere' and not 0<=(today-date).days<=90:continue
         seen.add(t['soundcloudUrn']);result.append(t)
+    if not result and source_errors:raise source_errors[0]
     result.sort(key=lambda t:t.get('releaseDate') or '',reverse=True) if kind=='premiere' else result.sort(key=lambda t:t.get('playbackCount',0)+t.get('likesCount',0)*30,reverse=True)
     data={'tracks':result[:250],'hasMore':((offset+1)*4<len(LEGENDS_ARTISTS if kind=='legends' else hits_queries if kind=='hits' else trends_queries if kind=='underground' else scene_queries if kind=='scene' else scene_queries+['russian rage'] if kind in ('energy','uncensored') else telescope_queries) and kind!='night'),'nextOffset':offset+1,'source':'soundcloud','selection':'metadata-and-editorial'}
     DISCOVERY_CACHE[key]=(time.time()+600,data)
@@ -524,7 +547,7 @@ def rap_candidate(track):
     if 'night' in track.get('modes',[]) and any(tokens(a).issubset(tokens(credit)) for a in CHILL_ARTISTS) and not re.search(r'rock|metal',text,re.I):return True
     cfg=scene_artist(credit)
     # Missing genre can use a known rap artist; explicit rock/pop genre does not.
-    return not text.strip() and bool(cfg and cfg.get('style')=='hard')
+    return not text.strip() and (bool(cfg and cfg.get('style')=='hard') or any(tokens(a).issubset(tokens(credit)) for a in LEGENDS_ARTISTS+HITS_ADDITIONS))
 
 def smart_queries(query):
     import difflib
@@ -582,14 +605,15 @@ def discovery(kind,offset=0):
     cached=DISCOVERY_CACHE.get(key)
     if cached and cached[0]>time.time():return cached[1]
     seeds=CHILL_ARTISTS if kind=='night' else list(dict.fromkeys(['9mice','Kai Angel','madk1d','FORTUNA 812','FRIENDLY THUG 52 NGG','OG Buda','Big Baby Tape','PHARAOH','SODA LUV']+[c['name'] for c in SCENE_ROSTER]+LEGENDS_ARTISTS))
-    queries=seeds[offset*4:offset*4+4]
+    queries=seeds[offset*2:offset*2+2]
     def get(q):
         params={'q':q,'access':'playable','limit':50,'linked_partitioning':'true'}
         if kind=='underground':params['created_at[from]']=(datetime.now(timezone.utc)-timedelta(days=180)).strftime('%Y-%m-%d %H:%M:%S')
         # Explicit soft tags retrieve a different set from a broad relevance search.
-        requests=[params] if kind=='underground' else [{**params,'tags':tag}for tag in ['chill','rnb','lofi']]+[params]
+        requests=[params] if kind=='underground' else [params,{**params,'tags':'chill'}]
         result=[];raw_count=0;errors=[]
         for request in requests:
+            if result:break
             try:
                 raw=api('/tracks',request);items=raw.get('collection',[])if isinstance(raw,dict)else raw
                 raw_count+=len(items)
@@ -602,14 +626,200 @@ def discovery(kind,offset=0):
                     if not rap_candidate(t) or kind not in t.get('modes',[]):continue
                     if re.search(r'remix|sped|slowed|karaoke|instrumental',t['title'],re.I):continue
                     result.append(t)
-            except APIError as e:errors.append(e.code)
+            except APIError as e:
+                errors.append(e.code)
+                if e.status==429:break
         return result,raw_count,errors
     with ThreadPoolExecutor(max_workers=4)as pool:batches=list(pool.map(get,queries))
     tracks={t['soundcloudUrn']:t for batch,_,_ in batches for t in batch}
     errors=sorted(set(e for _,_,codes in batches for e in codes))
     result=sorted(tracks.values(),key=lambda t:t.get('playbackCount',0)+30*t.get('likesCount',0),reverse=True)
     MODE_DIAGNOSTICS[kind+':'+str(offset)]={'queries':queries,'raw':sum(n for _,n,_ in batches),'accepted':len(result),'errors':errors}
-    if not result and errors and not any(n for _,n,_ in batches):raise APIError(502,'mode_sources_unavailable')
-    data={'tracks':result,'hasMore':(offset+1)*4<len(seeds),'nextOffset':offset+1,'selection':'soundcloud-metadata'}
+    if not result and errors:
+        if 'soundcloud_rate_limited'in errors:raise APIError(429,'soundcloud_rate_limited')
+        raise APIError(502,'mode_sources_unavailable')
+    data={'tracks':result,'hasMore':(offset+1)*2<len(seeds),'nextOffset':offset+1,'selection':'soundcloud-metadata'}
     DISCOVERY_CACHE[key]=(time.time()+(600 if result else 30),data)
+    return data
+
+"""Shared metadata request budget. Playback/CDN traffic has a separate path."""
+import copy
+from contextlib import contextmanager
+from email.utils import parsedate_to_datetime
+METADATA_CACHE={};METADATA_FLIGHTS={};METADATA_ERRORS={}
+METADATA_LOCK=threading.RLock();METADATA_SLOTS=threading.BoundedSemaphore(2)
+METADATA_NEXT=0.0;SOUNDCLOUD_RETRY_AT=0.0;STREAM_RETRY_AT=0.0;RATE_WINDOWS={};LAST_RATE_LIMIT={}
+REQUEST_STATS={'network':0,'cache_hits':0,'coalesced':0,'rate_limits':0}
+def observe_rate(url,headers,status):
+    path=urlsplit(url).path
+    group='oauth'if path.endswith('/oauth/token')else 'stream'if path.endswith(('/stream','/streams'))else 'metadata'
+    entry={'status':status,'observedAt':int(time.time()),'endpoint':path}
+    for name,header in [('limit','X-Ratelimit-Limit'),('remaining','X-Ratelimit-Remaining'),('resetAt','X-Ratelimit-Reset')]:
+        try:entry[name]=int(float(headers.get(header,'')))
+        except (ValueError,TypeError):pass
+    with METADATA_LOCK:
+        RATE_WINDOWS[group]=entry
+        if status==429:LAST_RATE_LIMIT[group]=entry
+    if status==429:print('SoundCloud HTTP 429 '+json.dumps({'group':group,**entry}),flush=True)
+_raw_json_request=json_request
+def json_request(url,data=None,headers=None):
+    global SOUNDCLOUD_RETRY_AT,STREAM_RETRY_AT
+    if urlsplit(url).path.endswith('/oauth/token')and SOUNDCLOUD_RETRY_AT>time.time()and RATE_WINDOWS.get('oauth',{}).get('status')==429:raise APIError(429,'soundcloud_rate_limited')
+    try:return _raw_json_request(url,data,headers)
+    except APIError as e:
+        if e.status==429:
+            with METADATA_LOCK:
+                retry_at=time.time()+getattr(e,'retry_after',60)
+                if urlsplit(url).path.endswith(('/streams','/stream'))and retry_at>time.time()+120:STREAM_RETRY_AT=max(STREAM_RETRY_AT,retry_at)
+                else:SOUNDCLOUD_RETRY_AT=max(SOUNDCLOUD_RETRY_AT,retry_at)
+                REQUEST_STATS['rate_limits']+=1
+        raise
+
+_uncached_api=api
+@contextmanager
+def metadata_slot():
+    if not METADATA_SLOTS.acquire(timeout=8):raise APIError(503,'catalog_busy')
+    try:yield
+    finally:METADATA_SLOTS.release()
+def api(path,params=None):
+    global METADATA_NEXT,SOUNDCLOUD_RETRY_AT
+    # Cached metadata never contains OAuth tokens, signed stream links or audio.
+    metadata=path=='/tracks' or path.startswith('/users')
+    if not metadata:
+        if path.endswith(('/streams','/stream'))and STREAM_RETRY_AT>time.time():raise APIError(429,'soundcloud_rate_limited')
+        return _uncached_api(path,params)
+    requested=None
+    if path=='/tracks' and (params or {}).get('q'):
+        params=dict(params)
+        try:requested=max(1,int(params.get('limit',50)))
+        except (ValueError,TypeError):requested=50
+        if requested<=50:params['limit']=50
+    def project(value):
+        value=copy.deepcopy(value)
+        if requested and isinstance(value,dict) and len(value.get('collection',[]))>requested:
+            value['collection']=value['collection'][:requested];value['next_href']='cached-more'
+        return value
+    key=(path,json.dumps(params or {},sort_keys=True,ensure_ascii=False))
+    while True:
+        with METADATA_LOCK:
+            now=time.time();cached=METADATA_CACHE.get(key)
+            if cached and cached[0]>now:
+                REQUEST_STATS['cache_hits']+=1;return project(cached[2])
+            if SOUNDCLOUD_RETRY_AT>now:
+                if cached and cached[1]>now:return project(cached[2])
+                error=APIError(429,'soundcloud_rate_limited');error.retry_after=max(1,int(SOUNDCLOUD_RETRY_AT-now));raise error
+            failure=METADATA_ERRORS.get(key)
+            if failure and failure[0]>now:
+                if cached and cached[1]>now:return project(cached[2])
+                raise APIError(failure[1],failure[2])
+            flight=METADATA_FLIGHTS.get(key)
+            if flight is None:
+                if len(METADATA_FLIGHTS)>=12:raise APIError(503,'catalog_busy')
+                flight=threading.Event();METADATA_FLIGHTS[key]=flight;break
+            REQUEST_STATS['coalesced']+=1
+        if not flight.wait(25):raise APIError(503,'catalog_busy')
+    try:
+        with metadata_slot():
+            with METADATA_LOCK:
+                if SOUNDCLOUD_RETRY_AT>time.time():raise APIError(429,'soundcloud_rate_limited')
+                delay=max(0,METADATA_NEXT-time.monotonic());METADATA_NEXT=max(METADATA_NEXT,time.monotonic())+1.3
+            if delay:time.sleep(delay)
+            with METADATA_LOCK:
+                if SOUNDCLOUD_RETRY_AT>time.time():raise APIError(429,'soundcloud_rate_limited')
+                REQUEST_STATS['network']+=1
+            value=_uncached_api(path,params)
+        with METADATA_LOCK:
+            METADATA_CACHE[key]=(time.time()+21600,time.time()+86400,copy.deepcopy(value));METADATA_ERRORS.pop(key,None)
+            if len(METADATA_CACHE)>512:
+                for old in list(METADATA_CACHE)[:128]:METADATA_CACHE.pop(old,None)
+        return project(value)
+    except APIError as e:
+        with METADATA_LOCK:
+            if e.status==429 and SOUNDCLOUD_RETRY_AT<=time.time():SOUNDCLOUD_RETRY_AT=time.time()+getattr(e,'retry_after',60)
+            METADATA_ERRORS[key]=(time.time()+15,e.status,e.code)
+            if len(METADATA_ERRORS)>512:
+                for old in list(METADATA_ERRORS)[:128]:METADATA_ERRORS.pop(old,None)
+            cached=METADATA_CACHE.get(key)
+            if cached and cached[1]>time.time():return project(cached[2])
+        raise
+    finally:
+        with METADATA_LOCK:METADATA_FLIGHTS.pop(key,None);flight.set()
+
+# Standardize artist searches so foreground, recommendations and collections share results.
+_search_before_budget=search
+def search(query,offset=0,limit=25):
+    if query=='telefy:requests:diagnostics':
+        return {'requests':dict(REQUEST_STATS),'retryAfter':max(0,int(SOUNDCLOUD_RETRY_AT-time.time())),'streamRetryAfter':max(0,int(STREAM_RETRY_AT-time.time())),'metadataCacheEntries':len(METADATA_CACHE),'limits':dict(RATE_WINDOWS),'lastRateLimit':dict(LAST_RATE_LIMIT)}
+    return _search_before_budget(query,offset,limit)
+
+_discovery_before_budget=discovery
+DISCOVERY_LAST_GOOD={}
+def discovery(kind,offset=0):
+    key=(kind,int(offset))
+    try:
+        data=_discovery_before_budget(kind,offset)
+        if data.get('tracks'):DISCOVERY_LAST_GOOD[key]=(time.time(),data)
+        return data
+    except APIError:
+        previous=DISCOVERY_LAST_GOOD.get(key)
+        if previous and time.time()-previous[0]<86400:return {**previous[1],'stale':True}
+        raise
+
+# Bounded editorial + independently verified small-profile batch, shared for six hours.
+_freshmen_before_budget=freshmen
+FRESHMEN_LAST_GOOD={}
+def freshmen(offset=0):
+    import random
+    batch=max(0,min(int(offset),9));period=int(time.time()//21600);key=('bounded',period,batch)
+    with FRESHMEN_LOCK:
+        saved=FRESHMEN_CACHE.get(key)
+        if saved and saved[0]>time.time():return saved[1]
+    rotation=random.Random(period).sample(SCENE_ROSTER,len(SCENE_ROSTER));result=[];errors=[]
+    for cfg in rotation[batch*2:batch*2+2]:
+        try:
+            choices=search(cfg['name'],0,50)['tracks']
+            choices=[t for t in choices if scene_matches(t['artist'],cfg) and rap_candidate(t)]
+            for item in choices[:3]:result.append({**item,'editorialPick':True,'editorialArtist':cfg['name']})
+        except APIError as e:
+            errors.append(e.code)
+            if e.status==429:break
+    # One search and one bulk user lookup; no fan-out to 32 user catalogs.
+    if not errors:
+        try:
+            raw=api('/tracks',{**FRESHMEN_SOURCES[batch%len(FRESHMEN_SOURCES)],'limit':50,'access':'playable','linked_partitioning':'true'})
+            songs=raw.get('collection',[])if isinstance(raw,dict)else raw
+            candidates=[];urns=[]
+            for item in songs:
+                user=item.get('user')or {};urn=user.get('urn')or ('soundcloud:users:'+str(user.get('id','')))
+                if not re.fullmatch(r'soundcloud:users:\d+',urn):continue
+                if not re.search('[а-яё]',str(item.get('title',''))+' '+str(item.get('metadata_artist',''))):continue
+                if urn not in urns and len(urns)>=10:continue
+                if urn not in urns:urns.append(urn)
+                candidates.append((urn,item))
+            if urns:
+                raw_users=api('/users',{'urns':','.join(urns)})
+                users=raw_users.get('collection',[])if isinstance(raw_users,dict)else raw_users
+                profiles={u.get('urn')or ('soundcloud:users:'+str(u.get('id',''))):u for u in users}
+                for urn,item in candidates:
+                    u=profiles.get(urn,{})
+                    if not isinstance(u.get('followers_count'),int)or not 5000<=u['followers_count']<=10000:continue
+                    if item.get('access')!='playable' or not item.get('streamable'):continue
+                    try:t=normalize_track(item)
+                    except APIError:continue
+                    if not rap_candidate(t)or re.search(r'шансон|пацан|блатн|chanson',t['title']+' '+t['genre'],re.I):continue
+                    result.append({**t,'freshmanFollowers':u['followers_count'],'freshmanProfile':urn})
+        except APIError as e:errors.append(e.code)
+    result=list({t['soundcloudUrn']:t for t in result}.values())[:24]
+    FRESHMEN_DIAGNOSTICS[batch]={'accepted':len(result),'errors':errors,'bounded':True,'period':period}
+    if not result and errors:
+        old=FRESHMEN_LAST_GOOD.get(batch)
+        if old and time.time()-old[0]<86400:return {**old[1],'stale':True}
+        raise APIError(429 if 'soundcloud_rate_limited'in errors else 502,errors[0])
+    data={'tracks':result,'period':period,'hasMore':batch<9,'nextOffset':batch+1,'metric':'followers-or-editorial'}
+    with FRESHMEN_LOCK:
+        FRESHMEN_CACHE[key]=((period+1)*21600 if result else time.time()+30,data)
+        if len(FRESHMEN_CACHE)>24:
+            for old in list(FRESHMEN_CACHE):
+                if old[0]=='bounded'and old[1]<period-1:FRESHMEN_CACHE.pop(old,None)
+    if result:FRESHMEN_LAST_GOOD[batch]=(time.time(),data)
     return data

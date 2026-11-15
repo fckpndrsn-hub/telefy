@@ -1,7 +1,7 @@
 /* Twenty distinct qualified tracks unlock taste-based discovery. */
 (() => {
  const storageKey=()=> 'telefy_recent20_v1_'+(window.TelefyProfile?.user?.telegram_id||'local');
- let history=[],busy=null,timer=null,sessionKeys=[];
+ let history=[],busy=null,timer=null,sessionKeys=[],lastRefill=0;
  const unique=list=>{const map=new Map();list.sort((a,b)=>(a.at||0)-(b.at||0)).forEach(h=>{if(h.key){map.delete(h.key);map.set(h.key,h);}});return [...map.values()].slice(-20);};
  function restore(){try{history=unique(JSON.parse(localStorage.getItem(storageKey())||'[]'));}catch(_){history=[];}}
  function save(){try{localStorage.setItem(storageKey(),JSON.stringify(history));}catch(_){}}
@@ -44,20 +44,19 @@
  function record(tr){
   const eventId=globalThis.crypto?.randomUUID?.()||('play_'+Date.now()+'_'+Math.random().toString(36).slice(2));
   const event={eventId,at:Date.now(),key:getTrackUniqueKey(tr),artist:tr.primaryArtist||tr.artist,modes:tr.modes||[],genre:tr.genre||'',urn:tr.soundcloudUrn};
-  history=unique([...history,event]);save();updatePlaylist();scheduleRefill();
+  history=unique([...history,event]);save();updatePlaylist();if(ready()&&(isMyVibeStreamActive()||typeof USER_PLAYLISTS!=='undefined'&&!USER_PLAYLISTS.some(p=>p.personal)))scheduleRefill();
   if(window.TelefyProfile?.user)fetch('/api/me/taste',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(event)}).catch(()=>{});
  }
  function scheduleRefill(){clearTimeout(timer);timer=setTimeout(()=>refill(),300);}
  async function refill(){
-  if(busy)return busy;
+  if(busy)return busy;if(Date.now()-lastRefill<180000)return;lastRefill=Date.now();
   busy=(async()=>{
    const weights=new Map();if(ready())history.forEach((h,i)=>weights.set(h.artist,(weights.get(h.artist)||0)+i+1));
-   const favorite=[...weights].sort((a,b)=>b[1]-a[1]).slice(0,3).map(x=>x[0]);
+   const favorite=[...weights].sort((a,b)=>b[1]-a[1]).slice(0,2).map(x=>x[0]);
    const modes=new Map();if(ready())history.forEach(h=>(h.modes||[]).forEach(m=>modes.set(m,(modes.get(m)||0)+1)));
    const mode=[...modes].sort((a,b)=>b[1]-a[1])[0]?.[0];
    const seeds=shuffle(['PHARAOH','9mice','Kai Angel','madk1d','FORTUNA 812','OG Buda','SODA LUV','Boulevard Depo','Big Baby Tape','ЛСП','Markul']);
-   const queries=[...favorite,...seeds.filter(a=>!favorite.includes(a)).slice(0,3)];
-   if(mode)queries.push('telefy:discovery:'+mode);
+   const queries=[...favorite,...seeds.filter(a=>!favorite.includes(a)).slice(0,2)];
    await Promise.allSettled(queries.map(async q=>{const r=await fetch('/api/soundcloud/search?'+new URLSearchParams({q,limit:50}),{signal:AbortSignal.timeout(25000)});if(r.ok){const data=await r.json();mergeParsedTracksIntoCatalog(data.tracks||[]);}}));
    updatePlaylist();if(typeof renderMaxBetaView==='function')renderMaxBetaView();
   })().finally(()=>{busy=null;});return busy;

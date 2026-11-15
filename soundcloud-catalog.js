@@ -82,17 +82,9 @@
       state.queueIds=(state.queueIds || []).filter(id=>tracks.some(track=>track.id===id));
       if (!tracks.some(track=>track.id===state.currentTrackId)) state.currentTrackId=tracks[0]?.id || 0;
       state.isCatalogParsing=true; renderAll();
-      let received=0;
-      for (let i=0;i<seeds.length;i+=3) {
-        const batch=await Promise.allSettled(seeds.slice(i,i+3).map(seed=>request(seed,0,10)));
-        let failure=null;
-        for (const result of batch) {
-          if (result.status==='fulfilled') { importTracks(result.value.tracks); received+=result.value.tracks.length; }
-          else failure=result.reason;
-        }
-        state.isCatalogParsing=false; renderAll();
-        if (!received && failure) throw failure;
-      }
+      // One seed initializes the screen. Further candidates load on demand.
+      if(!tracks.length&&!window.TelefyFirstRun?.pending){const data=await request(seeds[Math.floor(Math.random()*seeds.length)],0,50);importTracks(data.tracks);}
+
     } catch (error) {
       state.catalogError=error.code || 'network';
     } finally {

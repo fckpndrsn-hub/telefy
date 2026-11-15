@@ -38,7 +38,7 @@ class Handler(base.Handler):
     def do_GET(self):
         route=urlsplit(self.path).path
         if route=='/health':
-            self.reply(200,{'ok':True,'build':'telefy-profile-db-v1','music_build':'telefy-modes-v2-20261116','recommendations_period_hours':6,'database_configured':bool(os.environ.get('DATABASE_URL')),'telegram_configured':bool(os.environ.get('BOT_TOKEN'))});return
+            self.reply(200,{'ok':True,'build':'telefy-profile-db-v1','music_build':'telefy-request-budget-v3-20261116','recommendations_period_hours':6,'soundcloud_limits':dict(getattr(base.sc,'RATE_WINDOWS',{})),'soundcloud_last_rate_limit':dict(getattr(base.sc,'LAST_RATE_LIMIT',{})),'soundcloud_retry_after':max(0,int(getattr(base.sc,'SOUNDCLOUD_RETRY_AT',0)-time.time())),'database_configured':bool(os.environ.get('DATABASE_URL')),'telegram_configured':bool(os.environ.get('BOT_TOKEN'))});return
         if route=='/api/me/taste':
             try:
                 user=DB.profile(self.cookie_token())
@@ -118,7 +118,7 @@ class Handler(base.Handler):
         self.end_headers();self.wfile.write(body)
 
 if __name__=='__main__':
-    threading.Thread(target=base.check_soundcloud,daemon=True).start()
+    # Do not spend search/stream quota on every deploy just to probe readiness.
     bot=getattr(base,'tbot',None)
     if bot:threading.Thread(target=bot.setup,daemon=True).start()
     ThreadingHTTPServer(('0.0.0.0',int(os.environ.get('PORT','10000'))),Handler).serve_forever()
