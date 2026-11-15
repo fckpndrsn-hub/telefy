@@ -133,10 +133,12 @@ def normalize_track(raw):
             'duration':max(1, float(raw.get('duration') or 0)/1000), 'coverImg':artwork or safe_url(user.get('avatar_url')),
             'artistImg':safe_url(user.get('avatar_url')), 'genre':str(raw.get('genre') or ''),
             'uncensored':False, 'mood':'all', 'releaseYear':str(raw.get('release_year') or ''),
-            'access':raw.get('access'), 'source':'soundcloud'}
+            'access':raw.get('access'), 'source':'soundcloud', **discovery_metadata(raw)}
 
 def search(query, offset=0, limit=25):
     query = str(query or '').strip()[:180]
+    if query == 'telefy:freshmen': return freshmen()
+    if query.startswith('telefy:discovery:'):return discovery(query.split(':')[-1],offset)
     try: offset=max(0,min(int(offset),10000)); limit=max(1,min(int(limit),50))
     except (TypeError,ValueError): raise APIError(400,'invalid_pagination')
     if len(query)<2: raise APIError(400,'query_too_short')
@@ -246,3 +248,121 @@ if __name__=='__main__':
     except APIError as error:
         print('Connection not confirmed: '+error.code+'. Keys were not saved.')
         raise SystemExit(1)
+
+
+# Small Russian-language rap profiles, measured by followers (not listeners).
+FRESHMEN_CACHE = None
+FRESHMEN_LOCK = threading.Lock()
+def freshmen():
+    global FRESHMEN_CACHE
+    with FRESHMEN_LOCK:
+        if FRESHMEN_CACHE and FRESHMEN_CACHE[0]>time.time(): return FRESHMEN_CACHE[1]
+        users=[];seen=set()
+        for query in ('русский рэп','russian rap','underground rap'):
+            raw=api('/users',{'q':query,'limit':50,'linked_partitioning':'true'})
+            for user in (raw.get('collection',[]) if isinstance(raw,dict) else raw):
+                followers=user.get('followers_count')
+                urn=str(user.get('urn') or ('soundcloud:users:'+str(user.get('id',''))))
+                if not re.fullmatch(r'soundcloud:users:\d+',urn) or urn in seen:continue
+                if not isinstance(followers,int) or not 1000<=followers<=5000:continue
+                seen.add(urn);users.append((urn,user))
+            if len(users)>=8:break
+        from concurrent.futures import ThreadPoolExecutor
+        def pick(pair):
+            urn,user=pair
+            try:
+                # Verify audience again from the profile rather than trusting search snippets.
+                profile=api('/users/'+quote(urn,safe=''))
+                count=profile.get('followers_count')
+                if not isinstance(count,int) or not 1000<=count<=5000:return []
+                raw=api('/users/'+quote(urn,safe='')+'/tracks',{'limit':30,'linked_partitioning':'true'})
+                result=[]
+                for track in (raw.get('collection',[]) if isinstance(raw,dict) else raw):
+                    if track.get('access')!='playable' or not track.get('streamable'):continue
+                    text=' '.join(str(track.get(k) or '') for k in ('title','genre','tag_list'))
+                    if not re.search('[а-яё]',text,re.I):continue
+                    if not re.search(r'rap|hip.?hop|рэп|trap|трэп',text,re.I):continue
+                    if re.search(r'remix|reupload|sped.?up|slowed|перезалив|cover',text,re.I):continue
+                    item=normalize_track(track)
+                    # Reject a credited artist different from the small uploader.
+                    credit=tokens(item['artist']);owner=tokens(profile.get('username',''))
+                    if credit and owner and not credit.intersection(owner):continue
+                    item['freshmanFollowers']=count;item['freshmanProfile']=urn
+                    result.append(item)
+                    if len(result)==2:break
+                return result
+            except APIError:return []
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            items=[t for batch in pool.map(pick,users[:8]) for t in batch]
+        result={'tracks':items,'nextOffset':0,'hasMore':False,'metric':'followers','min':1000,'max':5000}
+        FRESHMEN_CACHE=(time.time()+(600 if items else 120),result)
+        return result
+
+
+DISCOVERY_CACHE={}
+def discovery_metadata(raw):
+    from datetime import datetime,timezone
+    text=' '.join(str(raw.get(k) or '') for k in ('title','genre','tag_list','metadata_artist')).casefold()
+    bpm=raw.get('bpm') or 0
+    chill=bool(re.search(r'chill|lo.?fi|ambient|relax|медлен|спокой|чилл',text)) or (isinstance(bpm,(int,float)) and 50<bpm<95)
+    heavy=bool(re.search(r'rage|hardcore|hard.?trap|808|distort|supertrap|madk1d|madkid|fortune 812|тёмный принц|темный принц',text))
+    energy=not chill and (heavy or bool(re.search(r'drill|phonk|energetic|бодр|энерг',text)) or (isinstance(bpm,(int,float)) and bpm>=115))
+    plays=int(raw.get('playback_count') or 0);likes=int(raw.get('likes_count') or raw.get('favoritings_count') or 0)
+    date=raw.get('release_date')
+    if not date and raw.get('release_year'):
+        date=f"{raw['release_year']}-{int(raw.get('release_month') or 1):02d}-{int(raw.get('release_day') or 1):02d}"
+    created=raw.get('created_at')
+    def age(value):
+        try:return (datetime.now(timezone.utc)-datetime.fromisoformat(str(value).replace('Z','+00:00')).astimezone(timezone.utc)).days
+        except (ValueError,TypeError):return 99999
+    fresh=0<=age(created)<=60
+    russian=bool(re.search('[а-яё]',text))
+    modes=[]
+    if energy:modes.append('energy')
+    if chill:modes.append('night')
+    if heavy:modes.append('uncensored')
+    if russian and fresh and (plays>=10000 or likes>=250):modes.append('underground')
+    return dict(modes=modes,releaseDate=date,createdAt=created,playbackCount=plays,likesCount=likes)
+
+def discovery(kind,offset=0):
+    from datetime import datetime,timezone
+    from concurrent.futures import ThreadPoolExecutor
+    if kind not in ('energy','night','uncensored','underground','hits','legends','premiere','telescope'):raise APIError(400,'invalid_discovery')
+    offset=max(0,min(int(offset),6));key=(kind,offset)
+    cached=DISCOVERY_CACHE.get(key)
+    if cached and cached[0]>time.time():return cached[1]
+    artists=['PHARAOH','ЛСП','Big Baby Tape','KIZARU','Скриптонит','Miyagi','Markul','OG Buda','SALUKI','9mice','Kai Angel','madk1d','Boulevard Depo','GONE.Fludd','BUSHIDO ZHO','ALBLAK 52','FRIENDLY THUG 52 NGG','MAYOT','Aarne','Toxi$','SODA LUV','OBLADAET','FEDUK','Баста','Каста','Кравц','ATL','Хаски']
+    queries={
+      'energy':['russian drill','русский фонк','BUSHIDO ZHO','ALBLAK 52'],
+      'night':['русский chill','russian lofi rap','чилл рэп','Скриптонит chill'],
+      'uncensored':['madk1d','fortune 812','темный принц','russian rage'],
+      'underground':['русский рэп','russian trap','9mice','Kai Angel'],
+      'legends':['Баста','Каста','Скриптонит','Гуф'],
+      'telescope':['PHARAOH Дико например','ЛСП Монетка','Big Baby Tape Gimme the Loot','SALUKI Огней'],
+    }.get(kind,artists[offset*4:offset*4+4])
+    if not queries:return {'tracks':[],'hasMore':False,'nextOffset':0}
+    def get(q):
+        try:
+            found=search(q,0,50)['tracks']
+            if kind=='telescope':
+                titles={'PHARAOH Дико например':'Дико например','ЛСП Монетка':'Монетка','Big Baby Tape Gimme the Loot':'Gimme the Loot','SALUKI Огней':'Огней'}
+                title=tokens(titles[q]);found=[t for t in found if title.issubset(tokens(t['title']))]
+                return sorted(found,key=lambda t:t.get('playbackCount',0),reverse=True)[:1]
+            return found
+        except APIError:return []
+    with ThreadPoolExecutor(max_workers=4) as pool:items=[t for batch in pool.map(get,queries) for t in batch]
+    result=[];seen=set();today=datetime.now(timezone.utc).date()
+    for t in items:
+        if t['soundcloudUrn'] in seen:continue
+        if kind in ('hits','legends','premiere') and not tokens(t.get('artist','')).intersection(tokens(' '.join(queries))):continue
+        if kind in ('energy','night','uncensored','underground') and kind not in t.get('modes',[]):continue
+        if kind in ('hits','premiere'):
+            try:date=datetime.fromisoformat(str(t.get('releaseDate')).replace('Z','+00:00')).date()
+            except (ValueError,TypeError):continue
+            if kind=='hits' and not (2017<=date.year<=2026 and (t.get('playbackCount',0)>=100000 or t.get('likesCount',0)>=1000)):continue
+            if kind=='premiere' and not 0<=(today-date).days<=45:continue
+        seen.add(t['soundcloudUrn']);result.append(t)
+    result.sort(key=lambda t:t.get('releaseDate') or '',reverse=True) if kind=='premiere' else result.sort(key=lambda t:t.get('playbackCount',0)+t.get('likesCount',0)*30,reverse=True)
+    data={'tracks':result[:100],'hasMore':kind in ('hits','premiere') and offset<6,'nextOffset':offset+1,'source':'soundcloud','selection':'metadata-and-editorial'}
+    DISCOVERY_CACHE[key]=(time.time()+600,data)
+    return data

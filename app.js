@@ -98,13 +98,10 @@
     const TRACK_ACCENT_COLORS = ['#1E3A8A', '#5856D6', '#0284C7', '#E11D48', '#7C3AED', '#0F766E', '#1D4ED8', '#BE123C'];
 
     const MOODS = [
-      { id: 'all', label: 'Мой поток', streamTitle: 'Мой поток', shortDesc: 'Свежие треки по твоему вкусу', color: '#2AABEE', hideChip: true },
-      { id: 'uncensored', label: 'Без цензуры', streamTitle: 'Андеграунд поток', shortDesc: 'Тёмный звук и редкие релизы', color: '#E11D48' },
-      { id: 'night', label: 'Ночь', streamTitle: 'Ночной поток', shortDesc: 'Мягкий ритм для позднего времени', color: '#0284C7' },
-      { id: 'energy', label: 'Бодро', streamTitle: 'Энергичный поток', shortDesc: 'Плотный бит и высокий темп', color: '#34C759' },
-      { id: 'underground', label: 'Открытия', streamTitle: 'Поток открытий', shortDesc: 'Новые имена и свежие жанры', color: '#5856D6' }
+      {id:'all',hideChip:true,label:'Мой поток'},
+      {id:'energy',color:'#34C759'}, {id:'night',color:'#0284C7'},
+      {id:'uncensored',color:'#E11D48'}, {id:'underground',color:'#5856D6'}
     ];
-
     // Roster of artists for catalog initialization
     const RUSSIAN_RAP_ROSTER = [
       { name: 'Big Baby Tape', query: 'Big Baby Tape', mood: 'energy', uncensoredDefault: true, aliases: ['big baby tape', 'биг бейби тейп', 'dj tape'] },
@@ -144,13 +141,9 @@
       { name: 'Каста', query: 'Каста', mood: 'underground', uncensoredDefault: true, aliases: ['каста'] }
     ];
 
-    // User liked & listened tracking (empty by default so the user can test and add tracks manually)
-    try {
-      localStorage.removeItem('telefy_user_liked_keys_v8');
-      localStorage.removeItem('telefy_user_listened_keys_v8');
-    } catch (_) {}
-    const userLikedTrackKeys = new Set();
-    const userListenedTrackKeys = new Set();
+    function savedKeys(key){try{const a=JSON.parse(localStorage.getItem(key)||'[]');return Array.isArray(a)?a.filter(x=>typeof x==='string'):[];}catch(_){return [];}}
+    const userLikedTrackKeys = new Set(savedKeys('telefy_user_liked_keys_v8'));
+    const userListenedTrackKeys = new Set(savedKeys('telefy_qualified_listens_v1'));
     const userListenedTrackIds = new Set();
 
     function saveUserLikedKeys() {
@@ -161,7 +154,7 @@
 
     function saveUserListenedKeys() {
       try {
-        localStorage.setItem('telefy_user_listened_keys_v8', JSON.stringify(Array.from(userListenedTrackKeys).slice(-200)));
+        localStorage.setItem('telefy_qualified_listens_v1', JSON.stringify(Array.from(userListenedTrackKeys).slice(-200)));
       } catch (_) {}
     }
 
@@ -181,16 +174,7 @@
       return [];
     })();
 
-    const COLLECTIONS = [
-      { id: 'favorites_telefy', title: 'Фавориты Telefy', tag: 'Выбор авторов Telefy', shortDesc: 'Лучшие релизы по версии редакции', artists: 'Big Baby Tape, KIZARU, Скриптонит', targetArtists: ['Big Baby Tape', 'KIZARU', 'Скриптонит', 'SALUKI', 'Miyagi & Эндшпиль'], cover: '#1E3A8A', icon: '<span class="tg-ico text-[19px]">&#xF143;</span>', trackIds: [] },
-      { id: 'freshmen', title: 'Фрешмены', tag: 'Новые имена', shortDesc: 'Громкие новички этой недели', artists: 'FRIENDLY THUG 52 NGG, ALBLAK 52, Toxi$', targetArtists: ['FRIENDLY THUG 52 NGG', 'ALBLAK 52', 'Toxi$', 'Heronwater', 'ICEGERGERT', 'Whole Lotta Swag'], cover: '#0EA5E9', icon: '<span class="tg-ico text-[19px]">&#xF053;</span>', trackIds: [] },
-      { id: 'hiphop_rap', title: 'Хип-хоп и рэп', tag: 'Жанровая подборка', shortDesc: 'Главные биты и свежие куплеты', artists: 'Big Baby Tape, KIZARU, OBLADAET', targetArtists: ['Big Baby Tape', 'KIZARU', 'OBLADAET', 'OG Buda', 'Aarne', 'Платина'], cover: '#E11D48', icon: '<span class="tg-ico text-[19px]">&#xF0BF;</span>', trackIds: [] },
-      { id: 'party_up', title: 'Отрываемся!', tag: 'Энергия и драйв', shortDesc: 'Максимум драйва без пауз', artists: 'BUSHIDO ZHO, Aarne, GONE.Fludd', targetArtists: ['BUSHIDO ZHO', 'Aarne', 'Toxi$', 'GONE.Fludd', 'Heronwater', 'MACAN'], cover: '#F97316', icon: '<span class="tg-ico text-[19px]">&#xF01B;</span>', trackIds: [] },
-      { id: 'my_vibe', title: 'Мой вайб', tag: 'Персональная подборка', shortDesc: 'Собрано под твоё настроение', artists: 'SALUKI, Markul, ЛСП', targetArtists: ['SALUKI', 'Markul', 'ЛСП', 'FEDUK', 'Thomas Mraz', 'T-Fest', 'LOVV66'], cover: '#7C3AED', icon: '<span class="tg-ico text-[19px]">&#xF016;</span>', trackIds: [] },
-      { id: 'uncut', title: 'Свежее без цензуры', tag: 'Выбор авторов Telefy', shortDesc: 'Бутлеги и треки без рамок', artists: 'PHARAOH, OG Buda, SODA LUV', targetArtists: ['PHARAOH', 'OG Buda', 'SODA LUV', 'Платина', 'LIL KRYSTALLL', '163ONMYNECK', 'SEEMEE'], cover: '#BE123C', icon: '<span class="tg-ico text-[19px]">&#xF06E;</span>', trackIds: [] },
-      { id: 'night_drive', title: 'Ночной драйв', tag: 'Под настроение', shortDesc: 'Глубокий бас для ночной дороги', artists: 'Скриптонит, Miyagi & Эндшпиль, Баста', targetArtists: ['Скриптонит', 'Miyagi & Эндшпиль', 'Баста', 'MACAN', 'MAYOT', 'масло чёрного тмина'], cover: '#5856D6', icon: '<span class="tg-ico text-[19px]">&#xF283;</span>', trackIds: [] },
-      { id: 'ru_rock', title: 'Андеграунд и Концепт', tag: 'Культовый звук', shortDesc: 'Глубокие тексты и концептуальные альбомы', artists: 'Boulevard Depo, Хаски', targetArtists: ['Boulevard Depo', 'Хаски', 'Каста', 'масло чёрного тмина', 'SALUKI'], cover: '#1D4ED8', icon: '<span class="tg-ico text-[19px]">&#xF13F;</span>', trackIds: [] }
-    ];
+    const COLLECTIONS = [{"id": "hits", "title": "100 хитов русского рэпа", "tag": "2017–2026", "shortDesc": "Хиты русского рэпа разных лет", "artists": "", "targetArtists": [], "cover": "#2450A4", "icon": "<svg viewBox=\"0 0 24 24\" width=\"22\" height=\"22\" fill=\"currentColor\" aria-hidden=\"true\"><path d=\"M8 3h8v3h4v4c0 3-2 5-5 5h-1v3h3v3H7v-3h3v-3H9c-3 0-5-2-5-5V6h4V3Zm-1 6v1c0 1.5 1 2 2 2V9H7Zm8 0v3c1 0 2-.5 2-2V9h-2Z\"/></svg>", "trackIds": [], "curated": true}, {"id": "legends", "title": "Легенды хип-хопа", "tag": "Классика жанра", "shortDesc": "Артисты, которые сформировали звук", "artists": "", "targetArtists": [], "cover": "#6B4BA2", "icon": "<svg viewBox=\"0 0 24 24\" width=\"22\" height=\"22\" fill=\"currentColor\" aria-hidden=\"true\"><path d=\"m2 6 5 4 5-7 5 7 5-4-3 13H5L2 6Zm3 15h14v2H5z\"/></svg>", "trackIds": [], "curated": true}, {"id": "premiere", "title": "Премьера", "tag": "Свежие релизы", "shortDesc": "Новые релизы популярных артистов", "artists": "", "targetArtists": [], "cover": "#B84363", "icon": "<svg viewBox=\"0 0 24 24\" width=\"22\" height=\"22\" fill=\"currentColor\" aria-hidden=\"true\"><path d=\"m12 1 3 7 8 1-6 5 2 8-7-4-7 4 2-8-6-5 8-1z\"/></svg>", "trackIds": [], "curated": true}, {"id": "telescope", "title": "Teleскоп", "tag": "Выбор Telefy", "shortDesc": "Редакционная подборка", "artists": "", "targetArtists": [], "cover": "#197D86", "icon": "<svg viewBox=\"0 0 24 24\" width=\"22\" height=\"22\" fill=\"currentColor\" aria-hidden=\"true\"><path d=\"m2 9 12-6 4 8-12 6-4-8Zm16-7 4-2 2 4-4 2-2-4ZM9 16h4l5 7h-4l-3-4-3 4H4l5-7Z\"/></svg>", "trackIds": [], "curated": true}];
 
     const I18N = {
       ru: {
@@ -436,10 +420,10 @@
     const MOOD_I18N = {
       ru: {
         all: { label: 'Мой поток', streamTitle: 'Мой поток', shortDesc: 'Свежие треки по твоему вкусу' },
-        uncensored: { label: 'Без цензуры', streamTitle: 'Андеграунд поток', shortDesc: 'Тёмный звук и редкие релизы' },
-        night: { label: 'Ночь', streamTitle: 'Ночной поток', shortDesc: 'Мягкий ритм для позднего времени' },
-        energy: { label: 'Бодро', streamTitle: 'Энергичный поток', shortDesc: 'Плотный бит и высокий темп' },
-        underground: { label: 'Открытия', streamTitle: 'Поток открытий', shortDesc: 'Новые имена и свежие жанры' }
+        uncensored: { label: 'Супер-бит', streamTitle: 'Супер-бит', shortDesc: 'Жёсткий трэп и тяжёлый бас' },
+        night: { label: 'Чилл-вайб', streamTitle: 'Чилл-вайб', shortDesc: 'Мягкий звук и спокойный ритм' },
+        energy: { label: 'Энергия', streamTitle: 'Энергия', shortDesc: 'Драйв, напор и быстрый ритм' },
+        underground: { label: 'Тренды', streamTitle: 'Тренды', shortDesc: 'Свежие популярные русскоязычные треки' }
       },
       en: {
         all: { label: 'My Flow', streamTitle: 'My Flow', shortDesc: 'Fresh tracks tailored to your taste' },
@@ -488,19 +472,14 @@
       } catch {}
     }
 
-    const DEFAULT_USER_PLAYLISTS = [
-      { id: 'upl_night', title: 'Ночной вайб', subtitle: 'Для поздних поездок', cover: '#2AABEE', targetMood: 'night', trackIds: [] },
-      { id: 'upl_bass', title: 'Плотный бас', subtitle: 'В машину и на тренировку', cover: '#5856D6', targetMood: 'energy', trackIds: [] },
-      { id: 'upl_chill', title: 'Фокус и флоу', subtitle: 'Свежие биты и стиль', cover: '#0284C7', targetMood: 'underground', trackIds: [] },
-      { id: 'upl_uncut', title: 'Андеграунд 18+', subtitle: 'Без цензуры', cover: '#E11D48', targetMood: 'uncensored', trackIds: [] }
-    ];
+    const DEFAULT_USER_PLAYLISTS = [];
     let USER_PLAYLISTS = (() => {
       try {
         const raw = localStorage.getItem('telefy_user_playlists_v6');
         if (raw) {
           const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed) && parsed.length) {
-            return parsed.map(p => ({ ...p, coverImg: (p.coverImg && p.coverImg.startsWith('http')) ? p.coverImg : null }));
+          if (Array.isArray(parsed)) {
+            return parsed.filter(p=>!['upl_night','upl_bass','upl_chill','upl_uncut'].includes(p.id)).map(p => ({ ...p, coverImg: (p.coverImg && p.coverImg.startsWith('http')) ? p.coverImg : null }));
           }
         }
       } catch {}
@@ -543,6 +522,7 @@
     }
 
     function getColText(col) {
+      if(col.curated)return {title:col.title,tag:col.tag,shortDesc:col.shortDesc};
       const langMap = COL_I18N[state.lang] || COL_I18N.ru;
       return langMap[col.id] || { title: col.title, tag: col.tag, shortDesc: col.shortDesc };
     }
@@ -606,10 +586,27 @@
       }, 2400);
     }
 
+    function animateDismiss(m, panel, onClosed) {
+      if(m.classList.contains('hidden')||m._dismissMotion)return;
+      const start=getComputedStyle(panel).transform;
+      const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
+      panel.style.animation='none';panel.style.transition='none';
+      const motion=panel.animate([{transform:start==='none'?'translateY(0)':start},{transform:`translateY(${panel.getBoundingClientRect().height+24}px)`}],{duration:reduced?1:380,easing:'cubic-bezier(.32,.72,0,1)',fill:'forwards'});
+      m._dismissMotion=motion;
+      motion.onfinish=()=>{
+        if(m._dismissMotion!==motion)return;
+        m.classList.add('hidden');m.classList.remove('is-open','is-closing');
+        m._dismissMotion=null;motion.cancel();panel.style.animation='';panel.style.transition='';panel.style.transform='';
+        panel.style.setProperty('--sheet-drag-y','0px');
+        if(onClosed)onClosed();
+      };
+    }
+
     // Unified Bottom-Sheet Modal Controller (Telegram iOS Spring)
     function openSheetModal(modalOrId, haptic = 'light') {
       const m = typeof modalOrId === 'string' ? document.getElementById(modalOrId) : modalOrId;
       if (!m) return;
+      if(m._dismissMotion){m._dismissMotion.cancel();m._dismissMotion=null;}
       if (m._closeTimer) {
         clearTimeout(m._closeTimer);
         m._closeTimer = null;
@@ -629,25 +626,10 @@
     }
 
     function closeSheetModal(modalOrId, onClosed = null) {
-      const m = typeof modalOrId === 'string' ? document.getElementById(modalOrId) : modalOrId;
-      if (!m || m.classList.contains('hidden') || m.classList.contains('is-closing')) return;
-      if (m._closeTimer) clearTimeout(m._closeTimer);
-      m.classList.remove('is-open');
-      m.classList.add('is-closing');
-      m._closeTimer = setTimeout(() => {
-        m.classList.add('hidden');
-        m.classList.remove('is-closing');
-        const panel = m.querySelector('.col-sheet-panel');
-        if (panel) {
-          panel.style.setProperty('--sheet-drag-y', '0px');
-          panel.style.transform = '';
-          panel.style.transition = '';
-        }
-        m.style.opacity = '';
-        m.style.transition = '';
-        m._closeTimer = null;
-        if (typeof onClosed === 'function') onClosed();
-      }, 320);
+      const m=typeof modalOrId==='string'?document.getElementById(modalOrId):modalOrId;
+      if(!m)return;
+      const panel=m.querySelector('.col-sheet-panel');
+      if(panel)animateDismiss(m,panel,onClosed);
     }
 
     function updateSettingsUI() {
@@ -740,6 +722,7 @@
     }
 
     function doesTrackMatchMood(tr, moodId) {
+      if(moodId && moodId!=='all')return Array.isArray(tr?.modes)&&tr.modes.includes(moodId);
       if (!tr) return false;
       const m = moodId || 'all';
       if (m === 'all') return true;
@@ -764,12 +747,9 @@
     function markFlowTrackPlayed(tr) {
       if (!tr || !tr.id) return;
       playedFlowTrackIds.add(tr.id);
-      userListenedTrackIds.add(tr.id);
       const k = getTrackUniqueKey(tr);
       if (k) {
         playedFlowTrackKeys.add(k);
-        userListenedTrackKeys.add(k);
-        saveUserListenedKeys();
       }
       const existingIdx = recentFlowHistoryIds.indexOf(tr.id);
       if (existingIdx !== -1) recentFlowHistoryIds.splice(existingIdx, 1);
@@ -781,7 +761,7 @@
       return tracks.filter(tr => {
         if (!tr || !tr.id || tr.disliked) return false;
         const k = getTrackUniqueKey(tr);
-        return Boolean(tr.liked) || userListenedTrackIds.has(tr.id) || (k && userListenedTrackKeys.has(k));
+        return userListenedTrackIds.has(tr.id) || (k && userListenedTrackKeys.has(k));
       });
     }
 
@@ -913,7 +893,7 @@
           doesTrackMatchMood(tr, moodId) && !tinyWindow.has(tr.id)
         );
       }
-      if (!pool.length) {
+      if (!pool.length && (!moodId || moodId==='all')) {
         pool = tracks.filter(tr => tr && tr.id !== state.currentTrackId && !tr.disliked);
       }
       if (!pool.length) return null;
@@ -1123,9 +1103,7 @@
       const matchingUnplayed = interleaveByArtist(
         tracks.filter(t => isFlowTrackUnplayed(t) && doesTrackMatchMood(t, mode.id))
       );
-      const pool = matchingUnplayed.length > 0
-        ? matchingUnplayed
-        : interleaveByArtist(tracks.filter(t => isFlowTrackUnplayed(t)));
+      const pool = matchingUnplayed;
       state.queueIds = pool.length > 0 ? pool.slice(1, 16).map(t => t.id) : [];
       if (pool.length > 0) {
         if (autoPlay) {
@@ -1151,7 +1129,7 @@
           const button = document.createElement('button');
           button.type = 'button'; button.dataset.mood = m.id; button.className = 'mood-chip';
           button.addEventListener('click', () => {
-            triggerHaptic('light'); applyStreamMode(state.activeMood === m.id ? 'all' : m.id, true);
+            triggerHaptic('light'); applyStreamMode(m.id, true);
           });
           container.append(button);
         });
@@ -1308,7 +1286,10 @@
         document.getElementById('flow-stream-name').textContent = modeText.streamTitle;
       }
       const iconMode = ['all','uncensored','night','energy','underground'].includes(mode.id) ? mode.id : 'all';
-      document.getElementById('flow-mode-icon').src = `assets/icons/mode-${iconMode === 'uncensored' ? 'flame' : iconMode}.svg`;
+      const icons={"energy": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22white%22%3E%3Cpath%20d%3D%22M13%201%203%2014h7l-1%209L21%209h-8z%22/%3E%3C/svg%3E", "night": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22white%22%3E%3Cpath%20d%3D%22M21%2015A10%2010%200%200%201%209%203%2010%2010%200%201%200%2021%2015Z%22/%3E%3C/svg%3E", "uncensored": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22white%22%3E%3Cpath%20d%3D%22M4%202h16v20H4V2Zm8%208a5%205%200%201%200%200%2010%205%205%200%200%200%200-10Zm0%203a2%202%200%201%201%200%204%202%202%200%200%201%200-4Zm0-9a2%202%200%201%200%200%204%202%202%200%200%200%200-4Z%22%20fill-rule%3D%22evenodd%22/%3E%3C/svg%3E", "underground": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22white%22%3E%3Cpath%20d%3D%22M14%203h8v8l-3-3-6%206-4-4-7%207v-5l7-7%204%204%203-3zM2%2020h20v3H2z%22/%3E%3C/svg%3E"};
+      const symbol=icons[mode.id]||'assets/icons/mode-all.svg';
+      document.getElementById('flow-mode-icon').src=symbol;
+      document.getElementById('flow-mode-card').style.setProperty('--mode-symbol',`url("${symbol}")`);
     }
 
     function createSimpleQueueRowHTML(t) {
@@ -1766,7 +1747,7 @@
 
     // --- EVENT LISTENERS ---
     document.querySelectorAll('.nav-tab').forEach(btn => {
-      btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+      btn.addEventListener('click', () => {switchTab(btn.dataset.tab);if(btn.dataset.tab==='home')requestAnimationFrame(()=>window.scrollTo({top:0,behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'}));});
     });
 
     document.getElementById('btn-header-search').addEventListener('click', () => {
@@ -2510,6 +2491,7 @@
           existing.collectionId = item.collectionId || existing.collectionId;
           existing.previewUrl = item.previewUrl || existing.previewUrl;
           if (item.soundcloudUrn) {
+            existing.modes=item.modes||existing.modes||[];existing.releaseDate=item.releaseDate||existing.releaseDate;existing.playbackCount=item.playbackCount||existing.playbackCount||0;
             existing.soundcloudUrn=item.soundcloudUrn; existing.soundcloudUrl=item.soundcloudUrl;
             existing.uploader=item.uploader; existing.uploaderUrl=item.uploaderUrl;
           }
@@ -2519,6 +2501,7 @@
         const accentColor = TRACK_ACCENT_COLORS[(nextId + idx) % TRACK_ACCENT_COLORS.length];
         const trObj = {
           id: nextId++,
+          modes:item.modes||[], releaseDate:item.releaseDate||null, playbackCount:item.playbackCount||0,
           soundcloudUrn:item.soundcloudUrn || null,
           soundcloudUrl:item.soundcloudUrl || null,
           uploader:item.uploader || null,
@@ -2591,6 +2574,7 @@
       const usedCollectionCovers = new Set();
 
       COLLECTIONS.forEach((col, colIdx) => {
+        if(col.curated)return;
         const targetList = col.targetArtists || [];
         const matched = interleaveByArtist(
           tracks.filter(tr => targetList.some(ta => doesArtistMatch(tr.artist, ta)))
@@ -2612,28 +2596,8 @@
         }
       });
 
-      const usedPlaylistCovers = new Set();
-      USER_PLAYLISTS.forEach((pl, idx) => {
-        const validExisting = (pl.trackIds || []).filter(id => tracks.some(t => t.id === id));
-        if (validExisting.length >= 3) {
-          pl.trackIds = validExisting;
-        } else {
-          const moodTarget = pl.targetMood || (idx === 0 ? 'night' : idx === 1 ? 'energy' : idx === 2 ? 'underground' : 'uncensored');
-          const moodMatches = tracks.filter(t => moodTarget === 'uncensored' ? t.uncensored : t.mood === moodTarget);
-          const sourcePool = moodMatches.length >= 4 ? moodMatches : tracks;
-          const startOffset = (idx * 3) % Math.max(1, sourcePool.length);
-          const picked = [];
-          for (let i = 0; i < Math.min(8, sourcePool.length); i++) {
-            picked.push(sourcePool[(startOffset + i) % sourcePool.length]);
-          }
-          pl.trackIds = picked.map(t => t.id);
-        }
-        const plTracks = pl.trackIds.map(id => tracks.find(t => t.id === id)).filter(Boolean);
-        const distinctPlTrack = plTracks.find(t => t.coverImg && !usedPlaylistCovers.has(t.coverImg)) || plTracks[0];
-        if (distinctPlTrack && distinctPlTrack.coverImg) {
-          pl.coverImg = distinctPlTrack.coverImg;
-          usedPlaylistCovers.add(distinctPlTrack.coverImg);
-        }
+      USER_PLAYLISTS.forEach(pl=>{
+        if(pl.trackKeys)pl.trackIds=tracks.filter(tr=>pl.trackKeys.includes(getTrackUniqueKey(tr))).map(tr=>tr.id);
       });
       saveUserPlaylists();
 
@@ -3432,6 +3396,7 @@
     function openFullPlayer() {
       const modal = document.getElementById('full-player-modal');
       if (!modal) return;
+      if(modal._dismissMotion){modal._dismissMotion.cancel();modal._dismissMotion=null;}
       if (modal._closeTimer) {
         clearTimeout(modal._closeTimer);
         modal._closeTimer = null;
@@ -3449,17 +3414,8 @@
       });
     }
     function closeFullPlayer() {
-      const modal = document.getElementById('full-player-modal');
-      if (!modal || modal.classList.contains('hidden')) return;
-      if (modal._closeTimer) clearTimeout(modal._closeTimer);
-      modal.style.transform = '';
-      modal.style.transition = '';
-      modal.classList.remove('sheet-open');
-      modal.classList.add('sheet-closed');
-      modal._closeTimer = setTimeout(() => {
-        modal.classList.add('hidden');
-        modal._closeTimer = null;
-      }, 340);
+      const modal=document.getElementById('full-player-modal');
+      if(modal)animateDismiss(modal,modal,()=>{modal.classList.remove('sheet-open');modal.classList.add('sheet-closed');});
     }
 
     let miniDidSwipe = false;
@@ -3831,6 +3787,7 @@
     function activateMaxSubscription() {
       triggerHaptic('heavy');
       state.isMaxSubscribed = true;
+      buildPersonalPlaylists();
       closeUpsellModal();
       switchTab('mytelefy');
       renderAll();
@@ -4096,7 +4053,7 @@
       });
     }
 
-    function deleteUserPlaylist(plId) {
+    function removeConfirmedPlaylist(plId) {
       const idx = USER_PLAYLISTS.findIndex(p => p.id === plId);
       if (idx === -1) return;
       const removed = USER_PLAYLISTS[idx];
@@ -4316,6 +4273,50 @@
       closeSheetModal(profileBgModal);
     }
 
+
+    function buildPersonalPlaylists(){
+      if(!state.isMaxSubscribed)return;
+      if(localStorage.getItem('telefy_personal_playlists_created_v1'))return;
+      const heard=getMyVibeTracksPool();if(!heard.length)return;
+      const groups=new Map();heard.forEach(tr=>{const k=tr.mood||'all';if(!groups.has(k))groups.set(k,[]);groups.get(k).push(tr);});
+      const ranked=[...groups].sort((a,b)=>b[1].length-a[1].length);
+      const titles={night:'Ночной вайб',energy:'На энергии',underground:'Твои открытия',uncensored:'Без рамок',all:'Твой вайб'};
+      const selections=ranked.length>1?ranked.slice(0,2):[[ranked[0][0],heard.filter((_,i)=>i%2===0)],[ranked[0][0],heard.filter((_,i)=>i%2===1)]];
+      selections.forEach(([m,pool],i)=>USER_PLAYLISTS.push({id:'personal_'+Date.now()+'_'+i,title:titles[m]+(ranked.length===1?' · '+(i+1):''),subtitle:'По твоим прослушиваниям',cover:i?'#5856D6':'#2AABEE',coverImg:pool[0]?.coverImg||null,trackIds:pool.map(t=>t.id),trackKeys:pool.map(getTrackUniqueKey),personal:true}));
+      saveUserPlaylists();localStorage.setItem('telefy_personal_playlists_created_v1','1');
+    }
+    let pendingPlaylistDelete=null;
+    function deleteUserPlaylist(id){
+      const pl=USER_PLAYLISTS.find(p=>p.id===id);if(!pl)return;
+      pendingPlaylistDelete=id;
+      document.getElementById('delete-playlist-description').textContent=state.lang==='en'?`Delete “${pl.title}”? This cannot be undone.`:`Удалить «${pl.title}»? Восстановить плейлист не получится.`;
+      document.getElementById('delete-playlist-title').textContent=state.lang==='en'?'Delete playlist?':'Удалить плейлист?';
+      document.getElementById('confirm-playlist-delete').textContent=state.lang==='en'?'Delete':'Удалить';
+      document.getElementById('cancel-playlist-delete').textContent=state.lang==='en'?'Cancel':'Отмена';
+      openSheetModal('delete-playlist-modal');
+    }
+    document.getElementById('cancel-playlist-delete').onclick=()=>{pendingPlaylistDelete=null;closeSheetModal('delete-playlist-modal');};
+    document.getElementById('confirm-playlist-delete').onclick=()=>{const id=pendingPlaylistDelete;pendingPlaylistDelete=null;closeSheetModal('delete-playlist-modal');if(id)removeConfirmedPlaylist(id);};
+    document.getElementById('delete-playlist-modal').addEventListener('click',e=>{if(e.target.id==='delete-playlist-modal'){pendingPlaylistDelete=null;closeSheetModal(e.target);}});
+    // Count advancing playback, not seeking, buffering, paused time or time spent on a card.
+    const listenAudio=document.getElementById('telefy-audio');
+    let listenSample=null,listenSeconds=0,listenKey='';
+    function sampleListen(){
+      const tr=tracks.find(t=>t.id===state.currentTrackId),key=tr?getTrackUniqueKey(tr):'';
+      const now=performance.now(),pos=listenAudio.currentTime;
+      if(key!==listenKey){listenKey=key;listenSeconds=0;listenSample=null;}
+      if(listenSample&&!listenAudio.paused&&!listenAudio.seeking&&listenAudio.readyState>=3){
+        const dt=(now-listenSample.now)/1000,dp=pos-listenSample.pos;
+        if(dt>0&&dp>0&&dp<=dt*Math.max(1,listenAudio.playbackRate)*1.5+.1)listenSeconds+=Math.min(dt,dp/Math.max(.1,listenAudio.playbackRate));
+      }
+      listenSample={now,pos};
+      if(key&&listenSeconds>=30&&!userListenedTrackKeys.has(key)){
+        userListenedTrackKeys.add(key);userListenedTrackIds.add(tr.id);saveUserListenedKeys();buildPersonalPlaylists();renderMaxBetaView();
+      }
+    }
+    listenAudio.addEventListener('timeupdate',sampleListen);
+    for(const event of ['seeking','seeked','pause','playing','waiting','loadstart','ended'])listenAudio.addEventListener(event,()=>{listenSample=null;});
+
     // Unified Interactive Drag-Down-to-Close for All Sheet Modals
     const modalCloseMap = {
       'profile-bg-modal': closeProfileBgModal,
@@ -4329,14 +4330,23 @@
     };
 
 
-    const sheetModals=[...document.querySelectorAll('.tg-sheet-modal')];
+    const sheetModals=[...document.querySelectorAll('.tg-sheet-modal, #full-player-modal')];
     const syncSheetScrollLock=()=>document.documentElement.classList.toggle('telefy-sheet-open',sheetModals.some(m=>!m.classList.contains('hidden')));
     const sheetObserver=new MutationObserver(syncSheetScrollLock);
     sheetModals.forEach(modal=>{
       sheetObserver.observe(modal,{attributes:true,attributeFilter:['class']});
-      const panel=modal.querySelector('.col-sheet-panel');if(!panel)return;
-      const handle=panel.firstElementChild;
-      if(handle)handle.classList.add('sheet-drag-handle');
+      const isPlayer=modal.id==='full-player-modal';
+      const panel=isPlayer?modal:modal.querySelector('.col-sheet-panel');if(!panel)return;
+      // Every sheet has the same visible grip and a generous drag target.
+      let grip=panel.querySelector(':scope > .telefy-sheet-grip');
+      if(!grip){
+        const old=panel.firstElementChild;
+        if(!isPlayer && old?.classList.contains('w-10') && !old.children.length)old.remove();
+        grip=document.createElement('div');grip.className='telefy-sheet-grip';
+        grip.setAttribute('aria-hidden','true');panel.prepend(grip);
+      }
+      const handles=[grip,...[...panel.children].slice(1,2)];
+      handles.forEach(h=>h.classList.add('sheet-drag-handle'));
       let gesture=null,settleTimer;
       const settle=()=>{
         panel.style.transition='transform .34s cubic-bezier(.22,1,.36,1)';
@@ -4346,7 +4356,7 @@
       panel.addEventListener('pointerdown',e=>{
         if(gesture||!e.isPrimary||e.button!==0||e.target.closest('button,a,input,textarea,select'))return;
         // Only the handle owns the gesture; lists retain native momentum scrolling.
-        if(!handle?.contains(e.target))return;
+        if(!handles.some(h=>h.contains(e.target)))return;
         clearTimeout(settleTimer);
         gesture={id:e.pointerId,y:e.clientY,lastY:e.clientY,time:performance.now(),speed:0,dy:0};
         panel.style.animation='none';panel.style.transition='none';
@@ -4366,8 +4376,8 @@
         if(panel.hasPointerCapture?.(e.pointerId))panel.releasePointerCapture(e.pointerId);
         const speed=performance.now()-g.time<100?g.speed:0;
         if(!cancelled&&(g.dy>Math.min(120,panel.offsetHeight*.23)||(g.dy>28&&speed>.55))){
-          panel.style.animation='';panel.style.transition='';
-          (modalCloseMap[modal.id]||(()=>closeSheetModal(modal)))();
+          panel.style.transition='';
+          (isPlayer?closeFullPlayer:(modalCloseMap[modal.id]||(()=>closeSheetModal(modal))))();
         }else settle();
       };
       panel.addEventListener('pointerup',e=>finish(e));

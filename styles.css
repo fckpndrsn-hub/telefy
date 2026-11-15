@@ -970,3 +970,19 @@ html.telefy-sheet-open, html.telefy-sheet-open body { overflow:hidden; }
  .tg-sheet-modal.is-open, .tg-sheet-modal.is-closing,
  .tg-sheet-modal.is-open .col-sheet-panel, .tg-sheet-modal.is-closing .col-sheet-panel { animation-duration:.01ms !important; }
 }
+
+/* A full-card progress wash, below the controls, clipped to the card outline. */
+#mini-progress-bar { inset:0 auto 0 0; height:100%; border-radius:0;
+ background:var(--glass-active); opacity:1; pointer-events:none; transition:none; }
+#mini-player-card > .relative { z-index:1; }
+#full-player-modal.sheet-closed { transform:translate3d(0,100%,0); }
+
+.telefy-sheet-grip { flex-shrink:0; position:relative; height:22px; min-height:22px; width:100%; margin:0!important; touch-action:none; }
+.telefy-sheet-grip::after { content:''; position:absolute; width:36px; height:5px; top:5px; left:50%; transform:translateX(-50%); border-radius:9px; background:var(--text-muted); opacity:.35; }
+#full-player-modal > .telefy-sheet-grip { position:absolute; top:calc(var(--telefy-safe-top) + 3px); left:0; z-index:30; }
+
+#mini-player-card { border-radius:18px; clip-path:inset(0 round 18px); }
+#delete-playlist-modal > .col-sheet-panel { border-radius:24px 24px 0 0; padding-bottom:calc(20px + var(--telefy-safe-bottom)); }
+
+#home-mood-chips { width:100%; max-width:none; min-height:46px; border-radius:999px; }
+#home-mood-chips .mood-chip { flex:1 1 0; min-width:0; min-height:36px; padding:8px 4px; font-size:12px; text-align:center; }
