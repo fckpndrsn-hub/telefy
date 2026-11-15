@@ -137,7 +137,7 @@ def normalize_track(raw):
 
 def search(query, offset=0, limit=25):
     query = str(query or '').strip()[:180]
-    if query == 'telefy:freshmen': return freshmen()
+    if query == 'telefy:freshmen': return freshmen(offset)
     if query.startswith('telefy:discovery:'):return discovery(query.split(':')[-1],offset)
     try: offset=max(0,min(int(offset),10000)); limit=max(1,min(int(limit),50))
     except (TypeError,ValueError): raise APIError(400,'invalid_pagination')
@@ -252,55 +252,69 @@ if __name__=='__main__':
 
 
 # Small Russian-language rap profiles, measured by followers (not listeners).
-FRESHMEN_CACHE = None
+FRESHMEN_CACHE = {}
 FRESHMEN_LOCK = threading.Lock()
-def freshmen():
-    global FRESHMEN_CACHE
-    with FRESHMEN_LOCK:
-        if FRESHMEN_CACHE and FRESHMEN_CACHE[0]>time.time(): return FRESHMEN_CACHE[1]
-        users=[];seen=set()
-        for query in ('russian plugg','русский new jazz','russian rage','русский hyperpop'):
-            raw=api('/users',{'q':query,'limit':50,'linked_partitioning':'true'})
-            for user in (raw.get('collection',[]) if isinstance(raw,dict) else raw):
-                followers=user.get('followers_count')
-                urn=str(user.get('urn') or ('soundcloud:users:'+str(user.get('id',''))))
-                if not re.fullmatch(r'soundcloud:users:\d+',urn) or urn in seen:continue
-                if not isinstance(followers,int) or not 5000<=followers<=10000:continue
-                seen.add(urn);users.append((urn,user))
-            if len(users)>=8:break
-        from concurrent.futures import ThreadPoolExecutor
-        def pick(pair):
-            urn,user=pair
-            try:
-                # Verify audience again from the profile rather than trusting search snippets.
-                profile=api('/users/'+quote(urn,safe=''))
-                count=profile.get('followers_count')
-                if not isinstance(count,int) or not 5000<=count<=10000:return []
-                raw=api('/users/'+quote(urn,safe='')+'/tracks',{'limit':30,'linked_partitioning':'true'})
-                result=[]
-                for track in (raw.get('collection',[]) if isinstance(raw,dict) else raw):
-                    if track.get('access')!='playable' or not track.get('streamable'):continue
-                    text=' '.join(str(track.get(k) or '') for k in ('title','genre','tag_list'))
-                    if not re.search('[а-яё]',text,re.I):continue
-                    if not re.search(r'plugg|new.?jazz|rage|hyperpop|trap|трэп|нью.?джаз|гиперпоп',text,re.I):continue
-                    if re.search(r'chanson|шансон|блатн|воровск|тюрем|gangsta|пацанск',text,re.I):continue
-                    if recommendation_blocked(track):continue
-                    if re.search(r'remix|reupload|sped.?up|slowed|перезалив|cover',text,re.I):continue
-                    item=normalize_track(track)
-                    # Reject a credited artist different from the small uploader.
-                    credit=tokens(item['artist']);owner=tokens(profile.get('username',''))
-                    if credit and owner and not credit.intersection(owner):continue
-                    item['freshmanFollowers']=count;item['freshmanProfile']=urn
-                    result.append(item)
-                    if len(result)==2:break
-                return result
-            except APIError:return []
-        with ThreadPoolExecutor(max_workers=3) as pool:
-            items=[t for batch in pool.map(pick,users[:8]) for t in batch]
-        result={'tracks':items,'nextOffset':0,'hasMore':False,'metric':'followers','min':5000,'max':10000}
-        FRESHMEN_CACHE=(time.time()+(600 if items else 120),result)
-        return result
 
+def freshmen(offset=0):
+    from concurrent.futures import ThreadPoolExecutor
+    batch=max(0,min(int(offset),5))
+    with FRESHMEN_LOCK:
+        cached=FRESHMEN_CACHE.get(batch)
+        if cached and cached[0]>time.time():return cached[1]
+    queries=('russian plugg','русский new jazz','russian rage','русский hyperpop','русский trap','русский рэп')
+    # User search searches profile names, not a reliable genre directory.
+    # Search music first and verify the actual uploader's full profile.
+    raw=api('/tracks',{'q':queries[batch],'limit':50,'access':'playable','linked_partitioning':'true'})
+    songs=raw.get('collection',[]) if isinstance(raw,dict) else raw
+    candidates={}
+    banned=r'chanson|шансон|блатн|воровск|тюрем|gangsta|пацанск'
+    variants=r'remix|reupload|sped.?up|slowed|перезалив|cover|instrumental'
+    for track in songs:
+        if recommendation_blocked(track):continue
+        user=track.get('user') or {}
+        urn=str(user.get('urn') or ('soundcloud:users:'+str(user.get('id',''))))
+        if not re.fullmatch(r'soundcloud:users:\d+',urn):continue
+        # Missing followers_count is NOT zero. Verify it below from /users/:urn.
+        count=user.get('followers_count')
+        if isinstance(count,int) and not 5000<=count<=10000:continue
+        candidates.setdefault(urn,[]).append(track)
+    def pick(pair):
+        urn,seed_tracks=pair
+        try:
+            profile=api('/users/'+quote(urn,safe=''))
+            count=profile.get('followers_count')
+            if not isinstance(count,int) or not 5000<=count<=10000:return []
+            profile_text=' '.join(str(profile.get(k) or '') for k in ('username','full_name','description','city'))
+            if re.search(banned,profile_text,re.I) or recommendation_blocked(profile):return []
+            raw=api('/users/'+quote(urn,safe='')+'/tracks',{'limit':30,'linked_partitioning':'true'})
+            songs=raw.get('collection',[]) if isinstance(raw,dict) else raw
+            result=[];seen=set()
+            for track in seed_tracks+songs:
+                if track.get('access')!='playable' or not track.get('streamable'):continue
+                text=' '.join(str(track.get(k) or '') for k in ('title','genre','tag_list','description'))
+                if re.search(banned,text,re.I) or re.search(variants,track.get('title',''),re.I):continue
+                if recommendation_blocked(track):continue
+                # Language evidence can be in the profile when song titles use Latin.
+                if not re.search('[а-яё]',text+' '+profile_text,re.I):continue
+                if not re.search(r'rap|hip.?hop|рэп|plugg|new.?jazz|rage|hyperpop|trap|трэп|нью.?джаз|гиперпоп',text,re.I):continue
+                owner=tokens(profile.get('username','')+' '+str(profile.get('full_name') or ''))
+                credit=tokens(track.get('metadata_artist') or '')
+                # Explicit other-artist credits identify reuploads; don't infer credit
+                # from a dash in the title, which often belongs to the song itself.
+                if credit and owner and not credit.intersection(owner):continue
+                item=normalize_track(track)
+                if not credit:item['artist']=item['primaryArtist']=profile.get('username') or item['artist']
+                if item['soundcloudUrn'] in seen:continue
+                seen.add(item['soundcloudUrn']);item['freshmanFollowers']=count;item['freshmanProfile']=urn
+                result.append(item)
+                if len(result)>=3:break
+            return result
+        except APIError:return []
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        items=[t for group in pool.map(pick,list(candidates.items())[:16]) for t in group]
+    result={'tracks':items,'nextOffset':batch+1,'hasMore':batch<5,'metric':'followers','min':5000,'max':10000}
+    with FRESHMEN_LOCK:FRESHMEN_CACHE[batch]=(time.time()+(600 if items else 15),result)
+    return result
 
 def recommendation_blocked(track):
     user=track.get('user') or {}
@@ -347,7 +361,7 @@ def discovery(kind,offset=0):
       'uncensored':['madk1d','fortune 812','темный принц','russian rage'],
       'underground':['русский рэп','russian trap','9mice','Kai Angel'],
       'legends':['PHARAOH','KIZARU','Big Baby Tape','Boulevard Depo','ЛСП'],
-      'telescope':['Kai Angel','9mice','PHARAOH','ЛСП','fortune 812','FRIENDLY THUG 52 NGG'],
+      'telescope':(['Kai Angel','9mice','PHARAOH','ЛСП','fortune 812','FRIENDLY THUG 52 NGG','madk1d','темный принц','ALBLAK 52','BUSHIDO ZHO','Big Baby Tape','KIZARU','OG Buda','Платина','LIL KRYSTALLL','Boulevard Depo','SALUKI','MAYOT','SODA LUV','Toxi$'])[offset*4:offset*4+4],
     }.get(kind,artists[offset*4:offset*4+4])
     if not queries:return {'tracks':[],'hasMore':False,'nextOffset':0}
     def get(q):
@@ -356,7 +370,7 @@ def discovery(kind,offset=0):
             if kind=='telescope':
                 artist=tokens(q)
                 found=[t for t in found if artist.issubset(tokens(t.get('artist',''))) and not re.search(r'remix|sped|slowed|reupload|cover|instrumental',t.get('title',''),re.I)]
-                return sorted(found,key=lambda t:t.get('playbackCount',0),reverse=True)[:8]
+                return sorted(found,key=lambda t:t.get('playbackCount',0),reverse=True)[:10]
             return found
         except APIError:return []
     with ThreadPoolExecutor(max_workers=4) as pool:items=[t for batch in pool.map(get,queries) for t in batch]
@@ -377,6 +391,6 @@ def discovery(kind,offset=0):
             if kind=='premiere' and not 0<=(today-date).days<=45:continue
         seen.add(t['soundcloudUrn']);result.append(t)
     result.sort(key=lambda t:t.get('releaseDate') or '',reverse=True) if kind=='premiere' else result.sort(key=lambda t:t.get('playbackCount',0)+t.get('likesCount',0)*30,reverse=True)
-    data={'tracks':result[:100],'hasMore':kind in ('hits','premiere') and offset<6,'nextOffset':offset+1,'source':'soundcloud','selection':'metadata-and-editorial'}
+    data={'tracks':result[:100],'hasMore':((kind in ('hits','premiere') and offset<6) or (kind=='telescope' and offset<4)),'nextOffset':offset+1,'source':'soundcloud','selection':'metadata-and-editorial'}
     DISCOVERY_CACHE[key]=(time.time()+600,data)
     return data

@@ -14,7 +14,8 @@
      const data=await fetchBatch(col.id,offset);data.tracks.forEach(t=>urns.add(t.soundcloudUrn));importBatch(data.tracks);
      memberships.set(col.id,urns);let selected=tracks.filter(t=>urns.has(t.soundcloudUrn));
      if(col.id==='hits'){selected.sort((a,b)=>(b.playbackCount||0)-(a.playbackCount||0));const seen=new Set();selected=selected.filter(t=>{const k=getTrackUniqueKey(t);if(seen.has(k))return false;seen.add(k);return true;});}
-     col.trackIds=selected.slice(0,100).map(t=>t.id);
+     if(col.id==='telescope'){const seen=new Set();selected=selected.filter(t=>{const k=getTrackUniqueKey(t);if(seen.has(k))return false;seen.add(k);return true;});}
+     col.trackIds=selected.slice(0,col.id==='telescope'?200:100).map(t=>t.id);
      col.coverImg=tracks.find(t=>col.trackIds.includes(t.id)&&t.coverImg)?.coverImg||null;renderCollections();
      if(state.activeCollectionId===col.id)updateCollectionPresentation();
      if(state.activeCollectionId===col.id){const box=document.getElementById('col-modal-tracks');box.innerHTML=col.trackIds.length?col.trackIds.map(id=>createTrackRowHTML(getTrack(id))).join(''):'<p class="px-4 py-7 text-muted text-sm">Подходящих треков пока не найдено</p>';bindTrackRowEvents(box,col.title);}
