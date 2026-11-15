@@ -15,7 +15,7 @@
   try{
    const r=await fetch('/api/soundcloud/search?q=telefy%3Afreshmen&limit=25',{signal:AbortSignal.timeout(90000)});
    if(!r.ok)throw Error('unavailable');const d=await r.json();
-   const list=(d.tracks||[]).filter(t=>Number.isInteger(t.freshmanFollowers)&&t.freshmanFollowers>=1000&&t.freshmanFollowers<=5000);
+   const list=(d.tracks||[]).filter(t=>Number.isInteger(t.freshmanFollowers)&&t.freshmanFollowers>=5000&&t.freshmanFollowers<=10000);
    mergeParsedTracksIntoCatalog(list);ids=new Set(list.map(t=>t.soundcloudUrn));
   }catch(_){failed=true;}finally{busy=false;renderHomeTracks();}
  }

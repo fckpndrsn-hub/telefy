@@ -986,3 +986,9 @@ html.telefy-sheet-open, html.telefy-sheet-open body { overflow:hidden; }
 
 #home-mood-chips { width:100%; max-width:none; min-height:46px; border-radius:999px; }
 #home-mood-chips .mood-chip { flex:1 1 0; min-width:0; min-height:36px; padding:8px 4px; font-size:12px; text-align:center; }
+
+#collection-modal > .col-sheet-panel { overflow-y:auto; -webkit-overflow-scrolling:touch; overscroll-behavior-y:contain; }
+#collection-modal > .col-sheet-panel > * { flex-shrink:0; }
+.collection-large-cover { width:min(220px,65vw); aspect-ratio:1; border-radius:22px; overflow:hidden; margin:8px auto 18px!important; display:flex; align-items:center; justify-content:center; color:white; }
+.collection-large-cover > svg { width:64px; height:64px; }
+#col-modal-tracks { overflow:visible; }

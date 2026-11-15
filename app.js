@@ -126,7 +126,6 @@
       { name: 'ЛСП', query: 'ЛСП', mood: 'night', uncensoredDefault: true, aliases: ['лсп', 'lsp'] },
       { name: 'FEDUK', query: 'FEDUK', mood: 'energy', uncensoredDefault: false, aliases: ['feduk', 'федук'] },
       { name: 'Miyagi & Эндшпиль', query: 'Miyagi Эндшпиль', mood: 'night', uncensoredDefault: false, aliases: ['miyagi & эндшпиль', 'miyagi & andy panda', 'miyagi', 'мияги'] },
-      { name: 'Баста', query: 'Баста', mood: 'night', uncensoredDefault: false, aliases: ['баста', 'ноганно'] },
       { name: 'GONE.Fludd', query: 'GONE.Fludd', mood: 'energy', uncensoredDefault: true, aliases: ['gone.fludd', 'gone fludd'] },
       { name: 'LIL KRYSTALLL', query: 'LIL KRYSTALLL', mood: 'uncensored', uncensoredDefault: true, aliases: ['lil krystalll', 'лил кристаллл'] },
       { name: 'LOVV66', query: 'LOVV66', mood: 'night', uncensoredDefault: true, aliases: ['lovv66', 'ловв66'] },
@@ -166,7 +165,7 @@
           const parsed = JSON.parse(raw);
           if (Array.isArray(parsed) && parsed.length > 0) {
             return parsed
-              .filter(t => t && t.title && t.artist && (t.soundcloudUrn || (t.coverImg && t.coverImg.startsWith('http'))))
+              .filter(t => t && t.title && t.artist && !/(^|[^a-zа-яё])(?:баста|basta|ноггано|noggano)(?=$|[^a-zа-яё])/i.test(t.artist) && (t.soundcloudUrn || (t.coverImg && t.coverImg.startsWith('http'))))
               .map(t => ({ ...t, liked: false }));
           }
         }
@@ -722,7 +721,7 @@
     }
 
     function doesTrackMatchMood(tr, moodId) {
-      if(moodId && moodId!=='all')return Array.isArray(tr?.modes)&&tr.modes.includes(moodId);
+      if(moodId && moodId!=='all')return tr?.classificationVersion===2&&Array.isArray(tr.modes)&&tr.modes.includes(moodId);
       if (!tr) return false;
       const m = moodId || 'all';
       if (m === 'all') return true;
@@ -1379,10 +1378,10 @@
     }
 
     function renderSearchView() {
+      if(state.searchFilter==='uncensored')state.searchFilter='all';
       if (state.searchFilter === 'liked' && !state.isMaxSubscribed) state.searchFilter = 'all';
       const filters = [
         { id: 'all', label: t('searchAll') },
-        { id: 'uncensored', label: t('searchExplicit') },
         { id: 'liked', label: t('searchLiked') }
       ];
       const filterContainer = document.getElementById('search-filter-chips');
@@ -1612,6 +1611,16 @@
       updateProgressUI();
     }
 
+    function updateCollectionPresentation(){
+      const c=COLLECTIONS.find(c=>c.id===state.activeCollectionId)||USER_PLAYLISTS.find(c=>c.id===state.activeCollectionId);
+      const cover=document.getElementById('col-modal-cover');if(!c||!cover)return;
+      const tr=(c.trackIds||[]).map(getTrack).find(t=>t?.coverImg);
+      const url=c.coverImg||tr?.coverImg;
+      cover.style.backgroundColor=c.cover||'#2450A4';cover.style.backgroundImage='';cover.replaceChildren();
+      if(url){const img=document.createElement('img');img.src=url;img.alt='';img.className='w-full h-full object-cover';cover.append(img);}
+      else if(c.icon){cover.innerHTML=c.icon;}
+      document.getElementById('col-modal-description').textContent=c.shortDesc||c.subtitle||'';
+    }
     function openCollectionModal(colId) {
       const col = COLLECTIONS.find(c => c.id === colId);
       if (!col) return;
@@ -1629,6 +1638,7 @@
         : `<div class="text-center py-8 text-xs text-muted">${state.lang === 'en' ? 'Loading collection tracks...' : 'Загружаем треки подборки...'}</div>`;
       bindTrackRowEvents(listEl, cText.title);
 
+      updateCollectionPresentation();
       openSheetModal('collection-modal', 'light');
       if (colTracks.length < 16) {
         ensureCollectionTracksLoaded(col);
@@ -1728,6 +1738,7 @@
                 : `<div class="text-center py-8 text-xs text-muted">${state.lang === 'en' ? 'Playlist is empty' : 'Плейлист пуст'}</div>`;
               bindTrackRowEvents(listEl);
               state.activeCollectionId = pl.id;
+              updateCollectionPresentation();
               openSheetModal('collection-modal', null);
             });
           });
@@ -2491,7 +2502,7 @@
           existing.collectionId = item.collectionId || existing.collectionId;
           existing.previewUrl = item.previewUrl || existing.previewUrl;
           if (item.soundcloudUrn) {
-            existing.modes=item.modes||existing.modes||[];existing.releaseDate=item.releaseDate||existing.releaseDate;existing.playbackCount=item.playbackCount||existing.playbackCount||0;
+            existing.classificationVersion=item.classificationVersion||existing.classificationVersion||0;existing.modes=item.modes||existing.modes||[];existing.releaseDate=item.releaseDate||existing.releaseDate;existing.playbackCount=item.playbackCount||existing.playbackCount||0;
             existing.soundcloudUrn=item.soundcloudUrn; existing.soundcloudUrl=item.soundcloudUrl;
             existing.uploader=item.uploader; existing.uploaderUrl=item.uploaderUrl;
           }
@@ -2501,7 +2512,7 @@
         const accentColor = TRACK_ACCENT_COLORS[(nextId + idx) % TRACK_ACCENT_COLORS.length];
         const trObj = {
           id: nextId++,
-          modes:item.modes||[], releaseDate:item.releaseDate||null, playbackCount:item.playbackCount||0,
+          classificationVersion:item.classificationVersion||0, modes:item.modes||[], releaseDate:item.releaseDate||null, playbackCount:item.playbackCount||0,
           soundcloudUrn:item.soundcloudUrn || null,
           soundcloudUrl:item.soundcloudUrl || null,
           uploader:item.uploader || null,
