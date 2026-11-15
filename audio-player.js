@@ -6,6 +6,51 @@
   let enabled = true, request = 0, activeId = null;
   let progressFrame = null;
   let hls = null, streamController = null;
+  let sourceReady = false;
+  function prepareSource(url, signal, requestId) {
+    return new Promise((resolve,reject) => {
+      let settled=false, timer=null, engine=null;
+      const cleanup=()=>{
+        clearTimeout(timer);
+        audio.removeEventListener('loadedmetadata',ready);
+        audio.removeEventListener('error',mediaError);
+        signal.removeEventListener('abort',abort);
+      };
+      const finish=error=>{
+        if(settled)return; settled=true;cleanup();
+        if(error)reject(error);else{sourceReady=true;resolve();}
+      };
+      const ready=()=>finish();
+      const mediaError=()=>finish(new Error('Браузер не смог открыть аудиопоток'));
+      const abort=()=>{const error=new Error('Cancelled');error.name='AbortError';finish(error);};
+      audio.addEventListener('loadedmetadata',ready);
+      audio.addEventListener('error',mediaError);
+      signal.addEventListener('abort',abort,{once:true});
+      timer=setTimeout(()=>finish(new Error('Поток не загрузился за 30 секунд. Проверь доступ к аудио')),30000);
+      if(signal.aborted){abort();return;}
+      // Prefer the explicit MSE adapter over a browser's unreliable HLS "maybe".
+      if(window.Hls?.isSupported()) {
+        engine=new Hls({enableWorker:true,lowLatencyMode:false,maxBufferLength:30,backBufferLength:30});
+        hls=engine;
+        let recovered=false;
+        engine.on(Hls.Events.ERROR,(_,error)=>{
+          if(requestId!==request || !error.fatal)return;
+          if(error.type===Hls.ErrorTypes.MEDIA_ERROR && !recovered){recovered=true;engine.recoverMediaError();return;}
+          const status=error.response?.code;
+          const message=`Не удалось загрузить поток (${error.details || 'HLS'}${status ? ', HTTP '+status : ''})`;
+          if(!settled)finish(new Error(message));
+          else {activeId=null;sourceReady=false;fail(message);}
+          engine.destroy();if(hls===engine)hls=null;
+        });
+        engine.on(Hls.Events.MEDIA_ATTACHED,()=>{
+          if(requestId===request && !signal.aborted)engine.loadSource(url);
+        });
+        engine.attachMedia(audio);
+      } else if(audio.canPlayType('application/vnd.apple.mpegurl')) {
+        audio.src=url; audio.load();
+      } else finish(new Error('Этот браузер не поддерживает воспроизведение HLS'));
+    });
+  }
   let scrubbing = false, scrubTarget = null, scrubPointer = null;
   const seekSlider = document.getElementById('full-seek-slider');
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
@@ -47,7 +92,8 @@
     const track = getTrack(state.currentTrackId);
     if (!track?.id) { fail('Дождись загрузки каталога'); return; }
     try {
-      if (reset || activeId !== track.id || !audio.getAttribute('src')) {
+      if (reset || activeId !== track.id || !audio.getAttribute('src') || !sourceReady) {
+        sourceReady=false;
         scrubbing = false; scrubTarget = null; scrubPointer = null;
         audio.pause();
         if (hls) { hls.destroy(); hls=null; }
@@ -79,28 +125,14 @@
         track.soundcloudUrl=data.track.soundcloudUrl;
         track.uploader=data.track.uploader; track.uploaderUrl=data.track.uploaderUrl;
         activeId=track.id;
-        if (audio.canPlayType('application/vnd.apple.mpegurl')) {
-          audio.src=data.url;
-        } else if (window.Hls?.isSupported()) {
-          hls = new Hls({enableWorker:true,lowLatencyMode:false,maxBufferLength:30,backBufferLength:30});
-          const currentHls=hls;
-          let mediaRecovered=false;
-          currentHls.on(Hls.Events.ERROR, (_,error) => {
-            if (currentRequest !== request || !error.fatal) return;
-            if (error.type===Hls.ErrorTypes.MEDIA_ERROR && !mediaRecovered) {
-              mediaRecovered=true; currentHls.recoverMediaError(); return;
-            }
-            fail('Не удалось продолжить воспроизведение. Нажми ▶ для повторного подключения');
-            activeId=null; currentHls.destroy(); if (hls===currentHls) hls=null;
-          });
-          currentHls.loadSource(data.url); currentHls.attachMedia(audio);
-        } else throw new Error('Этот браузер не поддерживает воспроизведение потока');
+        await prepareSource(data.url,streamController.signal,currentRequest);
 
       }
       if (currentRequest !== request) return;
       await audio.play(); if (currentRequest === request) renderPlayerUI();
     } catch (error) {
       if (currentRequest !== request || error.name === 'AbortError') return;
+      if(!sourceReady){activeId=null;if(hls){hls.destroy();hls=null;}}
       fail(error.name === 'NotAllowedError' ? 'Нажми ▶ ещё раз для запуска звука' : (error.message || 'Не удалось загрузить аудио'));
     }
   };
@@ -118,7 +150,7 @@
   on('loadedmetadata', updateProgressUI);
   on('playing', () => { if (activeId === state.currentTrackId) { state.isPlaying = true; renderPlayerUI(); } });
   on('ended', () => { if (!scrubbing && activeId === state.currentTrackId) playNext(true); });
-  on('error', () => { if (audio.getAttribute('src') && activeId === state.currentTrackId) { fail('Не удалось загрузить аудио'); activeId=null; } });
+  on('error', () => { if (sourceReady && audio.getAttribute('src') && activeId === state.currentTrackId) { fail('Не удалось загрузить аудио'); activeId=null;sourceReady=false; } });
   seekSlider.addEventListener('pointerdown', event => {
     if (!enabled || activeId !== state.currentTrackId || !event.isPrimary || event.button !== 0) return;
     scrubbing = true; scrubTarget = null; scrubPointer = event.pointerId;
