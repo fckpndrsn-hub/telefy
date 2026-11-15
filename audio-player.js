@@ -7,6 +7,7 @@
   let progressFrame = null;
   let hls = null, streamController = null;
   let sourceReady = false;
+  let pausePoint = null, resumePoint = null;
   function prepareSource(url, signal, requestId) {
     return new Promise((resolve,reject) => {
       let settled=false, timer=null, engine=null;
@@ -34,7 +35,7 @@
         hls=engine;
         let recovered=false;
         engine.on(Hls.Events.ERROR,(_,error)=>{
-          if(requestId!==request || !error.fatal)return;
+          if(engine!==hls || !enabled || !error.fatal)return;
           if(error.type===Hls.ErrorTypes.MEDIA_ERROR && !recovered){recovered=true;engine.recoverMediaError();return;}
           const status=error.response?.code;
           const message=`Не удалось загрузить поток (${error.details || 'HLS'}${status ? ', HTTP '+status : ''})`;
@@ -43,7 +44,7 @@
           engine.destroy();if(hls===engine)hls=null;
         });
         engine.on(Hls.Events.MEDIA_ATTACHED,()=>{
-          if(requestId===request && !signal.aborted)engine.loadSource(url);
+          if(engine===hls && !signal.aborted)engine.loadSource(url);
         });
         engine.attachMedia(audio);
       } else if(audio.canPlayType('application/vnd.apple.mpegurl')) {
@@ -56,7 +57,7 @@
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
   function syncProgress() {
     if (enabled && activeId === state.currentTrackId && !scrubbing && !audio.seeking) {
-      state.progressSec = audio.currentTime;
+      state.progressSec = audio.paused && pausePoint?.id === activeId ? pausePoint.time : audio.currentTime;
       updateProgressUI();
     }
   }
@@ -88,11 +89,20 @@
   syncRealAudio = async function(reset = false) {
     const currentRequest = ++request;
     if (!enabled) return original.sync(reset);
-    if (!state.isPlaying) { audio.pause(); return; }
+    if (!state.isPlaying) {
+      if (!audio.paused && sourceReady && activeId === state.currentTrackId) {
+        pausePoint={id:activeId,time:audio.currentTime};
+      }
+      audio.pause();
+      return;
+    }
     const track = getTrack(state.currentTrackId);
     if (!track?.id) { fail('Дождись загрузки каталога'); return; }
+    if(reset || (pausePoint && pausePoint.id!==track.id)){pausePoint=null;resumePoint=null;}
+    const restoreAt=pausePoint?.id===track.id ? pausePoint.time : null;
     try {
-      if (reset || activeId !== track.id || !audio.getAttribute('src') || !sourceReady) {
+      const hasSource=Boolean(hls || audio.srcObject || audio.currentSrc || audio.getAttribute('src'));
+      if (reset || activeId !== track.id || !hasSource || !sourceReady) {
         sourceReady=false;
         scrubbing = false; scrubTarget = null; scrubPointer = null;
         audio.pause();
@@ -108,6 +118,9 @@
         const data = await response.json();
         if (currentRequest !== request || !state.isPlaying) return;
         if (!response.ok) {
+          if(response.status===401 && data.error==='bridge_unauthorized') {
+            location.replace('/');return;
+          }
           const messages = {
             soundcloud_not_configured:'Подключи ключи через страницу настройки SoundCloud',
             matching_track_not_found:'Подходящая запись не найдена. Попробуй найти её через поиск',
@@ -118,7 +131,8 @@
             ,soundcloud_forbidden:'Музыка недоступна из текущей сети'
             ,soundcloud_geo_blocked:'Музыка недоступна из текущей сети'
           };
-          throw new Error(messages[data.error] || 'Не удалось подключить поток. Попробуй ещё раз');
+          const code=/^[a-z_]+$/.test(data.error || '') ? data.error : 'unknown';
+          throw new Error(messages[data.error] || `Не удалось подключить поток (HTTP ${response.status}, ${code})`);
         }
         if (typeof data.url !== 'string' || !data.url.startsWith('https://')) throw new Error('Некорректный адрес потока');
         track.soundcloudUrn=data.track.soundcloudUrn;
@@ -129,6 +143,11 @@
 
       }
       if (currentRequest !== request) return;
+      if(restoreAt!==null){
+        resumePoint={id:track.id,time:restoreAt};
+        audio.currentTime=restoreAt;state.progressSec=restoreAt;updateProgressUI();
+        pausePoint=null;
+      }
       await audio.play(); if (currentRequest === request) renderPlayerUI();
     } catch (error) {
       if (currentRequest !== request || error.name === 'AbortError') return;
@@ -148,7 +167,15 @@
   }, { signal:events.signal });
   reducedMotion.addEventListener('change', startProgressFrames, { signal:events.signal });
   on('loadedmetadata', updateProgressUI);
-  on('playing', () => { if (activeId === state.currentTrackId) { state.isPlaying = true; renderPlayerUI(); } });
+  on('playing', () => {
+    if (activeId === state.currentTrackId) {
+      if(resumePoint?.id===activeId){
+        if(Math.abs(audio.currentTime-resumePoint.time)>.25)audio.currentTime=resumePoint.time;
+        resumePoint=null;
+      }
+      state.isPlaying = true; renderPlayerUI();
+    }
+  });
   on('ended', () => { if (!scrubbing && activeId === state.currentTrackId) playNext(true); });
   on('error', () => { if (sourceReady && audio.getAttribute('src') && activeId === state.currentTrackId) { fail('Не удалось загрузить аудио'); activeId=null;sourceReady=false; } });
   seekSlider.addEventListener('pointerdown', event => {
@@ -168,6 +195,8 @@
     const target = scrubTarget;
     scrubbing = false; scrubTarget = null; scrubPointer = null;
     if (target !== null && enabled && activeId === state.currentTrackId) {
+      if(audio.paused)pausePoint={id:activeId,time:target};
+      resumePoint=null;
       audio.currentTime = target;
       state.progressSec = target; updateProgressUI();
       if (audio.paused && state.isPlaying) audio.play().catch(() => fail('Нажми ▶ для продолжения'));
@@ -189,6 +218,7 @@
   document.addEventListener('visibilitychange', () => { if (document.hidden) cancelScrub(); }, { signal:events.signal });
   window.TelefyAudio = { disable() {
     enabled = false; scrubbing = false; scrubTarget = null; scrubPointer = null;
+    pausePoint=null;resumePoint=null;
     request++; streamController?.abort(); if (hls) { hls.destroy(); hls=null; } stopProgressFrames(); audio.pause(); audio.removeAttribute('src'); audio.load(); events.abort();
     state.isPlaying = false; syncRealAudio = original.sync; startTimer = original.timer;
     updateProgressUI = original.progress; renderPlayerUI = original.render; renderAll();
