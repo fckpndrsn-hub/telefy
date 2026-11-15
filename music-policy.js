@@ -16,6 +16,7 @@ window.TelefyRapCandidate=function(tr){
  if(!tr||window.telefySongBlocked(tr)||window.TelefyPromotionExcluded(tr))return false;
  const genre=[tr.genre,tr.tag_list,tr.tags].filter(Boolean).join(' ');
  if(/rap|hip.?hop|trap|plugg|drill|rage|phonk|рэп|трэп/i.test(genre))return true;
+ if(tr.classificationVersion===4&&tr.modes?.includes('night')&&!/rock|metal/i.test(genre))return true;
  if(genre.trim())return false;
  const norm=s=>' '+String(s||'').toLowerCase().replace(/ё/g,'е').replace(/[^a-zа-я0-9$]+/g,' ').trim()+' ';
  const artist=norm(tr.primaryArtist||tr.artist);return window.TelefyHardArtistAliases.some(a=>artist.includes(norm(a)));

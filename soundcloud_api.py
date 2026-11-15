@@ -133,12 +133,13 @@ def normalize_track(raw):
             'uploader':str(user.get('username') or ''), 'uploaderUrl':safe_url(user.get('permalink_url')),
             'title':title, 'artist':artist, 'primaryArtist':artist, 'album':'',
             'duration':max(1, float(raw.get('duration') or 0)/1000), 'coverImg':artwork or safe_url(user.get('avatar_url')),
-            'artistImg':safe_url(user.get('avatar_url')), 'genre':str(raw.get('genre') or ''),
+            'artistImg':safe_url(user.get('avatar_url')), 'genre':str(raw.get('genre') or ''), 'tag_list':str(raw.get('tag_list') or ''),
             'uncensored':False, 'mood':'all', 'releaseYear':str(raw.get('release_year') or ''),
             'access':raw.get('access'), 'source':'soundcloud', **discovery_metadata({**raw,'metadata_artist':artist})}
 
 def search(query, offset=0, limit=25):
     query = str(query or '').strip()[:180]
+    if query == 'telefy:discovery:diagnostics':return {'modes':MODE_DIAGNOSTICS}
     if query == 'telefy:freshmen:diagnostics': return {'batches':dict(FRESHMEN_DIAGNOSTICS)}
     if query.startswith('telefy:cover:'):return collection_cover(query.split(':')[-1])
     if query == 'telefy:freshmen': return freshmen(offset)
@@ -418,17 +419,25 @@ def discovery_metadata(raw):
         date=f"{raw['release_year']}-{int(raw.get('release_month') or 1):02d}-{int(raw.get('release_day') or 1):02d}"
     created=raw.get('created_at')
     def age(value):
-        try:return (datetime.now(timezone.utc)-datetime.fromisoformat(str(value).replace('Z','+00:00')).astimezone(timezone.utc)).days
-        except (ValueError,TypeError):return 99999
-    fresh=0<=age(date or created)<=90
+        parsed=None
+        try:parsed=datetime.fromisoformat(str(value).replace('Z','+00:00'))
+        except (ValueError,TypeError):
+            for fmt in ('%Y/%m/%d %H:%M:%S %z','%Y-%m-%d %H:%M:%S %z'):
+                try:parsed=datetime.strptime(str(value),fmt);break
+                except (ValueError,TypeError):pass
+        if parsed is None:return 99999
+        if parsed.tzinfo is None:parsed=parsed.replace(tzinfo=timezone.utc)
+        return (datetime.now(timezone.utc)-parsed.astimezone(timezone.utc)).days
+    fresh=0<=age(raw.get('release_date') or (date if raw.get('release_month') else None) or created)<=180
+    if raw.get('release_year') and int(raw['release_year'])<datetime.now(timezone.utc).year-1:fresh=False
     credit=raw.get('metadata_artist') or ''
     russian=bool(re.search('[а-яё]',text)) or bool(scene_artist(credit)) or any(tokens(a).issubset(tokens(credit)) for a in LEGENDS_ARTISTS+HITS_ADDITIONS+['9mice','FRIENDLY THUG 52 NGG','BUSHIDO ZHO','ALBLAK 52','MAYOT','SALUKI','OBLADAET','GONE.Fludd','Toxi$','Aarne'])
     modes=[]
     if energy:modes.append('energy')
     if chill:modes.append('night')
     if heavy:modes.append('uncensored')
-    if russian and fresh and (plays>=10000 or likes>=250):modes.append('underground')
-    return dict(classificationVersion=3,modes=modes,releaseDate=date,createdAt=created,playbackCount=plays,likesCount=likes)
+    if russian and fresh and (plays>=1000 or likes>=50):modes.append('underground')
+    return dict(classificationVersion=4,modes=modes,releaseDate=date,createdAt=created,playbackCount=plays,likesCount=likes)
 
 def discovery(kind,offset=0):
     from datetime import datetime,timezone
@@ -511,7 +520,9 @@ def rap_candidate(track):
     if re.search(r'chanson|шансон|bollywood|bhangra|filmi|hindustani|carnatic',text,re.I):return False
     # All artists, including Cupsize, pass the same content rule.
     if re.search(r'hip.?hop|rap|рэп|trap|трэп|drill|rage|plugg|phonk|cloud',text,re.I):return True
-    cfg=scene_artist(track.get('artist') or track.get('metadata_artist') or '')
+    credit=track.get('artist') or track.get('metadata_artist') or ''
+    if 'night' in track.get('modes',[]) and any(tokens(a).issubset(tokens(credit)) for a in CHILL_ARTISTS) and not re.search(r'rock|metal',text,re.I):return True
+    cfg=scene_artist(credit)
     # Missing genre can use a known rap artist; explicit rock/pop genre does not.
     return not text.strip() and bool(cfg and cfg.get('style')=='hard')
 
@@ -558,3 +569,47 @@ def welcome_track():
 # Curated discovery and ordinary search use the same smart alias routing.
 _original_search=search
 search=smart_search
+
+"""Mode-specific candidate retrieval and aggregate diagnostics."""
+MODE_DIAGNOSTICS={}
+CHILL_ARTISTS=['PHARAOH','ЛСП','SALUKI','Boulevard Depo','Markul','Mnogoznaal','SODA LUV','Miyagi','OG Buda','Big Baby Tape','KIZARU','FRIENDLY THUG 52 NGG']
+_catalog_discovery=discovery
+def discovery(kind,offset=0):
+    if kind not in ('night','underground'):return _catalog_discovery(kind,offset)
+    from datetime import datetime,timezone,timedelta
+    from concurrent.futures import ThreadPoolExecutor
+    offset=max(0,min(int(offset),30));key=('modes-v2',kind,offset)
+    cached=DISCOVERY_CACHE.get(key)
+    if cached and cached[0]>time.time():return cached[1]
+    seeds=CHILL_ARTISTS if kind=='night' else list(dict.fromkeys(['9mice','Kai Angel','madk1d','FORTUNA 812','FRIENDLY THUG 52 NGG','OG Buda','Big Baby Tape','PHARAOH','SODA LUV']+[c['name'] for c in SCENE_ROSTER]+LEGENDS_ARTISTS))
+    queries=seeds[offset*4:offset*4+4]
+    def get(q):
+        params={'q':q,'access':'playable','limit':50,'linked_partitioning':'true'}
+        if kind=='underground':params['created_at[from]']=(datetime.now(timezone.utc)-timedelta(days=180)).strftime('%Y-%m-%d %H:%M:%S')
+        # Explicit soft tags retrieve a different set from a broad relevance search.
+        requests=[params] if kind=='underground' else [{**params,'tags':tag}for tag in ['chill','rnb','lofi']]+[params]
+        result=[];raw_count=0;errors=[]
+        for request in requests:
+            try:
+                raw=api('/tracks',request);items=raw.get('collection',[])if isinstance(raw,dict)else raw
+                raw_count+=len(items)
+                for item in items:
+                    if item.get('access')!='playable' or not item.get('streamable'):continue
+                    try:t=normalize_track(item)
+                    except APIError:continue
+                    cfg=scene_artist(q)
+                    if not ((cfg and scene_matches(t['artist'],cfg)) or tokens(q).issubset(tokens(t['artist']))):continue
+                    if not rap_candidate(t) or kind not in t.get('modes',[]):continue
+                    if re.search(r'remix|sped|slowed|karaoke|instrumental',t['title'],re.I):continue
+                    result.append(t)
+            except APIError as e:errors.append(e.code)
+        return result,raw_count,errors
+    with ThreadPoolExecutor(max_workers=4)as pool:batches=list(pool.map(get,queries))
+    tracks={t['soundcloudUrn']:t for batch,_,_ in batches for t in batch}
+    errors=sorted(set(e for _,_,codes in batches for e in codes))
+    result=sorted(tracks.values(),key=lambda t:t.get('playbackCount',0)+30*t.get('likesCount',0),reverse=True)
+    MODE_DIAGNOSTICS[kind+':'+str(offset)]={'queries':queries,'raw':sum(n for _,n,_ in batches),'accepted':len(result),'errors':errors}
+    if not result and errors and not any(n for _,n,_ in batches):raise APIError(502,'mode_sources_unavailable')
+    data={'tracks':result,'hasMore':(offset+1)*4<len(seeds),'nextOffset':offset+1,'selection':'soundcloud-metadata'}
+    DISCOVERY_CACHE[key]=(time.time()+(600 if result else 30),data)
+    return data

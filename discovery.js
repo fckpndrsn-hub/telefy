@@ -2,12 +2,14 @@
 (() => {
  const coverKey='telefy_collection_art_v1';let coverCache={};
  try{coverCache=JSON.parse(localStorage.getItem(coverKey)||'{}');}catch(_){}
- for(const col of COLLECTIONS){const c=coverCache[col.id];if(c&&Date.now()-c.at<86400000&&c.url?.startsWith('https://'))col.coverImg=c.url;}
+ for(const col of COLLECTIONS){const c=coverCache[col.id];if(c&&c.url?.startsWith('https://'))col.coverImg=c.url;}
  async function warmCollectionArt(col){
+  if(col.coverImg)return;
   try{const r=await fetch('/api/soundcloud/search?'+new URLSearchParams({q:'telefy:cover:'+col.id}),{signal:AbortSignal.timeout(30000)});if(!r.ok)return;const data=await r.json();if(!data.coverImg?.startsWith('https://'))return;
    const image=new Image();image.src=data.coverImg;await Promise.race([image.decode().catch(()=>{}),new Promise(resolve=>setTimeout(resolve,5000))]);
+   if(col.coverImg)return;
    coverCache[col.id]={url:data.coverImg,at:Date.now()};try{localStorage.setItem(coverKey,JSON.stringify(coverCache));}catch(_){}
-   if(!col.trackIds.length){col.coverImg=data.coverImg;renderCollections();if(state.activeCollectionId===col.id)updateCollectionPresentation();}
+   if(!col.coverImg){col.coverImg=data.coverImg;renderCollections();if(state.activeCollectionId===col.id)updateCollectionPresentation();}
   }catch(_){}
  }
  // Fetch lightweight artwork at startup; full playlists still load only on demand.
@@ -28,7 +30,7 @@
      if(col.id==='hits'){selected.sort((a,b)=>(b.playbackCount||0)-(a.playbackCount||0));const seen=new Set();selected=selected.filter(t=>{const k=getTrackUniqueKey(t);if(seen.has(k))return false;seen.add(k);return true;});}
      if(col.id==='telescope'){const seen=new Set();selected=selected.filter(t=>{const k=getTrackUniqueKey(t);if(seen.has(k))return false;seen.add(k);return true;});}
      col.trackIds=interleaveByArtist(selected).slice(0,250).map(t=>t.id);
-     col.coverImg=tracks.find(t=>col.trackIds.includes(t.id)&&t.coverImg)?.coverImg||null;renderCollections();
+     if(!col.coverImg){col.coverImg=tracks.find(t=>col.trackIds.includes(t.id)&&t.coverImg)?.coverImg||null;if(col.coverImg){coverCache[col.id]={url:col.coverImg,at:Date.now()};try{localStorage.setItem(coverKey,JSON.stringify(coverCache));}catch(_){}}}renderCollections();
      if(state.activeCollectionId===col.id)updateCollectionPresentation();
      if(state.activeCollectionId===col.id){const box=document.getElementById('col-modal-tracks');box.innerHTML=col.trackIds.length?col.trackIds.map(id=>createTrackRowHTML(getTrack(id))).join(''):'<p class="px-4 py-7 text-muted text-sm">Подходящих треков пока не найдено</p>';bindTrackRowEvents(box,col.title);}
      more=data.hasMore;offset=data.nextOffset;
@@ -39,13 +41,13 @@
  const catalog=window.TelefySoundCloud;const original=catalog.refill;
  catalog.refill=async function(autoPlay=false){
   const mood=state.activeMood;if(!mood||mood==='all')return original(autoPlay);
-  const key='mode:'+mood;if(pending.has(key))return;
+  const key='mode:'+mood;if(pending.has(key)){await pending.get(key);if(autoPlay&&state.activeMood===mood&&!doesTrackMatchMood(getTrack(state.currentTrackId),mood)&&state.queueIds.length)playTrack(state.queueIds.shift(),getMoodText(mood).streamTitle);return;}
   const task=(async()=>{try{
-   let offset=modeOffsets.get(mood)||0,data;for(let attempt=0;attempt<8;attempt++){data=await fetchBatch(mood,offset);if(state.activeMood!==mood)return;if(data.tracks.length||!data.hasMore)break;offset=data.nextOffset;}modeOffsets.set(mood,data.hasMore?data.nextOffset:0);importBatch(data.tracks);if(state.activeMood!==mood)return;
+   let offset=modeOffsets.get(mood)||0,data;for(let attempt=0;attempt<8;attempt++){data=await fetchBatch(mood,offset);if(state.activeMood!==mood)return;if(data.tracks.some(t=>t.classificationVersion===4&&t.modes?.includes(mood))||!data.hasMore)break;offset=data.nextOffset;}modeOffsets.set(mood,data.hasMore?data.nextOffset:0);importBatch(data.tracks);if(state.activeMood!==mood)return;
    const old=new Set(state.queueIds);
    state.queueIds=(state.queueIds||[]).filter(id=>{const t=tracks.find(t=>t.id===id);return t&&doesTrackMatchMood(t,mood);});const candidates=interleaveByArtist(tracks.filter(t=>doesTrackMatchMood(t,mood)&&isFlowTrackUnplayed(t)&&!old.has(t.id)));
    state.queueIds.push(...candidates.map(t=>t.id));if(autoPlay&&state.queueIds.length)playTrack(state.queueIds.shift(),getMoodText(mood).streamTitle);else renderAll();
-   if(!candidates.length&&!state.queueIds.length)showToast(state.lang==='en'?'No matching tracks yet':'Подходящих треков пока нет');
+   if(autoPlay&&!doesTrackMatchMood(getTrack(state.currentTrackId),mood)&&!candidates.length&&!state.queueIds.length)showToast(state.lang==='en'?'No matching tracks yet':'Подходящих треков пока нет');
   }catch(_){showToast(state.lang==='en'?'Could not load this mode':'Не удалось загрузить режим');}})();
   pending.set(key,task);try{await task;}finally{pending.delete(key);}
  };
@@ -62,4 +64,30 @@
  }
  warmScene();
  renderMoodChips();renderCollections();renderFlowMode();warmAllArt();
+})();
+
+/* Long music lists expose a Telegram-style return-to-top control. */
+(() => {
+ const behavior=()=>matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth';
+ const controls=[];
+ function add(id,host,target,visible,bottom){
+  if(!host||!target)return;
+  const button=document.createElement('button');button.id=id;button.type='button';button.className='music-scroll-top';button.setAttribute('aria-label','Наверх');button.title='Наверх';
+  button.innerHTML='<svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 14 6-6 6 6" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  if(bottom)button.classList.add('music-scroll-top-search');
+  host.append(button);
+  button.onclick=()=>{if(typeof triggerHaptic==='function')triggerHaptic('selection');target.scrollTo({top:0,behavior:behavior()});};
+  controls.push({button,target,visible});
+ }
+ const sheet=id=>document.querySelector('#'+id+' > .col-sheet-panel');
+ add('search-scroll-top',document.getElementById('app-shell'),window,()=>state.activeTab==='search'&&!document.documentElement.classList.contains('telefy-sheet-open'),true);
+ for(const [modal,target,id]of [['collection-modal',sheet('collection-modal'),'collection-scroll-top'],['library-modal',document.getElementById('library-modal-tracks'),'library-scroll-top'],['create-playlist-modal',document.getElementById('playlist-editor-tracks'),'playlist-scroll-top']]){
+  const host=document.getElementById(modal);add(id,host,target,()=>!host.classList.contains('hidden')&&!host.classList.contains('is-closing'));
+ }
+ function sync(){for(const c of controls){const y=c.target===window?window.scrollY:c.target.scrollTop;const shown=c.visible()&&y>280;c.button.classList.toggle('is-visible',shown);c.button.tabIndex=shown?0:-1;c.button.setAttribute('aria-hidden',String(!shown));}}
+ let frame=0;function schedule(){if(!frame)frame=requestAnimationFrame(()=>{frame=0;sync();});}
+ document.addEventListener('scroll',schedule,{capture:true,passive:true});window.addEventListener('scroll',schedule,{passive:true});window.addEventListener('resize',schedule);
+ const observer=new MutationObserver(schedule);for(const id of ['view-search','collection-modal','library-modal','create-playlist-modal']){const e=document.getElementById(id);if(e)observer.observe(e,{attributes:true,attributeFilter:['class']});}
+ document.querySelector('.nav-tab[data-tab="search"]')?.addEventListener('click',()=>window.scrollTo({top:0,behavior:behavior()}));
+ sync();
 })();

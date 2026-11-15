@@ -243,7 +243,7 @@
         settingsGroupSupport: 'Помощь',
         settingsSupport: 'Поддержка',
         settingsSupportWrite: 'Написать',
-        settingsFooter: 'Telefy · Telegram Mini App',
+        settingsFooter: 'Telefy 2026.', settingsDocuments: 'Политика и документы',
         lyricsBtn: 'Текст',
         lyricsAuthorNote: 'С уважением, Telefy',
         lyricsSoon: 'Текст скоро будет доступен',
@@ -362,7 +362,7 @@
         settingsGroupSupport: 'Help',
         settingsSupport: 'Support',
         settingsSupportWrite: 'Message',
-        settingsFooter: 'Telefy · Telegram Mini App',
+        settingsFooter: 'Telefy 2026.', settingsDocuments: 'Policies and documents',
         lyricsBtn: 'Lyrics',
         lyricsAuthorNote: 'With love, Telefy',
         lyricsSoon: 'Lyrics will be available soon',
@@ -751,7 +751,7 @@
     function doesTrackMatchMood(tr, moodId) {
       if(window.TelefyRapCandidate&&!window.TelefyRapCandidate(tr))return false;
       if(window.TelefyPromotionExcluded?.(tr))return false;
-      if(moodId && moodId!=='all')return tr?.classificationVersion===3&&Array.isArray(tr.modes)&&tr.modes.includes(moodId);
+      if(moodId && moodId!=='all')return tr?.classificationVersion===4&&Array.isArray(tr.modes)&&tr.modes.includes(moodId);
       if (!tr) return false;
       const m = moodId || 'all';
       if (m === 'all') return true;
@@ -1133,7 +1133,7 @@
           playTrack(pool[0].id, modeText.streamTitle);
         }
       } else if (autoPlay) {
-        if(mode.id!=='all'&&!doesTrackMatchMood(getTrack(state.currentTrackId),mode.id)){document.getElementById('telefy-audio')?.pause();state.isPlaying=false;}
+        if(mode.id!=='all'&&!doesTrackMatchMood(getTrack(state.currentTrackId),mode.id)){state.isPlaying=false;syncRealAudio();}
         const fallback = pickLeastRecentMoodFallback(mode.id);
         if (fallback) playTrack(fallback.id, modeText.streamTitle);
       }
@@ -1160,7 +1160,7 @@
         new ResizeObserver(positionMoodLens).observe(container);
       }
       container.querySelectorAll('.mood-chip').forEach(btn => {
-        btn.textContent = getMoodText(btn.dataset.mood).label;
+        const codes={energy:'F053',night:'F1D3',uncensored:'F06C',underground:'F01B'};btn.innerHTML=`<span class="tg-ico" aria-hidden="true">${btn.dataset.mood==='night'?'<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.9 13.4A8.7 8.7 0 0 1 10.6 3.1a.7.7 0 0 0-.9-.8A10 10 0 1 0 21.7 14.3a.7.7 0 0 0-.8-.9Z"/></svg>':String.fromCodePoint(parseInt(codes[btn.dataset.mood],16))}</span><span>${getMoodText(btn.dataset.mood).label}</span>`;
         btn.setAttribute('aria-pressed', String(state.activeMood === btn.dataset.mood));
       });
       requestAnimationFrame(positionMoodLens);
@@ -1310,9 +1310,9 @@
         document.getElementById('flow-stream-name').textContent = modeText.streamTitle;
       }
       const iconMode = ['all','uncensored','night','energy','underground'].includes(mode.id) ? mode.id : 'all';
-      const attributes={all:['F0BF','F15D','F127','F143','F01B'],energy:['F053','F26A','F06C','F284','F143'],night:['F1C2','F126','F0BF','F143','F15D'],uncensored:['F06C','F01B','F053','F284','F15D'],underground:['F152','F143','F114','F06C','F0BF']};
+      const attributes={all:['F0BF','F15D','F127','F143','F01B'],energy:['F053','F26A','F06C','F284','F143'],night:['F283','F126','F0BF','F143','F15D'],uncensored:['F06C','F01B','F053','F284','F15D'],underground:['F152','F143','F114','F06C','F0BF']};
       const symbols=attributes[mode.id]||attributes.all;
-      document.getElementById('flow-mode-icon').textContent=String.fromCodePoint(parseInt(symbols[0],16));
+      const modeIcon=document.getElementById('flow-mode-icon');if(mode.id==='night'){modeIcon.innerHTML='<svg width="25" height="25" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.9 13.4A8.7 8.7 0 0 1 10.6 3.1a.7.7 0 0 0-.9-.8A10 10 0 1 0 21.7 14.3a.7.7 0 0 0-.8-.9Z"/></svg>';}else modeIcon.textContent=String.fromCodePoint(parseInt(symbols[0],16));
       const pattern=document.querySelector('#flow-mode-card .flow-mode-pattern');
       pattern.innerHTML=symbols.map(code=>`<span class="tg-ico">${String.fromCodePoint(parseInt(code,16))}</span>`).join('');
 
@@ -1848,41 +1848,7 @@
       showToast(msg);
     }
 
-    function startMyVibeMode() {
-      triggerHaptic('medium');
-      const vibeTracks = getMyVibeTracksPool();
-      if (vibeTracks.length === 0) {
-        showToast(t('toastMyVibeEmpty'));
-        return;
-      }
-      // Prioritize liked tracks first, then previously listened tracks
-      const likedPart = vibeTracks.filter(tr => tr.liked);
-      const listenedOnlyPart = vibeTracks.filter(tr => !tr.liked).reverse();
-      const orderedPool = [...likedPart, ...listenedOnlyPart];
-      // Pick a track to start (prefer one different from current if possible or not playing)
-      let startIdx = 0;
-      if (state.isPlaying && orderedPool.length > 1 && orderedPool[0].id === state.currentTrackId) {
-        startIdx = 1;
-      }
-      const firstTrack = orderedPool[startIdx];
-      const remaining = orderedPool.filter((_, idx) => idx !== startIdx);
-      state.queueIds = remaining.map(tr => tr.id);
-
-      const vibeLabel = state.lang === 'en' ? 'My Vibe' : 'Мой вайб';
-      const vibeDesc = state.lang === 'en'
-        ? `Liked & previously played tracks (${orderedPool.length})`
-        : `Любимые и прослушанные ранее (${orderedPool.length})`;
-
-      const homeTitleEl = document.getElementById('home-stream-title');
-      if (homeTitleEl) homeTitleEl.textContent = vibeLabel;
-      const homeDescEl = document.getElementById('home-stream-desc');
-      if (homeDescEl) homeDescEl.textContent = vibeDesc;
-      const flowTitleEl = document.getElementById('flow-stream-name');
-      if (flowTitleEl) flowTitleEl.textContent = vibeLabel;
-
-      playTrack(firstTrack.id, vibeLabel);
-      showToast(`${t('toastMyVibeOn')} · ${orderedPool.length} ${state.lang === 'en' ? 'tracks' : 'тр.'}`);
-    }
+    function startMyVibeMode(){window.TelefyTaste?.start();}
 
     function resetAndShuffleMusicalPreferences() {
       triggerHaptic('heavy');
@@ -4316,17 +4282,7 @@
     }
 
 
-    function buildPersonalPlaylists(){
-      if(!state.isMaxSubscribed)return;
-      if(localStorage.getItem('telefy_personal_playlists_created_v1'))return;
-      const heard=getMyVibeTracksPool();if(!heard.length)return;
-      const groups=new Map();heard.forEach(tr=>{const k=tr.mood||'all';if(!groups.has(k))groups.set(k,[]);groups.get(k).push(tr);});
-      const ranked=[...groups].sort((a,b)=>b[1].length-a[1].length);
-      const titles={night:'Ночной вайб',energy:'На энергии',underground:'Твои открытия',uncensored:'Без рамок',all:'Твой вайб'};
-      const selections=ranked.length>1?ranked.slice(0,2):[[ranked[0][0],heard.filter((_,i)=>i%2===0)],[ranked[0][0],heard.filter((_,i)=>i%2===1)]];
-      selections.forEach(([m,pool],i)=>USER_PLAYLISTS.push({id:'personal_'+Date.now()+'_'+i,title:titles[m]+(ranked.length===1?' · '+(i+1):''),subtitle:'По твоим прослушиваниям',cover:i?'#5856D6':'#2AABEE',coverImg:pool[0]?.coverImg||null,trackIds:pool.map(t=>t.id),trackKeys:pool.map(getTrackUniqueKey),personal:true}));
-      saveUserPlaylists();localStorage.setItem('telefy_personal_playlists_created_v1','1');
-    }
+    function buildPersonalPlaylists(){window.TelefyTaste?.updatePlaylist();}
     let pendingPlaylistDelete=null;
     function deleteUserPlaylist(id){
       const pl=USER_PLAYLISTS.find(p=>p.id===id);if(!pl)return;

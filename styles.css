@@ -1015,3 +1015,30 @@ html.telefy-sheet-open, html.telefy-sheet-open body { overflow:hidden; }
 #flow-mode-card .flow-mode-pattern span:nth-child(2),#flow-mode-card .flow-mode-pattern span:nth-child(5) { font-size:42px; }
 #flow-mode-card #flow-mode-label { font-size:17px; line-height:22px; }
 #flow-mode-card #flow-mode-subtitle { font-size:12px; line-height:16px; color:rgb(255 255 255 / 85%); }
+
+#home-mood-chips .mood-chip{display:flex;align-items:center;justify-content:center;gap:5px;min-height:40px;font-size:12px;}
+#home-mood-chips .mood-chip .tg-ico{font-size:15px;line-height:1;flex-shrink:0;}
+@media(max-width:360px){#home-mood-chips .mood-chip{gap:3px;font-size:11px;padding-inline:2px;}}
+
+/* A single Telegram-style sheet for editorial and personal playlists. */
+#collection-modal > .col-sheet-panel { position:relative; border-radius:24px 24px 0 0; padding-inline:16px; padding-top:8px; box-shadow:none!important; gap:0; }
+#collection-modal .collection-toolbar { display:flex; align-items:center; justify-content:space-between; min-height:42px; margin:0!important; }
+#collection-modal .collection-toolbar-label { color:var(--text-muted); font-size:13px; font-weight:500; }
+#collection-modal .collection-toolbar-actions { display:flex; gap:8px; align-items:center; }
+#collection-modal .collection-toolbar button { width:32px; height:32px; box-shadow:none; }
+#collection-modal .collection-large-cover { width:min(168px,48vw); margin:8px auto 18px!important; border-radius:18px; }
+#collection-modal .collection-heading { text-align:center; margin:0!important; }
+#collection-modal #col-modal-title { font-size:22px; line-height:27px; font-weight:700; letter-spacing:-.4px; padding-inline:8px; }
+#collection-modal #col-modal-tag { margin-top:6px; font-size:13px; line-height:18px; font-weight:400; }
+#collection-modal #col-modal-description { text-align:center; font-size:14px; line-height:20px; padding:0 14px; margin:10px 0 18px!important; }
+#collection-modal #col-modal-description:empty { display:none; }
+#collection-modal #btn-play-collection { display:flex; gap:9px; align-items:center; justify-content:center; min-height:48px; border-radius:14px; padding:12px; font-size:16px; margin:0 0 20px!important; box-shadow:none; }
+#collection-modal #col-modal-tracks { margin:0!important; border-radius:14px; box-shadow:none; }
+#collection-modal #col-modal-tracks:has(>p:only-child) { background:transparent; }
+#collection-modal #col-modal-tracks > p { font-size:14px; padding:20px 12px; }
+
+.music-scroll-top { position:fixed; z-index:3; right:max(18px,calc((100vw - 448px)/2 + 18px)); bottom:calc(18px + var(--telefy-safe-bottom,0px)); display:flex; align-items:center; justify-content:center; width:44px; height:44px; border-radius:50%; color:var(--text-primary); background:var(--bg-card); border:1px solid rgb(127 127 127 / 14%); box-shadow:0 2px 10px rgb(0 0 0 / 10%); opacity:0; transform:translateY(10px) scale(.94); pointer-events:none; transition:opacity .2s,transform .25s cubic-bezier(.2,.8,.2,1); }
+.music-scroll-top.is-visible { opacity:1; transform:translateY(0) scale(1); pointer-events:auto; }
+.music-scroll-top:active { transform:scale(.92); }
+.music-scroll-top-search { z-index:41; bottom:calc(164px + var(--telefy-safe-bottom,0px)); }
+@media(prefers-reduced-motion:reduce){.music-scroll-top{transition:none;}}

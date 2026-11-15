@@ -38,7 +38,7 @@ class Handler(base.Handler):
     def do_GET(self):
         route=urlsplit(self.path).path
         if route=='/health':
-            self.reply(200,{'ok':True,'build':'telefy-profile-db-v1','music_build':'music-refresh-20261115-1','recommendations_period_hours':6,'database_configured':bool(os.environ.get('DATABASE_URL')),'telegram_configured':bool(os.environ.get('BOT_TOKEN'))});return
+            self.reply(200,{'ok':True,'build':'telefy-profile-db-v1','music_build':'telefy-modes-v2-20261116','recommendations_period_hours':6,'database_configured':bool(os.environ.get('DATABASE_URL')),'telegram_configured':bool(os.environ.get('BOT_TOKEN'))});return
         if route=='/api/me/taste':
             try:
                 user=DB.profile(self.cookie_token())

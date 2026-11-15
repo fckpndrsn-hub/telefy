@@ -1,48 +1,81 @@
-/* Local, user-scoped recent taste window. Audio accounting remains in app.js. */
+/* Twenty distinct qualified tracks unlock taste-based discovery. */
 (() => {
- window.TelefyPromotionExcluded=tr=>/(^|[^a-zа-яё])(?:баста|basta|ноггано|noggano|1.?клас|1.?kla[$sс]+|смоки[ ]*мо|smoky[ ]*mo|smokey[ ]*mo)(?=$|[^a-zа-яё])/i.test([tr?.artist,tr?.title].join(' '));
  const storageKey=()=> 'telefy_recent20_v1_'+(window.TelefyProfile?.user?.telegram_id||'local');
- let history=[];
- function restore(){try{const data=JSON.parse(localStorage.getItem(storageKey())||'[]');history=Array.isArray(data)?data.slice(-20):[];}catch(_){history=[];}}
+ let history=[],busy=null,timer=null,sessionKeys=[];
+ const unique=list=>{const map=new Map();list.sort((a,b)=>(a.at||0)-(b.at||0)).forEach(h=>{if(h.key){map.delete(h.key);map.set(h.key,h);}});return [...map.values()].slice(-20);};
+ function restore(){try{history=unique(JSON.parse(localStorage.getItem(storageKey())||'[]'));}catch(_){history=[];}}
+ function save(){try{localStorage.setItem(storageKey(),JSON.stringify(history));}catch(_){}}
  restore();
- async function cloudRestore(){restore();try{const r=await fetch('/api/me/taste',{cache:'no-store'});if(!r.ok)return;const data=await r.json();
-  const merged=new Map();[...(data.history||[]),...history].forEach(h=>merged.set(h.eventId||h.key,h));history=[...merged.values()].sort((a,b)=>(a.at||0)-(b.at||0)).slice(-20);
-  localStorage.setItem(storageKey(),JSON.stringify(history));
- }catch(_){}}
+ const ready=()=>history.length>=20;
+ const allowed=t=>t&&!t.disliked&&!window.TelefyPromotionExcluded?.(t)&&(!window.TelefyRapCandidate||window.TelefyRapCandidate(t));
+ const artistKey=s=>normalizeArtistToken(findRosterConfig(s)?.name||getPrimaryArtistName(s));
+ function score(tr){let n=0;const artist=artistKey(tr.primaryArtist||tr.artist);history.forEach((h,i)=>{const w=(i+1)/20;if(artistKey(h.artist)===artist)n+=3*w;n+=(tr.modes||[]).filter(m=>(h.modes||[]).includes(m)).length*.55*w;if(h.genre&&tr.genre&&h.genre.toLowerCase()===tr.genre.toLowerCase())n+=.25*w;});return n;}
+ const shuffle=list=>{const a=list.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;};
+ function pool(){
+  let candidates=tracks.filter(allowed),heard=new Set(history.map(h=>h.key));
+  const recent=new Set([...sessionKeys.slice(-30),...(typeof recentFlowHistoryIds!=='undefined'?recentFlowHistoryIds.slice(-10).map(id=>tracks.find(t=>t.id===id)).filter(Boolean).map(getTrackUniqueKey):[])]);
+  const unseenRecent=candidates.filter(t=>!recent.has(getTrackUniqueKey(t)));
+  if(unseenRecent.length)candidates=unseenRecent;
+  if(!ready())return shuffle(candidates);
+  const rank=list=>list.map(tr=>({tr,n:score(tr)})).filter(x=>x.n>=.6).sort((a,b)=>b.n-a.n).slice(0,100).map(x=>x.tr);
+  const fresh=rank(candidates.filter(t=>!heard.has(getTrackUniqueKey(t)))),familiar=rank(candidates.filter(t=>heard.has(getTrackUniqueKey(t))));
+  // New discoveries lead, familiar tracks remain a minority when available.
+  const result=[];while(fresh.length||familiar.length){result.push(...fresh.splice(0,3));if(familiar.length)result.push(familiar.shift());}
+  return result.length?result:shuffle(candidates);
+ }
+ getMyVibeTracksPool=pool;
+ function updatePlaylist(){
+  if(typeof USER_PLAYLISTS==='undefined')return;
+  const old=USER_PLAYLISTS.find(p=>p.personal);
+  const keep=USER_PLAYLISTS.filter(p=>!p.personal);const changed=keep.length!==USER_PLAYLISTS.length;
+  if(!ready()||!state.isMaxSubscribed){if(changed){USER_PLAYLISTS.splice(0,USER_PLAYLISTS.length,...keep);saveUserPlaylists();}return;}
+  const heard=new Set(history.map(h=>h.key));
+  const candidates=tracks.filter(allowed).map(tr=>({tr,n:score(tr)})).filter(x=>x.n>=.6||heard.has(getTrackUniqueKey(x.tr))).sort((a,b)=>b.n-a.n).map(x=>x.tr);
+  const selected=[...candidates.filter(t=>!heard.has(getTrackUniqueKey(t))).slice(0,12),...candidates.filter(t=>heard.has(getTrackUniqueKey(t))).slice(0,8)];
+  for(const t of candidates)if(selected.length<20&&!selected.some(x=>getTrackUniqueKey(x)===getTrackUniqueKey(t)))selected.push(t);
+  // Never publish a tiny automatic playlist while discovery is still loading.
+  if(selected.length<20)return;
+  const pl={...(old||{}),id:old?.id||'personal_vibe_1',title:'Мой вайб #1',subtitle:'Музыка в твоём вкусе',cover:'#2AABEE',coverImg:old?.coverImg||selected[0]?.coverImg||null,trackIds:selected.map(t=>t.id),trackKeys:selected.map(getTrackUniqueKey),personal:true};
+  USER_PLAYLISTS.splice(0,USER_PLAYLISTS.length,...keep,pl);saveUserPlaylists();
+ }
+ async function cloudRestore(){restore();try{const r=await fetch('/api/me/taste',{cache:'no-store'});if(r.ok){const data=await r.json();history=unique([...(data.history||[]),...history]);save();}}catch(_){}updatePlaylist();if(ready())scheduleRefill();}
  window.addEventListener('telefy:profile-ready',cloudRestore);
  if(window.TelefyProfile?.user)cloudRestore();
  function record(tr){
   const eventId=globalThis.crypto?.randomUUID?.()||('play_'+Date.now()+'_'+Math.random().toString(36).slice(2));
-  history.push({eventId,at:Date.now(),key:getTrackUniqueKey(tr),artist:tr.primaryArtist||tr.artist,modes:tr.modes||[],genre:tr.genre||'',urn:tr.soundcloudUrn});history=history.slice(-20);
-  try{localStorage.setItem(storageKey(),JSON.stringify(history));}catch(_){}
-  if(isMyVibeStreamActive()){
-   const pool=getMyVibeTracksPool().filter(t=>t.id!==state.currentTrackId);state.queueIds=interleaveByArtist(pool).slice(0,30).map(t=>t.id);
-  }
-  if(window.TelefyProfile?.user){const record=history[history.length-1];fetch('/api/me/taste',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(record)}).catch(()=>{});}
-  scheduleRefill();
+  const event={eventId,at:Date.now(),key:getTrackUniqueKey(tr),artist:tr.primaryArtist||tr.artist,modes:tr.modes||[],genre:tr.genre||'',urn:tr.soundcloudUrn};
+  history=unique([...history,event]);save();updatePlaylist();scheduleRefill();
+  if(window.TelefyProfile?.user)fetch('/api/me/taste',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(event)}).catch(()=>{});
  }
- function artistKey(s){const cfg=findRosterConfig(s);return normalizeArtistToken(cfg?.name||getPrimaryArtistName(s));}
- function score(tr){
-  let n=0;const artist=artistKey(tr.primaryArtist||tr.artist),modes=tr.modes||[];
-  history.forEach((h,i)=>{const w=(i+1)/Math.max(1,history.length);if(artistKey(h.artist)===artist)n+=3*w;
-   n+=modes.filter(m=>(h.modes||[]).includes(m)).length*.55*w;
-   if(h.genre&&tr.genre&&h.genre.toLowerCase()===tr.genre.toLowerCase())n+=.25*w;
-  });return n;
- }
- getMyVibeTracksPool=function(){
-  if(!history.length)return tracks.filter(t=>!t.disliked&&userListenedTrackKeys.has(getTrackUniqueKey(t)));
-  const ranked=tracks.filter(t=>!t.disliked&&!window.TelefyPromotionExcluded?.(t)&&(!window.TelefyRapCandidate||window.TelefyRapCandidate(t))).map(tr=>({tr,n:score(tr)})).filter(x=>x.n>=.6).sort((a,b)=>b.n-a.n);
-  return ranked.slice(0,80).map(x=>x.tr);
- };
- let busy=false,timer=null;
- function scheduleRefill(){clearTimeout(timer);timer=setTimeout(refill,300);}
+ function scheduleRefill(){clearTimeout(timer);timer=setTimeout(()=>refill(),300);}
  async function refill(){
-  if(busy||!history.length)return;busy=true;
-  const weights=new Map();history.forEach((h,i)=>weights.set(h.artist,(weights.get(h.artist)||0)+i+1));
-  const artists=[...weights].sort((a,b)=>b[1]-a[1]).slice(0,3).map(x=>x[0]);
-  try{for(const artist of artists){
-   const r=await fetch('/api/soundcloud/search?'+new URLSearchParams({q:artist,limit:25}),{signal:AbortSignal.timeout(25000)});if(!r.ok)continue;const data=await r.json();mergeParsedTracksIntoCatalog(data.tracks||[]);
-  }}catch(_){}finally{busy=false;}
+  if(busy)return busy;
+  busy=(async()=>{
+   const weights=new Map();if(ready())history.forEach((h,i)=>weights.set(h.artist,(weights.get(h.artist)||0)+i+1));
+   const favorite=[...weights].sort((a,b)=>b[1]-a[1]).slice(0,3).map(x=>x[0]);
+   const modes=new Map();if(ready())history.forEach(h=>(h.modes||[]).forEach(m=>modes.set(m,(modes.get(m)||0)+1)));
+   const mode=[...modes].sort((a,b)=>b[1]-a[1])[0]?.[0];
+   const seeds=shuffle(['PHARAOH','9mice','Kai Angel','madk1d','FORTUNA 812','OG Buda','SODA LUV','Boulevard Depo','Big Baby Tape','ЛСП','Markul']);
+   const queries=[...favorite,...seeds.filter(a=>!favorite.includes(a)).slice(0,3)];
+   if(mode)queries.push('telefy:discovery:'+mode);
+   await Promise.allSettled(queries.map(async q=>{const r=await fetch('/api/soundcloud/search?'+new URLSearchParams({q,limit:50}),{signal:AbortSignal.timeout(25000)});if(r.ok){const data=await r.json();mergeParsedTracksIntoCatalog(data.tracks||[]);}}));
+   updatePlaylist();if(typeof renderMaxBetaView==='function')renderMaxBetaView();
+  })().finally(()=>{busy=null;});return busy;
  }
- window.TelefyTaste={record,score,get history(){return history.slice();}};
+ async function start(){
+  triggerHaptic('medium');state.activeMood='all';if(typeof flowModeIndex!=='undefined')flowModeIndex=0;state.sourceLabel=state.lang==='en'?'My Vibe':'Мой вайб';
+  const label=state.sourceLabel,desc=state.lang==='en'?'Music that fits you':'Музыка в твоём вкусе';
+  for(const id of ['home-stream-title','flow-stream-name']){const e=document.getElementById(id);if(e)e.textContent=label;}
+  const subtitle=document.getElementById('home-stream-desc');if(subtitle)subtitle.textContent=desc;
+  if(typeof renderMoodChips==='function')renderMoodChips();
+  let candidates=pool().filter(t=>t.id!==state.currentTrackId);
+  if(candidates.length<20){await refill();if(!isMyVibeStreamActive())return;candidates=pool().filter(t=>t.id!==state.currentTrackId);}
+  if(candidates.length){state.queueIds=candidates.slice(1,41).map(t=>t.id);sessionKeys.push(getTrackUniqueKey(candidates[0]));playTrack(candidates[0].id,label);}
+  else{state.isPlaying=false;syncRealAudio();}
+  if(ready())scheduleRefill();
+ }
+ const originalPlay=playTrack;
+ playTrack=function(id,...args){const t=tracks.find(t=>t.id===id);if(t&&isMyVibeStreamActive()){sessionKeys.push(getTrackUniqueKey(t));sessionKeys=sessionKeys.slice(-40);}return originalPlay(id,...args);};
+ window.TelefyTaste={record,score,start,refill,updatePlaylist,get ready(){return ready();},get history(){return history.slice();}};
+ updatePlaylist();
 })();

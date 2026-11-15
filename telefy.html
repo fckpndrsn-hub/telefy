@@ -8,7 +8,7 @@
 
     <!-- Embedded SF Pro fonts: Latin and Cyrillic, no external font requests. -->
 
-  <link rel="stylesheet" href="assets/styles.css?v=a962e799774d">
+  <link rel="stylesheet" href="assets/styles.css?v=eb173cd02836">
   <link rel="stylesheet" href="assets/max-logo.css?v=64a86089965c">
                                             <meta name="telefy-build" content="telegram-ui-20261114-2">
 </head>
@@ -393,7 +393,7 @@
                 </span>
                 <p class="text-[15px] font-medium leading-tight truncate">Офлайн-выгрузка</p>
               </div>
-              <a class="text-[14px] text-[#2AABEE] shrink-0" href="https://t.me/TelefyApp_Bot" target="_blank" rel="noopener">@TelefyApp_Bot</a>
+              <span class="text-[14px] text-[#2AABEE] shrink-0">@TelefyApp_Bot</span>
             </div>
 
             <div class="tg-row gap-3">
@@ -609,7 +609,7 @@
           </div>
         </div>
 
-        <p data-i18n="settingsFooter" class="text-center text-[11px] text-muted pt-1">Telefy · Telegram Mini App</p>
+        <div class="text-center text-[11px] text-muted pt-1"><span>Telefy 2026. </span><button type="button" id="btn-policy-documents" class="text-muted active:opacity-50 transition-opacity" data-i18n="settingsDocuments">Политика и документы</button></div>
       </div>
     </div>
 
@@ -723,25 +723,19 @@
     <div id="collection-modal" class="tg-sheet-modal hidden fixed inset-0 z-50 bg-black/45 backdrop-blur-sm flex items-end justify-center">
       <div class="col-sheet-panel app-surface w-full max-w-md rounded-t-[36px] squircle px-4 pt-3 pb-6 max-h-[82vh] flex flex-col space-y-3.5" style="box-shadow: 0 -6px 28px rgba(0, 0, 0, 0.16);">
         <div class="w-10 h-1.5 rounded-full bg-[var(--text-muted)]/30 mx-auto"></div>
-        <div id="col-modal-cover" class="collection-large-cover"></div>
-        <div class="flex items-start justify-between gap-3 px-1">
-          <div class="min-w-0">
-            <p id="col-modal-tag" class="text-[13px] font-medium text-[var(--text-muted)]">Выбор авторов Telefy</p>
-            <h3 id="col-modal-title" class="font-rounded text-[21px] tracking-tight mt-0.5 leading-snug">—</h3>
-          </div>
-          <div class="flex items-center gap-1.5 shrink-0">
+        <div class="collection-toolbar"><span aria-hidden="true"></span><div class="collection-toolbar-actions">
             <button id="btn-edit-active-playlist" type="button" title="Редактировать" class="hidden w-8 h-8 rounded-full bg-elevated flex items-center justify-center text-[var(--text-primary)] hover:text-[#2AABEE] active:scale-95 transition">
               <span class="tg-ico text-[15px]">&#xF01F;</span>
             </button>
             <button id="btn-delete-active-playlist" type="button" title="Удалить" class="hidden w-8 h-8 rounded-full bg-elevated flex items-center justify-center text-[#FF3B30] active:scale-95 transition">
               <span class="tg-ico text-[15px]">&#xF0B2;</span>
             </button>
-            <button id="btn-close-col-modal" class="w-8 h-8 rounded-full bg-elevated flex items-center justify-center text-xs shrink-0">✕</button>
-          </div>
-        </div>
+            <button id="btn-close-col-modal" class="w-8 h-8 rounded-full bg-elevated flex items-center justify-center text-xs shrink-0">✕</button></div></div>
+        <div id="col-modal-cover" class="collection-large-cover"></div>
+        <div class="collection-heading"><h3 id="col-modal-title" class="font-rounded">—</h3><p id="col-modal-tag" class="text-muted"></p></div>
         <p id="col-modal-description" class="text-sm text-muted px-1"></p>
         <button id="btn-play-collection" class="w-full py-3 rounded-full bg-[#2AABEE] text-white font-rounded text-[14px] active:scale-[0.98] transition">
-          <span data-i18n="playCollection">Слушать подборку</span>
+          <span class="tg-ico" aria-hidden="true">&#xF148;</span><span data-i18n="playCollection">Слушать подборку</span>
         </button>
         <div id="col-modal-tracks" class="overflow-y-auto tg-card">
           <!-- Rendered by JS -->
@@ -1040,9 +1034,9 @@
   <script src="assets/player-artwork.js?v=edfc41a8f4d7" defer></script>
   <script src="assets/soundcloud-catalog.js?v=23d549520342" defer></script>
   <script src="assets/telegram-layout.js?v=210a9254d1a7" defer></script>
-  <script src="assets/music-policy.js?v=eba64e3de417" defer></script>
+  <script src="assets/music-policy.js?v=b81e0a728c7b" defer></script>
   <script src="assets/first-run.js?v=d12d6a59cd45" defer></script>
-  <script src="assets/app.js?v=7e7d20c06256" defer></script>
+  <script src="assets/app.js?v=ba6d651a4810" defer></script>
   <script src="assets/player-controls.js?v=38f1a02f2bce" defer></script>
   <script src="assets/max-logo.js?v=1baf79ecf8e6" defer></script>
   <script src="assets/flow-discovery.js?v=c2ee0ce89749" defer></script>
@@ -1050,8 +1044,8 @@
   <script src="assets/audio-player.js?v=191b74b81a65" defer></script>
   <audio id="telefy-audio" preload="none"></audio>
 <script src="assets/freshmen.js?v=c8321018b699" defer></script>
-<script src="assets/personal-vibe.js?v=87a9535d9428" defer></script>
-<script src="assets/discovery.js?v=57d384c83afd" defer></script>
+<script src="assets/personal-vibe.js?v=aa7bbf7b6462" defer></script>
+<script src="assets/discovery.js?v=98681d3393ab" defer></script>
 <script src="assets/user-profile.js?v=7aeacda46430" defer></script>
 <script>document.addEventListener('DOMContentLoaded',()=>window.TelefyFirstRun?.boot());</script>
 </body>

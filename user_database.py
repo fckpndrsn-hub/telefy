@@ -68,6 +68,13 @@ class UserDatabase:
         with self.connect() as conn:
             # Serialize concurrent updates to the same account in PostgreSQL.
             if self.url:self.execute(conn,'SELECT telegram_id FROM telefy_users WHERE telegram_id=%s FOR UPDATE',(uid,))
+            rows=self.execute(conn,'SELECT event_id,played_at,record_json FROM telefy_taste_events WHERE telegram_id=%s',(uid,)).fetchall()
+            newer=any(json.loads(row['record_json']).get('key')==record['key'] and row['played_at']>record['at'] for row in rows)
+            if not newer:
+                for row in rows:
+                    if row['event_id']!=record['eventId'] and json.loads(row['record_json']).get('key')==record['key']:
+                        self.execute(conn,'DELETE FROM telefy_taste_events WHERE telegram_id=%s AND event_id=%s',(uid,row['event_id']))
+            else:return self.taste(uid)
             self.execute(conn,'INSERT INTO telefy_taste_events VALUES(%s,%s,%s,%s) ON CONFLICT(telegram_id,event_id) DO NOTHING',(uid,record['eventId'],record['at'],json.dumps(record)))
             self.execute(conn,'DELETE FROM telefy_taste_events WHERE telegram_id=%s AND event_id NOT IN (SELECT event_id FROM telefy_taste_events WHERE telegram_id=%s ORDER BY played_at DESC,event_id DESC LIMIT 20)',(uid,uid))
         return self.taste(uid)
