@@ -992,3 +992,26 @@ html.telefy-sheet-open, html.telefy-sheet-open body { overflow:hidden; }
 .collection-large-cover { width:min(220px,65vw); aspect-ratio:1; border-radius:22px; overflow:hidden; margin:8px auto 18px!important; display:flex; align-items:center; justify-content:center; color:white; }
 .collection-large-cover > svg { width:64px; height:64px; }
 #col-modal-tracks { overflow:visible; }
+
+#btn-open-create-playlist { background:transparent; color:#2AABEE; padding:6px 0 6px 12px; border-radius:0; font-size:15px; box-shadow:none; }
+.playlist-empty-state { display:flex; align-items:center; gap:14px; padding:20px 16px; border-radius:18px; background:var(--bg-card); }
+.playlist-empty-icon { flex-shrink:0; display:flex; align-items:center; justify-content:center; width:44px; height:44px; border-radius:13px; background:var(--bg-elevated); color:var(--text-muted); font-size:22px; }
+.playlist-empty-state p { font-size:15px; font-weight:600; color:var(--text-primary); line-height:21px; }
+.playlist-empty-state div > span { display:block; margin-top:3px; font-size:13px; line-height:18px; color:var(--text-muted); }
+.collection-large-cover > .tg-ico { font-size:64px; }
+
+/* Illustrated Telegram-style mode cards; all symbols use the bundled glyph font. */
+#flow-mode-card { min-height:88px; padding:15px 14px; border-radius:20px; background:var(--mode-gradient); box-shadow:none; }
+#flow-mode-card[data-mode="all"] { --mode-gradient:linear-gradient(120deg,#309FE8,#266FC1); }
+#flow-mode-card[data-mode="energy"] { --mode-gradient:linear-gradient(120deg,#D77622,#A8481E); }
+#flow-mode-card[data-mode="night"] { --mode-gradient:linear-gradient(120deg,#8271DB,#51439F); }
+#flow-mode-card[data-mode="uncensored"] { --mode-gradient:linear-gradient(120deg,#DE5284,#963572); }
+#flow-mode-card[data-mode="underground"] { --mode-gradient:linear-gradient(120deg,#249C85,#206D81); }
+#flow-mode-card #flow-mode-icon { display:flex; align-items:center; justify-content:center; width:44px; height:44px; padding:0; font-size:25px; color:#fff; background:rgb(255 255 255 / 17%); border-radius:14px; }
+#flow-mode-card .flow-mode-actions { display:flex; gap:6px; flex-shrink:0; }
+#flow-mode-card .flow-mode-actions button { display:flex; align-items:center; justify-content:center; flex:0 0 38px; width:38px; min-width:38px; height:38px; min-height:38px; aspect-ratio:1; border-radius:50%; background:rgb(255 255 255 / 17%); padding:0; font-size:16px; }
+#flow-mode-card .flow-mode-pattern { opacity:.14; }
+#flow-mode-card .flow-mode-pattern span { background:none!important; display:flex; color:#fff; font-size:30px; }
+#flow-mode-card .flow-mode-pattern span:nth-child(2),#flow-mode-card .flow-mode-pattern span:nth-child(5) { font-size:42px; }
+#flow-mode-card #flow-mode-label { font-size:17px; line-height:22px; }
+#flow-mode-card #flow-mode-subtitle { font-size:12px; line-height:16px; color:rgb(255 255 255 / 85%); }

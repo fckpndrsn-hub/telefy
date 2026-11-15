@@ -18,3 +18,12 @@ CREATE TABLE IF NOT EXISTS telefy_user_sessions (
  expires_at BIGINT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS telefy_sessions_expiry_idx ON telefy_user_sessions(expires_at);
+
+CREATE TABLE IF NOT EXISTS telefy_taste_events (
+ telegram_id BIGINT NOT NULL REFERENCES telefy_users(telegram_id) ON DELETE CASCADE,
+ event_id TEXT NOT NULL,
+ played_at BIGINT NOT NULL,
+ record_json TEXT NOT NULL,
+ PRIMARY KEY(telegram_id,event_id)
+);
+CREATE INDEX IF NOT EXISTS telefy_taste_recent_idx ON telefy_taste_events(telegram_id,played_at);

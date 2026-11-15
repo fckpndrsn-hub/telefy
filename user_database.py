@@ -55,3 +55,19 @@ class UserDatabase:
     def logout(self,token):
         self.ensure()
         with self.connect() as conn:self.execute(conn,'DELETE FROM telefy_user_sessions WHERE token_hash=%s',(hashlib.sha256(token.encode()).hexdigest(),))
+
+    def taste(self,uid):
+        import json
+        self.ensure()
+        with self.connect() as conn:
+            rows=self.execute(conn,'SELECT record_json FROM telefy_taste_events WHERE telegram_id=%s ORDER BY played_at DESC,event_id DESC LIMIT 20',(uid,)).fetchall()
+        return list(reversed([json.loads(row['record_json']) for row in rows]))
+    def record_taste(self,uid,record):
+        import json
+        self.ensure()
+        with self.connect() as conn:
+            # Serialize concurrent updates to the same account in PostgreSQL.
+            if self.url:self.execute(conn,'SELECT telegram_id FROM telefy_users WHERE telegram_id=%s FOR UPDATE',(uid,))
+            self.execute(conn,'INSERT INTO telefy_taste_events VALUES(%s,%s,%s,%s) ON CONFLICT(telegram_id,event_id) DO NOTHING',(uid,record['eventId'],record['at'],json.dumps(record)))
+            self.execute(conn,'DELETE FROM telefy_taste_events WHERE telegram_id=%s AND event_id NOT IN (SELECT event_id FROM telefy_taste_events WHERE telegram_id=%s ORDER BY played_at DESC,event_id DESC LIMIT 20)',(uid,uid))
+        return self.taste(uid)

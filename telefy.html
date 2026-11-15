@@ -8,7 +8,7 @@
 
     <!-- Embedded SF Pro fonts: Latin and Cyrillic, no external font requests. -->
 
-  <link rel="stylesheet" href="assets/styles.css?v=c70bd1ef5a0a">
+  <link rel="stylesheet" href="assets/styles.css?v=a962e799774d">
   <link rel="stylesheet" href="assets/max-logo.css?v=64a86089965c">
                                             <meta name="telefy-build" content="telegram-ui-20261114-2">
 </head>
@@ -157,12 +157,12 @@
           <div id="flow-mode-card" class="squircle-card px-4 py-3 flex items-center justify-between gap-3 cursor-grab active:cursor-grabbing" style="transition: transform 0.28s cubic-bezier(0.34, 1.45, 0.64, 1), opacity 0.22s ease;">
             <div class="flow-mode-pattern" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
             <div class="flex items-center gap-2.5 min-w-0">
-              <img id="flow-mode-icon" class="flow-mode-icon" src="assets/icons/mode-all.svg" alt="" aria-hidden="true" />
+              <span id="flow-mode-icon" class="flow-mode-icon tg-ico" aria-hidden="true"></span>
               <div class="flow-mode-text"><p id="flow-mode-label" class="font-rounded">Всё подряд</p><p id="flow-mode-subtitle"></p></div>
             </div>
             <div id="flow-mode-dots" class="flow-mode-actions">
-              <button type="button" id="flow-mode-prev" aria-label="Предыдущий режим"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m14 7-5 5 5 5"/></svg></button>
-              <button type="button" id="flow-mode-next" aria-label="Следующий режим"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m10 7 5 5-5 5"/></svg></button>
+              <button type="button" id="flow-mode-prev" aria-label="Предыдущий режим"><span class="tg-ico" aria-hidden="true">&#xF200;</span></button>
+              <button type="button" id="flow-mode-next" aria-label="Следующий режим"><span class="tg-ico" aria-hidden="true">&#xF1F9;</span></button>
             </div>
           </div>
         </div>
@@ -417,7 +417,7 @@
             <div class="flex items-center justify-between px-1">
               <h3 data-i18n="maxPlaylistsHeading" class="font-rounded text-[18px] tracking-tight">Мои плейлисты</h3>
               <button id="btn-open-create-playlist" type="button" class="px-3.5 py-1.5 rounded-full bg-[#2AABEE] text-white font-rounded text-[12px] flex items-center gap-1.5 active:scale-95 transition">
-                <span class="tg-ico text-[14px]">&#xF05B;</span>
+                <span class="tg-ico text-[14px]">&#xF0B9;</span>
                 <span data-i18n="maxCreatePlaylistBtn">Создать</span>
               </button>
             </div>
@@ -1038,17 +1038,21 @@
  <button id="cancel-playlist-delete" class="w-full py-3 rounded-2xl bg-elevated text-[#2AABEE] font-medium">Отмена</button></div></div>
 
   <script src="assets/player-artwork.js?v=edfc41a8f4d7" defer></script>
-  <script src="assets/soundcloud-catalog.js?v=9b2e225eb805" defer></script>
+  <script src="assets/soundcloud-catalog.js?v=23d549520342" defer></script>
   <script src="assets/telegram-layout.js?v=210a9254d1a7" defer></script>
-  <script src="assets/app.js?v=e384a792f52e" defer></script>
+  <script src="assets/music-policy.js?v=eba64e3de417" defer></script>
+  <script src="assets/first-run.js?v=d12d6a59cd45" defer></script>
+  <script src="assets/app.js?v=4a8a95c48e95" defer></script>
   <script src="assets/player-controls.js?v=38f1a02f2bce" defer></script>
   <script src="assets/max-logo.js?v=1baf79ecf8e6" defer></script>
   <script src="assets/flow-discovery.js?v=c2ee0ce89749" defer></script>
   <script src="assets/vendor/hls.light.min.js?v=482cccb3a224" defer></script>
   <script src="assets/audio-player.js?v=191b74b81a65" defer></script>
   <audio id="telefy-audio" preload="none"></audio>
-<script src="assets/freshmen.js?v=8fb22694ecfe" defer></script>
-<script src="assets/discovery.js?v=3f568b45f4d2" defer></script>
-<script src="assets/user-profile.js?v=28ae689ad552" defer></script>
+<script src="assets/freshmen.js?v=c8321018b699" defer></script>
+<script src="assets/personal-vibe.js?v=87a9535d9428" defer></script>
+<script src="assets/discovery.js?v=5bdecf0a247e" defer></script>
+<script src="assets/user-profile.js?v=7aeacda46430" defer></script>
+<script>document.addEventListener('DOMContentLoaded',()=>window.TelefyFirstRun?.boot());</script>
 </body>
 </html>

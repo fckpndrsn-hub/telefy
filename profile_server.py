@@ -38,7 +38,14 @@ class Handler(base.Handler):
     def do_GET(self):
         route=urlsplit(self.path).path
         if route=='/health':
-            self.reply(200,{'ok':True,'build':'telefy-profile-db-v1','database_configured':bool(os.environ.get('DATABASE_URL')),'telegram_configured':bool(os.environ.get('BOT_TOKEN'))});return
+            self.reply(200,{'ok':True,'build':'telefy-profile-db-v1','music_build':'music-refresh-20261115-1','recommendations_period_hours':6,'database_configured':bool(os.environ.get('DATABASE_URL')),'telegram_configured':bool(os.environ.get('BOT_TOKEN'))});return
+        if route=='/api/me/taste':
+            try:
+                user=DB.profile(self.cookie_token())
+                if not user:self.reply(401,{'error':'login_required'});return
+                self.reply(200,{'history':DB.taste(user['telegram_id'])})
+            except Exception:self.reply(503,{'error':'database_unavailable'})
+            return
         if route=='/api/me':
             try:profile=DB.profile(self.cookie_token())
             except Exception:self.reply(503,{'error':'database_unavailable'});return
@@ -53,6 +60,30 @@ class Handler(base.Handler):
         return origin in allowed
     def do_POST(self):
         route=urlsplit(self.path).path
+        if route=='/api/me/taste':
+            if not self.same_origin():self.reply(403,{'error':'origin_rejected'});return
+            try:
+                user=DB.profile(self.cookie_token())
+                if not user:self.reply(401,{'error':'login_required'});return
+            except Exception:self.reply(503,{'error':'database_unavailable'});return
+            try:
+                import re
+                n=int(self.headers.get('Content-Length','0'))
+                if not 0<n<=12000 or not self.headers.get('Content-Type','').startswith('application/json'):raise ValueError()
+                record=json.loads(self.rfile.read(n))
+                if not isinstance(record,dict):raise ValueError()
+                for k,size in [('eventId',64),('key',500),('artist',200),('genre',100)]:
+                    if not isinstance(record.get(k),str) or len(record[k])>size:raise ValueError()
+                if not re.fullmatch(r'[a-zA-Z0-9_-]{8,64}',record['eventId']):raise ValueError()
+                if not isinstance(record.get('at'),int) or not int(time.time()*1000)-90*86400000<=record['at']<=int(time.time()*1000)+300000:raise ValueError()
+                modes=record.get('modes')
+                if not isinstance(modes,list) or len(modes)>5 or any(m not in ('all','energy','night','uncensored','underground')for m in modes):raise ValueError()
+                clean={k:record[k]for k in ('eventId','key','artist','genre','at','modes')}
+                clean['urn']=str(record.get('urn') or '')[:100]
+            except (ValueError,TypeError,KeyError):self.reply(400,{'error':'invalid_history'});return
+            try:self.reply(200,{'history':DB.record_taste(user['telegram_id'],clean)})
+            except Exception:self.reply(503,{'error':'database_unavailable'})
+            return
         if route not in ('/api/auth/telegram','/api/auth/logout'):return super().do_POST()
         if not self.same_origin():self.reply(403,{'error':'origin_rejected'});return
         if route=='/api/auth/logout':

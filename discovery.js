@@ -1,6 +1,18 @@
 /* SoundCloud discovery adapters, separated from playback. */
 (() => {
- const memberships=new Map(),pending=new Map();
+ const coverKey='telefy_collection_art_v1';let coverCache={};
+ try{coverCache=JSON.parse(localStorage.getItem(coverKey)||'{}');}catch(_){}
+ for(const col of COLLECTIONS){const c=coverCache[col.id];if(c&&Date.now()-c.at<86400000&&c.url?.startsWith('https://'))col.coverImg=c.url;}
+ async function warmCollectionArt(col){
+  try{const r=await fetch('/api/soundcloud/search?'+new URLSearchParams({q:'telefy:cover:'+col.id}),{signal:AbortSignal.timeout(30000)});if(!r.ok)return;const data=await r.json();if(!data.coverImg?.startsWith('https://'))return;
+   const image=new Image();image.src=data.coverImg;await Promise.race([image.decode().catch(()=>{}),new Promise(resolve=>setTimeout(resolve,5000))]);
+   coverCache[col.id]={url:data.coverImg,at:Date.now()};try{localStorage.setItem(coverKey,JSON.stringify(coverCache));}catch(_){}
+   if(!col.trackIds.length){col.coverImg=data.coverImg;renderCollections();if(state.activeCollectionId===col.id)updateCollectionPresentation();}
+  }catch(_){}
+ }
+ // Fetch lightweight artwork at startup; full playlists still load only on demand.
+ async function warmAllArt(){await Promise.allSettled(COLLECTIONS.map(warmCollectionArt));}
+ const memberships=new Map(),pending=new Map(),modeOffsets=new Map();
  const english={energy:['Energy','High tempo and drive'],night:['Chill vibe','Soft sound and mellow rhythms'],uncensored:['Super beat','Heavy trap and distorted bass'],underground:['Trends','Fresh popular Russian tracks']};
  for(const [id,[label,desc]]of Object.entries(english))MOOD_I18N.en[id]={label,streamTitle:label,shortDesc:desc};
  async function fetchBatch(kind,offset=0){const r=await fetch('/api/soundcloud/search?'+new URLSearchParams({q:'telefy:discovery:'+kind,offset,limit:50}),{signal:AbortSignal.timeout(90000)});if(!r.ok)throw Error('discovery');return r.json();}
@@ -15,7 +27,7 @@
      memberships.set(col.id,urns);let selected=tracks.filter(t=>urns.has(t.soundcloudUrn));
      if(col.id==='hits'){selected.sort((a,b)=>(b.playbackCount||0)-(a.playbackCount||0));const seen=new Set();selected=selected.filter(t=>{const k=getTrackUniqueKey(t);if(seen.has(k))return false;seen.add(k);return true;});}
      if(col.id==='telescope'){const seen=new Set();selected=selected.filter(t=>{const k=getTrackUniqueKey(t);if(seen.has(k))return false;seen.add(k);return true;});}
-     col.trackIds=selected.slice(0,col.id==='telescope'?200:100).map(t=>t.id);
+     col.trackIds=interleaveByArtist(selected).slice(0,250).map(t=>t.id);
      col.coverImg=tracks.find(t=>col.trackIds.includes(t.id)&&t.coverImg)?.coverImg||null;renderCollections();
      if(state.activeCollectionId===col.id)updateCollectionPresentation();
      if(state.activeCollectionId===col.id){const box=document.getElementById('col-modal-tracks');box.innerHTML=col.trackIds.length?col.trackIds.map(id=>createTrackRowHTML(getTrack(id))).join(''):'<p class="px-4 py-7 text-muted text-sm">Подходящих треков пока не найдено</p>';bindTrackRowEvents(box,col.title);}
@@ -29,12 +41,25 @@
   const mood=state.activeMood;if(!mood||mood==='all')return original(autoPlay);
   const key='mode:'+mood;if(pending.has(key))return;
   const task=(async()=>{try{
-   const data=await fetchBatch(mood);importBatch(data.tracks);if(state.activeMood!==mood)return;
-   const old=new Set(state.queueIds);const candidates=tracks.filter(t=>doesTrackMatchMood(t,mood)&&isFlowTrackUnplayed(t)&&!old.has(t.id));
+   const offset=modeOffsets.get(mood)||0;const data=await fetchBatch(mood,offset);modeOffsets.set(mood,data.hasMore?data.nextOffset:0);importBatch(data.tracks);if(state.activeMood!==mood)return;
+   const old=new Set(state.queueIds);
+   state.queueIds=(state.queueIds||[]).filter(id=>{const t=tracks.find(t=>t.id===id);return t&&doesTrackMatchMood(t,mood);});const candidates=interleaveByArtist(tracks.filter(t=>doesTrackMatchMood(t,mood)&&isFlowTrackUnplayed(t)&&!old.has(t.id)));
    state.queueIds.push(...candidates.map(t=>t.id));if(autoPlay&&state.queueIds.length)playTrack(state.queueIds.shift(),getMoodText(mood).streamTitle);else renderAll();
    if(!candidates.length&&!state.queueIds.length)showToast(state.lang==='en'?'No matching tracks yet':'Подходящих треков пока нет');
   }catch(_){showToast(state.lang==='en'?'Could not load this mode':'Не удалось загрузить режим');}})();
   pending.set(key,task);try{await task;}finally{pending.delete(key);}
  };
- renderMoodChips();renderCollections();renderFlowMode();
+ async function warmScene(){
+  for(let offset=0;offset<7;offset++){
+   try{const data=await fetchBatch('scene',offset);importBatch(data.tracks);
+    if(state.activeMood==='all'&&!isMyVibeStreamActive()&&!window.TelefyFirstRun?.pending){
+     const old=new Set(state.queueIds||[]);const extra=tracks.filter(t=>data.tracks.some(x=>x.soundcloudUrn===t.soundcloudUrn)&&!old.has(t.id)&&isFlowTrackUnplayed(t));
+     state.queueIds=interleaveByArtist([...(state.queueIds||[]).map(getTrack),...extra]).map(t=>t.id);renderAll();
+    }
+    if(!data.hasMore)break;
+   }catch(_){break;}
+  }
+ }
+ warmScene();
+ renderMoodChips();renderCollections();renderFlowMode();warmAllArt();
 })();

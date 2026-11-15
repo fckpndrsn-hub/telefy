@@ -8,13 +8,14 @@
       signal:typeof AbortSignal.timeout==='function'?AbortSignal.timeout(22000):undefined
     });
     const data = await response.json();
+    if (response.status===401 && data.error==='bridge_unauthorized') { location.replace('/'); throw new Error('session_expired'); }
     if (!response.ok) {
       const error=new Error(data.error || 'soundcloud_unavailable'); error.code=data.error; throw error;
     }
     return data;
   }
-  function importTracks(items, mood=null) {
-    return mergeParsedTracksIntoCatalog(items.map(item => {
+  function importTracks(items, mood=null, explicit=false) {
+    return mergeParsedTracksIntoCatalog(items.filter(item=>explicit||!window.TelefyPromotionExcluded?.(item)).map(item => {
       const cfg = findRosterConfig(item.artist);
       return { ...item, mood:mood || cfg?.mood || 'all', coverStatus:'loaded' };
     }));
@@ -30,7 +31,8 @@
     try {
       const data=await request(query,offset);
       if (revision!==queryRevision) return;
-      importTracks(data.tracks);
+      window.TelefySearchAliases={query,artists:data.queryArtists||[]};
+      importTracks(data.tracks,null,true);
       state.catalogError=null;
       searchPagination.nextIndex=data.nextOffset; searchPagination.hasMore=data.hasMore;
       if (more) searchDisplayLimit+=data.tracks.length;
@@ -69,9 +71,16 @@
   async function initialize() {
     state.catalogError=null;
     try {
-      const status=await fetch('/api/soundcloud/status',{cache:'no-store'}).then(r=>r.json());
+      const statusResponse=await fetch('/api/soundcloud/status',{cache:'no-store'});
+      const status=await statusResponse.json();
+      if (statusResponse.status===401 && status.error==='bridge_unauthorized') { location.replace('/'); return; }
+      if (!statusResponse.ok) { const error=new Error(status.error);error.code=status.error;throw error; }
       if (!status.configured) { await hydrateAllTrackCovers(); return; }
       window.TelefySoundCloud.ready=true;
+      // A legacy Deezer metadata card is not a verified playable SoundCloud item.
+      tracks=tracks.filter(track=>track.soundcloudUrn);
+      state.queueIds=(state.queueIds || []).filter(id=>tracks.some(track=>track.id===id));
+      if (!tracks.some(track=>track.id===state.currentTrackId)) state.currentTrackId=tracks[0]?.id || 0;
       state.isCatalogParsing=true; renderAll();
       let received=0;
       for (let i=0;i<seeds.length;i+=3) {

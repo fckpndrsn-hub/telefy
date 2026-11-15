@@ -13,7 +13,7 @@
    initial.className='font-rounded text-[28px] text-white tracking-tight';initial.textContent=Array.from(user.first_name||'T')[0].toLocaleUpperCase();avatar.append(initial);
    if(user.photo_url?.startsWith('https://')){const img=document.createElement('img');img.alt='';img.referrerPolicy='no-referrer';img.className='w-full h-full object-cover';img.src=user.photo_url;img.onerror=()=>{img.remove();initial.hidden=false;};initial.hidden=true;avatar.append(img);}
   }
-  window.TelefyProfile={user};
+  window.TelefyProfile={user};window.dispatchEvent(new Event('telefy:profile-ready'));
  }
  async function load(){
   const tg=window.Telegram?.WebApp;

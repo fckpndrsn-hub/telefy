@@ -104,6 +104,32 @@
     ];
     // Roster of artists for catalog initialization
     const RUSSIAN_RAP_ROSTER = [
+      {"name": "RMW", "query": "RMW", "mood": "energy", "uncensoredDefault": true, "aliases": ["rmw", "рмв"]},
+      {"name": "Anonymous Ember", "query": "Anonymous Ember", "mood": "energy", "uncensoredDefault": true, "aliases": ["anonymous ember", "anonymous amber", "анонимный эмбер"]},
+      {"name": "tuborosho", "query": "tuborosho", "mood": "energy", "uncensoredDefault": true, "aliases": ["tuborosho", "туборошо"]},
+      {"name": "huzzy b", "query": "huzzy b", "mood": "energy", "uncensoredDefault": true, "aliases": ["huzzy b", "huzzyb", "хаззиб"]},
+      {"name": "fckshiza", "query": "fckshiza", "mood": "energy", "uncensoredDefault": true, "aliases": ["fckshiza", "факшиза"]},
+      {"name": "FORTUNA 812", "query": "FORTUNA 812", "mood": "energy", "uncensoredDefault": true, "aliases": ["fortuna 812", "fortune 812", "фортуна 812", "фортуна"]},
+      {"name": "madk1d", "query": "madk1d", "mood": "energy", "uncensoredDefault": true, "aliases": ["madk1d", "madkid", "медкид", "мэдкид"]},
+      {"name": "темный принц", "query": "темный принц", "mood": "energy", "uncensoredDefault": true, "aliases": ["темный принц", "тёмный принц"]},
+      {"name": "Kai Angel", "query": "Kai Angel", "mood": "energy", "uncensoredDefault": true, "aliases": ["kai angel", "кай ангел"]},
+      {"name": "9mice", "query": "9mice", "mood": "energy", "uncensoredDefault": true, "aliases": ["9mice", "9 mice"]},
+      {"name": "Clout", "query": "Clout", "mood": "energy", "uncensoredDefault": true, "aliases": ["clout", "клаут", "klout"]},
+      {"name": "CUPSIZE", "query": "CUPSIZE", "mood": "energy", "uncensoredDefault": true, "aliases": ["cupsize", "капсайз"]},
+      {"name": "CODE10", "query": "CODE10", "mood": "energy", "uncensoredDefault": true, "aliases": ["code10", "code 10", "code80"]},
+      {"name": "Королевский", "query": "Королевский", "mood": "all", "uncensoredDefault": true, "aliases": ["королевский", "королевский xvii", "королевский 17", "korolevskiy"]},
+      {"name": "Nanmas", "query": "Nanmas", "mood": "energy", "uncensoredDefault": true, "aliases": ["nanmas", "нанмас"]},
+      {"name": "fakemutin", "query": "fakemutin", "mood": "energy", "uncensoredDefault": true, "aliases": ["fakemutin", "фейкмутин"]},
+      {"name": "Олег Кавказ", "query": "Олег Кавказ", "mood": "energy", "uncensoredDefault": true, "aliases": ["олег кавказ", "oleg kavkaz"]},
+      {"name": "ivycraft", "query": "ivycraft", "mood": "energy", "uncensoredDefault": true, "aliases": ["ivycraft", "айвикрафт"]},
+      {"name": "Главный герой", "query": "Главный герой", "mood": "energy", "uncensoredDefault": true, "aliases": ["главный герой", "glavniy geroy"]},
+      {"name": "хулагу 3g", "query": "хулагу 3g", "mood": "energy", "uncensoredDefault": true, "aliases": ["хулагу 3g", "hulagu 3g", "hulagu3g"]},
+      {"name": "3goth2002", "query": "3goth2002", "mood": "energy", "uncensoredDefault": true, "aliases": ["3goth2002"]},
+      {"name": "akiko!", "query": "akiko!", "mood": "energy", "uncensoredDefault": true, "aliases": ["akiko!"]},
+      {"name": "CODE80", "query": "CODE80", "mood": "energy", "uncensoredDefault": true, "aliases": ["code80", "code 80"]},
+      {"name": "greyrock", "query": "greyrock", "mood": "energy", "uncensoredDefault": true, "aliases": ["greyrock", "грейрок"]},
+      {"name": "tewiq", "query": "tewiq", "mood": "energy", "uncensoredDefault": true, "aliases": ["tewiq", "тевик"]},
+      {"name": "3umph", "query": "3umph", "mood": "energy", "uncensoredDefault": true, "aliases": ["3umph"]},
       { name: 'Big Baby Tape', query: 'Big Baby Tape', mood: 'energy', uncensoredDefault: true, aliases: ['big baby tape', 'биг бейби тейп', 'dj tape'] },
       { name: 'KIZARU', query: 'kizaru', mood: 'uncensored', uncensoredDefault: true, aliases: ['kizaru', 'кизару'] },
       { name: 'FRIENDLY THUG 52 NGG', query: 'FRIENDLY THUG 52 NGG', mood: 'underground', uncensoredDefault: true, aliases: ['friendly thug 52 ngg', 'friendly thug 52'] },
@@ -165,7 +191,7 @@
           const parsed = JSON.parse(raw);
           if (Array.isArray(parsed) && parsed.length > 0) {
             return parsed
-              .filter(t => t && t.title && t.artist && !/(^|[^a-zа-яё])(?:баста|basta|ноггано|noggano)(?=$|[^a-zа-яё])/i.test(t.artist) && (t.soundcloudUrn || (t.coverImg && t.coverImg.startsWith('http'))))
+              .filter(t => t && !window.telefySongBlocked(t) && t.title && t.artist && !/(^|[^a-zа-яё])(?:баста|basta|ноггано|noggano)(?=$|[^a-zа-яё])/i.test(t.artist) && (t.soundcloudUrn || (t.coverImg && t.coverImg.startsWith('http'))))
               .map(t => ({ ...t, liked: false }));
           }
         }
@@ -173,7 +199,7 @@
       return [];
     })();
 
-    const COLLECTIONS = [{"id": "hits", "title": "100 хитов русского рэпа", "tag": "2017–2026", "shortDesc": "Хиты русского рэпа разных лет", "artists": "", "targetArtists": [], "cover": "#2450A4", "icon": "<svg viewBox=\"0 0 24 24\" width=\"22\" height=\"22\" fill=\"currentColor\" aria-hidden=\"true\"><path d=\"M8 3h8v3h4v4c0 3-2 5-5 5h-1v3h3v3H7v-3h3v-3H9c-3 0-5-2-5-5V6h4V3Zm-1 6v1c0 1.5 1 2 2 2V9H7Zm8 0v3c1 0 2-.5 2-2V9h-2Z\"/></svg>", "trackIds": [], "curated": true}, {"id": "legends", "title": "Легенды хип-хопа", "tag": "Классика жанра", "shortDesc": "Артисты, которые сформировали звук", "artists": "", "targetArtists": [], "cover": "#6B4BA2", "icon": "<svg viewBox=\"0 0 24 24\" width=\"22\" height=\"22\" fill=\"currentColor\" aria-hidden=\"true\"><path d=\"m2 6 5 4 5-7 5 7 5-4-3 13H5L2 6Zm3 15h14v2H5z\"/></svg>", "trackIds": [], "curated": true}, {"id": "premiere", "title": "Премьера", "tag": "Свежие релизы", "shortDesc": "Новые релизы популярных артистов", "artists": "", "targetArtists": [], "cover": "#B84363", "icon": "<svg viewBox=\"0 0 24 24\" width=\"22\" height=\"22\" fill=\"currentColor\" aria-hidden=\"true\"><path d=\"m12 1 3 7 8 1-6 5 2 8-7-4-7 4 2-8-6-5 8-1z\"/></svg>", "trackIds": [], "curated": true}, {"id": "telescope", "title": "Teleскоп", "tag": "Выбор Telefy", "shortDesc": "Редакционная подборка", "artists": "", "targetArtists": [], "cover": "#197D86", "icon": "<svg viewBox=\"0 0 24 24\" width=\"22\" height=\"22\" fill=\"currentColor\" aria-hidden=\"true\"><path d=\"m2 9 12-6 4 8-12 6-4-8Zm16-7 4-2 2 4-4 2-2-4ZM9 16h4l5 7h-4l-3-4-3 4H4l5-7Z\"/></svg>", "trackIds": [], "curated": true}];
+    const COLLECTIONS = [{"id": "hits", "title": "250 хитов русского рэпа", "tag": "2017–2026", "shortDesc": "Хиты русского рэпа разных лет", "artists": "", "targetArtists": [], "cover": "#2450A4", "icon": "<span class=\"tg-ico text-[22px]\" aria-hidden=\"true\">&#xF06C;</span>", "trackIds": [], "curated": true}, {"id": "legends", "title": "Легенды хип-хопа", "tag": "Классика жанра", "shortDesc": "Артисты, которые сформировали звук", "artists": "", "targetArtists": [], "cover": "#6B4BA2", "icon": "<span class=\"tg-ico text-[22px]\" aria-hidden=\"true\">&#xF114;</span>", "trackIds": [], "curated": true}, {"id": "premiere", "title": "Премьера", "tag": "Свежие релизы", "shortDesc": "Новые релизы популярных артистов", "artists": "", "targetArtists": [], "cover": "#B84363", "icon": "<span class=\"tg-ico text-[22px]\" aria-hidden=\"true\">&#xF01B;</span>", "trackIds": [], "curated": true}, {"id": "telescope", "title": "Teleскоп", "tag": "Выбор Telefy", "shortDesc": "Редакционная подборка", "artists": "", "targetArtists": [], "cover": "#197D86", "icon": "<span class=\"tg-ico text-[22px]\" aria-hidden=\"true\">&#xF15B;</span>", "trackIds": [], "curated": true}];
 
     const I18N = {
       ru: {
@@ -551,6 +577,7 @@
     };
 
     function getTrack(id) {
+      if(window.TelefyFirstRun?.pending)return {...PARSING_FALLBACK_TRACK,title:state.lang==='en'?'Picking a track…':'Подбираем трек…'};
       if (!tracks.length) {
         if (state.isCatalogParsing) return PARSING_FALLBACK_TRACK;
         return { ...PARSING_FALLBACK_TRACK, title:state.lang==='en'?'Catalog unavailable':'Каталог недоступен',
@@ -675,6 +702,7 @@
     }
 
     function setTheme(theme) {
+      if(!profileBgCustom)applyProfileGradient(theme==='light'?'white':'slate');
       state.theme = theme;
       document.body.classList.toggle('theme-light', theme === 'light');
       savePrefs();
@@ -721,7 +749,9 @@
     }
 
     function doesTrackMatchMood(tr, moodId) {
-      if(moodId && moodId!=='all')return tr?.classificationVersion===2&&Array.isArray(tr.modes)&&tr.modes.includes(moodId);
+      if(window.TelefyRapCandidate&&!window.TelefyRapCandidate(tr))return false;
+      if(window.TelefyPromotionExcluded?.(tr))return false;
+      if(moodId && moodId!=='all')return tr?.classificationVersion===3&&Array.isArray(tr.modes)&&tr.modes.includes(moodId);
       if (!tr) return false;
       const m = moodId || 'all';
       if (m === 'all') return true;
@@ -735,6 +765,8 @@
     }
 
     function isFlowTrackUnplayed(tr) {
+      if(window.TelefyRapCandidate&&!window.TelefyRapCandidate(tr))return false;
+      if(window.TelefyPromotionExcluded?.(tr))return false;
       if (!tr || !tr.id || tr.disliked) return false;
       if (tr.id === state.currentTrackId) return false;
       if (playedFlowTrackIds.has(tr.id)) return false;
@@ -770,29 +802,21 @@
     }
 
     function interleaveByArtist(list) {
-      const byArtist = new Map();
-      const seenKeys = new Set();
-      list.forEach(tr => {
-        if (!tr || !tr.id) return;
-        const uk = getTrackUniqueKey(tr);
-        if (uk && seenKeys.has(uk)) return;
-        if (uk) seenKeys.add(uk);
-        const aKey = normalizeArtistToken(tr.primaryArtist || getPrimaryArtistName(tr.artist || ''));
-        if (!byArtist.has(aKey)) byArtist.set(aKey, []);
-        byArtist.get(aKey).push(tr);
-      });
-      const out = [];
-      let round = 0;
-      let more = true;
-      while (more) {
-        more = false;
-        for (const group of byArtist.values()) {
-          if (round < group.length) {
-            out.push(group[round]);
-            more = true;
-          }
-        }
-        round++;
+      const priority=new Set(["rmw", "anonymous ember", "tuborosho", "huzzy b", "fckshiza", "fortuna 812", "madk1d", "темный принц", "kai angel", "9mice", "clout", "cupsize", "code10", "королевский", "nanmas", "fakemutin", "олег кавказ", "ivycraft", "главный герой", "хулагу 3g", "3goth2002", "akiko!", "code80", "greyrock", "tewiq", "3umph"]);
+      const key=tr=>normalizeArtistToken(findRosterConfig(tr.primaryArtist||getPrimaryArtistName(tr.artist))?.name||tr.primaryArtist||getPrimaryArtistName(tr.artist));
+      const groups=new Map(),seen=new Set();
+      for(const tr of list){if(!tr?.id)continue;const k=getTrackUniqueKey(tr);if(seen.has(k))continue;seen.add(k);const a=key(tr);if(!groups.has(a))groups.set(a,[]);groups.get(a).push(tr);}
+      for(const bucket of groups.values())for(let i=bucket.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[bucket[i],bucket[j]]=[bucket[j],bucket[i]];}
+      const recent=recentFlowHistoryIds.slice(-3).map(id=>tracks.find(t=>t.id===id)).filter(Boolean).map(key);
+      const out=[];
+      while(groups.size){
+        let choices=[...groups.keys()].filter(a=>!recent.includes(a));
+        if(!choices.length)choices=[...groups.keys()].filter(a=>a!==recent.at(-1));
+        if(!choices.length)choices=[...groups.keys()];
+        const weights=choices.map(a=>priority.has(a)?2:1);let draw=Math.random()*weights.reduce((a,b)=>a+b,0),selected=choices[choices.length-1];
+        for(let i=0;i<choices.length;i++){draw-=weights[i];if(draw<0){selected=choices[i];break;}}
+        const bucket=groups.get(selected);out.push(bucket.shift());if(!bucket.length)groups.delete(selected);
+        recent.push(selected);if(recent.length>3)recent.shift();
       }
       return out;
     }
@@ -1285,10 +1309,12 @@
         document.getElementById('flow-stream-name').textContent = modeText.streamTitle;
       }
       const iconMode = ['all','uncensored','night','energy','underground'].includes(mode.id) ? mode.id : 'all';
-      const icons={"energy": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22white%22%3E%3Cpath%20d%3D%22M13%201%203%2014h7l-1%209L21%209h-8z%22/%3E%3C/svg%3E", "night": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22white%22%3E%3Cpath%20d%3D%22M21%2015A10%2010%200%200%201%209%203%2010%2010%200%201%200%2021%2015Z%22/%3E%3C/svg%3E", "uncensored": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22white%22%3E%3Cpath%20d%3D%22M4%202h16v20H4V2Zm8%208a5%205%200%201%200%200%2010%205%205%200%200%200%200-10Zm0%203a2%202%200%201%201%200%204%202%202%200%200%201%200-4Zm0-9a2%202%200%201%200%200%204%202%202%200%200%200%200-4Z%22%20fill-rule%3D%22evenodd%22/%3E%3C/svg%3E", "underground": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22white%22%3E%3Cpath%20d%3D%22M14%203h8v8l-3-3-6%206-4-4-7%207v-5l7-7%204%204%203-3zM2%2020h20v3H2z%22/%3E%3C/svg%3E"};
-      const symbol=icons[mode.id]||'assets/icons/mode-all.svg';
-      document.getElementById('flow-mode-icon').src=symbol;
-      document.getElementById('flow-mode-card').style.setProperty('--mode-symbol',`url("${symbol}")`);
+      const attributes={all:['F0BF','F15D','F127','F143','F01B'],energy:['F053','F26A','F06C','F284','F143'],night:['F1C2','F126','F0BF','F143','F15D'],uncensored:['F06C','F01B','F053','F284','F15D'],underground:['F152','F143','F114','F06C','F0BF']};
+      const symbols=attributes[mode.id]||attributes.all;
+      document.getElementById('flow-mode-icon').textContent=String.fromCodePoint(parseInt(symbols[0],16));
+      const pattern=document.querySelector('#flow-mode-card .flow-mode-pattern');
+      pattern.innerHTML=symbols.map(code=>`<span class="tg-ico">${String.fromCodePoint(parseInt(code,16))}</span>`).join('');
+
     }
 
     function createSimpleQueueRowHTML(t) {
@@ -1332,6 +1358,7 @@
     const libraryBrowsePagination = { rosterIdx: 0, chartIndex: 0, queryIdx: 0, queryOffset: 0, loading: false, hasMore: true };
 
     function doesTrackMatchSearchQuery(tr, rawQuery) {
+      const hint=window.TelefySearchAliases;if(hint?.query===rawQuery&&hint.artists?.some(a=>doesArtistMatch(tr.artist,a)))return true;
       if (!tr) return false;
       const q = (rawQuery || '').trim().toLowerCase().replace(/ё/g, 'е');
       if (!q) return true;
@@ -1678,7 +1705,7 @@
       const gridEl = document.getElementById('max-playlists-grid');
       if (gridEl) {
         if (USER_PLAYLISTS.length === 0) {
-          gridEl.innerHTML = `<div class="col-span-2 tg-card text-center py-8 text-xs text-muted">${state.lang === 'en' ? 'No playlists yet. Tap Create!' : 'Плейлистов пока нет. Нажмите «Создать»!'}</div>`;
+          gridEl.innerHTML = `<div class="playlist-empty-state col-span-2"><span class="playlist-empty-icon tg-ico" aria-hidden="true">&#xF0BF;</span><div><p>${state.lang === 'en' ? 'Your music, together' : 'Твоя музыка — вместе'}</p><span>${state.lang === 'en' ? 'Create a playlist and add your favourite tracks' : 'Создай плейлист и добавь любимые треки'}</span></div></div>`;
         } else {
           gridEl.innerHTML = USER_PLAYLISTS.map(pl => {
             const validTracks = (pl.trackIds || []).map(id => tracks.find(x => x.id === id)).filter(Boolean);
@@ -2493,6 +2520,7 @@
       let nextId = tracks.reduce((mx, x) => Math.max(mx, Number(x.id) || 0), 0) + 1;
 
       newItems.forEach((item, idx) => {
+        if(window.telefySongBlocked(item))return;
         if (!item || !item.title || !item.artist || (!item.coverImg && !item.soundcloudUrn)) return;
         const k = `${normalizeArtistToken(getPrimaryArtistName(item.artist))}::${normalizeTrackTitleKey(item.title)}`;
         const existing = existingByKey.get(k);
@@ -2502,7 +2530,7 @@
           existing.collectionId = item.collectionId || existing.collectionId;
           existing.previewUrl = item.previewUrl || existing.previewUrl;
           if (item.soundcloudUrn) {
-            existing.classificationVersion=item.classificationVersion||existing.classificationVersion||0;existing.modes=item.modes||existing.modes||[];existing.releaseDate=item.releaseDate||existing.releaseDate;existing.playbackCount=item.playbackCount||existing.playbackCount||0;
+            existing.genre=item.genre||existing.genre||'';existing.classificationVersion=item.classificationVersion||existing.classificationVersion||0;existing.modes=item.modes||existing.modes||[];existing.releaseDate=item.releaseDate||existing.releaseDate;existing.playbackCount=item.playbackCount||existing.playbackCount||0;
             existing.soundcloudUrn=item.soundcloudUrn; existing.soundcloudUrl=item.soundcloudUrl;
             existing.uploader=item.uploader; existing.uploaderUrl=item.uploaderUrl;
           }
@@ -2512,7 +2540,7 @@
         const accentColor = TRACK_ACCENT_COLORS[(nextId + idx) % TRACK_ACCENT_COLORS.length];
         const trObj = {
           id: nextId++,
-          classificationVersion:item.classificationVersion||0, modes:item.modes||[], releaseDate:item.releaseDate||null, playbackCount:item.playbackCount||0,
+          genre:item.genre||'', classificationVersion:item.classificationVersion||0, modes:item.modes||[], releaseDate:item.releaseDate||null, playbackCount:item.playbackCount||0,
           soundcloudUrn:item.soundcloudUrn || null,
           soundcloudUrl:item.soundcloudUrl || null,
           uploader:item.uploader || null,
@@ -4205,11 +4233,12 @@
       { id: 'copper', bg: 'linear-gradient(160deg, #C98042 0%, #9E5E2A 55%, #714019 100%)' }
     ];
 
-    let selectedProfileBgId = 'slate';
+    let profileBgCustom=localStorage.getItem('telefy_profile_bg_mode')==='custom';
+    let selectedProfileBgId = state.theme==='light'?'white':'slate';
     try {
       const savedBg = localStorage.getItem('telefy_profile_bg_id');
       if (savedBg && PROFILE_GRADIENTS.some(g => g.id === savedBg)) {
-        selectedProfileBgId = savedBg;
+        if(profileBgCustom || !['white','slate'].includes(savedBg)){selectedProfileBgId=savedBg;profileBgCustom=true;}
       }
     } catch (e) {}
 
@@ -4233,7 +4262,8 @@
       return { primary, username, status, badge, dark };
     }
 
-    function applyProfileGradient(id) {
+    function applyProfileGradient(id, manual=false) {
+      if(manual){profileBgCustom=true;try{localStorage.setItem('telefy_profile_bg_mode','custom');}catch(_){}}
       const found = PROFILE_GRADIENTS.find(g => g.id === id) || PROFILE_GRADIENTS[0];
       selectedProfileBgId = found.id;
       const headerEl = document.getElementById('tg-profile-header');
@@ -4311,21 +4341,23 @@
     document.getElementById('delete-playlist-modal').addEventListener('click',e=>{if(e.target.id==='delete-playlist-modal'){pendingPlaylistDelete=null;closeSheetModal(e.target);}});
     // Count advancing playback, not seeking, buffering, paused time or time spent on a card.
     const listenAudio=document.getElementById('telefy-audio');
-    let listenSample=null,listenSeconds=0,listenKey='';
+    let listenSample=null,listenSeconds=0,listenKey='',qualifiedThisPlay=false;
     function sampleListen(){
       const tr=tracks.find(t=>t.id===state.currentTrackId),key=tr?getTrackUniqueKey(tr):'';
       const now=performance.now(),pos=listenAudio.currentTime;
-      if(key!==listenKey){listenKey=key;listenSeconds=0;listenSample=null;}
+      if(key!==listenKey){listenKey=key;listenSeconds=0;listenSample=null;qualifiedThisPlay=false;}
       if(listenSample&&!listenAudio.paused&&!listenAudio.seeking&&listenAudio.readyState>=3){
         const dt=(now-listenSample.now)/1000,dp=pos-listenSample.pos;
         if(dt>0&&dp>0&&dp<=dt*Math.max(1,listenAudio.playbackRate)*1.5+.1)listenSeconds+=Math.min(dt,dp/Math.max(.1,listenAudio.playbackRate));
       }
       listenSample={now,pos};
-      if(key&&listenSeconds>=30&&!userListenedTrackKeys.has(key)){
+      if(key&&listenSeconds>=30&&!qualifiedThisPlay){
+        qualifiedThisPlay=true;window.TelefyTaste?.record(tr);
         userListenedTrackKeys.add(key);userListenedTrackIds.add(tr.id);saveUserListenedKeys();buildPersonalPlaylists();renderMaxBetaView();
       }
     }
     listenAudio.addEventListener('timeupdate',sampleListen);
+    for(const event of ['loadstart','ended'])listenAudio.addEventListener(event,()=>{listenSeconds=0;qualifiedThisPlay=false;});
     for(const event of ['seeking','seeked','pause','playing','waiting','loadstart','ended'])listenAudio.addEventListener(event,()=>{listenSample=null;});
 
     // Unified Interactive Drag-Down-to-Close for All Sheet Modals
@@ -4409,7 +4441,7 @@
       profileBgGrid.addEventListener('click', (e) => {
         const card = e.target.closest('[data-bg-id]');
         if (!card) return;
-        applyProfileGradient(card.getAttribute('data-bg-id'));
+        applyProfileGradient(card.getAttribute('data-bg-id'),true);
         renderProfileBgGrid();
       });
     }
