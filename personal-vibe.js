@@ -1,7 +1,7 @@
 /* Twenty distinct qualified tracks unlock taste-based discovery. */
 (() => {
  const storageKey=()=> 'telefy_recent20_v1_'+(window.TelefyProfile?.user?.telegram_id||'local');
- let history=[],busy=null,timer=null,sessionKeys=[],lastRefill=0;
+ let history=[],busy=null,timer=null,sessionKeys=[],lastRefill=0,cloudUser=null;
  const unique=list=>{const map=new Map();list.sort((a,b)=>(a.at||0)-(b.at||0)).forEach(h=>{if(h.key){map.delete(h.key);map.set(h.key,h);}});return [...map.values()].slice(-20);};
  function restore(){try{history=unique(JSON.parse(localStorage.getItem(storageKey())||'[]'));}catch(_){history=[];}}
  function save(){try{localStorage.setItem(storageKey(),JSON.stringify(history));}catch(_){}}
@@ -38,7 +38,7 @@
   const pl={...(old||{}),id:old?.id||'personal_vibe_1',title:'Мой вайб #1',subtitle:'Музыка в твоём вкусе',cover:'#2AABEE',coverImg:old?.coverImg||selected[0]?.coverImg||null,trackIds:selected.map(t=>t.id),trackKeys:selected.map(getTrackUniqueKey),personal:true};
   USER_PLAYLISTS.splice(0,USER_PLAYLISTS.length,...keep,pl);saveUserPlaylists();
  }
- async function cloudRestore(){restore();try{const r=await fetch('/api/me/taste',{cache:'no-store'});if(r.ok){const data=await r.json();history=unique([...(data.history||[]),...history]);save();}}catch(_){}updatePlaylist();if(ready())scheduleRefill();}
+ async function cloudRestore(){const account=storageKey();cloudUser=null;restore();try{const r=await fetch('/api/me/taste',{cache:'no-store'});if(r.ok){const data=await r.json();if(storageKey()!==account)return;history=unique([...(data.history||[]),...history]);save();}}catch(_){}if(storageKey()!==account)return;cloudUser=account;updatePlaylist();if(ready())scheduleRefill();}
  window.addEventListener('telefy:profile-ready',cloudRestore);
  if(window.TelefyProfile?.user)cloudRestore();
  function record(tr){
@@ -75,6 +75,6 @@
  }
  const originalPlay=playTrack;
  playTrack=function(id,...args){const t=tracks.find(t=>t.id===id);if(t&&isMyVibeStreamActive()){sessionKeys.push(getTrackUniqueKey(t));sessionKeys=sessionKeys.slice(-40);}return originalPlay(id,...args);};
- window.TelefyTaste={record,score,start,refill,updatePlaylist,get ready(){return ready();},get history(){return history.slice();}};
+ window.TelefyTaste={record,score,start,refill,updatePlaylist,get restored(){return !window.TelefyProfile?.user||cloudUser===storageKey();},get ready(){return ready();},get history(){return history.slice();}};
  updatePlaylist();
 })();

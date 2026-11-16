@@ -31,6 +31,7 @@
  }
  // Reopening a sheet does not restart all artist searches from page zero.
  ensureCollectionTracksLoaded=async function(col,more=false){
+  if(col?.id==='recommendations')return window.TelefyRecommendations?.load();
   if(!col?.curated)return;
   if(pending.has(col.id))return pending.get(col.id);
   if(!more&&loadedAt.has(col.id)&&Date.now()-loadedAt.get(col.id)<21600000){paintCollection(col);return;}

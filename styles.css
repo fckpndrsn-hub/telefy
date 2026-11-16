@@ -1042,3 +1042,18 @@ html.telefy-sheet-open, html.telefy-sheet-open body { overflow:hidden; }
 .music-scroll-top:active { transform:scale(.92); }
 .music-scroll-top-search { z-index:41; bottom:calc(164px + var(--telefy-safe-bottom,0px)); }
 @media(prefers-reduced-motion:reduce){.music-scroll-top{transition:none;}}
+
+/* Keep dismissal controls reachable while the collection itself scrolls. */
+#collection-modal > .col-sheet-panel { scroll-padding-top:70px; }
+#collection-modal .telefy-sheet-grip { position:sticky; top:-8px; z-index:5; background:inherit; }
+#collection-modal .collection-toolbar { position:sticky; top:14px; z-index:4; background:inherit; }
+.tg-sheet-modal.is-closing { pointer-events:none; }
+.sheet-drag-handle { -webkit-user-drag:none; }
+
+#home-uncut-total.recommendations-more { display:inline-flex; align-items:center; justify-content:flex-start; gap:6px; min-height:36px; color:#2AABEE; font-size:14px; font-weight:500; background:transparent; padding:3px 0; }
+#home-uncut-total .tg-ico { font-size:16px; }
+#home-uncut-total:active { opacity:.6; }
+#view-home div:has(> h2[data-i18n="recommendedFreshmen"]) { flex-direction:column; align-items:flex-start; gap:2px; }
+
+/* Preserve native scrolling without browser pull-to-refresh. */
+html,body{overscroll-behavior-y:none;}

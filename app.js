@@ -100,7 +100,7 @@
     const MOODS = [
       {id:'all',hideChip:true,label:'Мой поток'},
       {id:'energy',color:'#34C759'}, {id:'night',color:'#0284C7'},
-      {id:'uncensored',color:'#E11D48'}, {id:'underground',color:'#5856D6'}
+      {id:'underground',color:'#5856D6'}
     ];
     // Roster of artists for catalog initialization
     const RUSSIAN_RAP_ROSTER = [
@@ -447,7 +447,7 @@
         all: { label: 'Мой поток', streamTitle: 'Мой поток', shortDesc: 'Свежие треки по твоему вкусу' },
         uncensored: { label: 'Супер-бит', streamTitle: 'Супер-бит', shortDesc: 'Жёсткий трэп и тяжёлый бас' },
         night: { label: 'Чилл-вайб', streamTitle: 'Чилл-вайб', shortDesc: 'Мягкий звук и спокойный ритм' },
-        energy: { label: 'Энергия', streamTitle: 'Энергия', shortDesc: 'Драйв, напор и быстрый ритм' },
+        energy: { label: 'Энерджи', streamTitle: 'Энерджи', shortDesc: 'Драйв, напор и быстрый ритм' },
         underground: { label: 'Тренды', streamTitle: 'Тренды', shortDesc: 'Свежие популярные русскоязычные треки' }
       },
       en: {
@@ -617,6 +617,7 @@
       const start=getComputedStyle(panel).transform;
       const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
       panel.style.animation='none';panel.style.transition='none';
+      m.classList.add('is-closing');
       const motion=panel.animate([{transform:start==='none'?'translateY(0)':start},{transform:`translateY(${panel.getBoundingClientRect().height+24}px)`}],{duration:reduced?1:380,easing:'cubic-bezier(.32,.72,0,1)',fill:'forwards'});
       m._dismissMotion=motion;
       motion.onfinish=()=>{
@@ -639,6 +640,7 @@
       }
       const panel = m.querySelector('.col-sheet-panel');
       if (panel) {
+        panel.style.animation='';
         panel.style.setProperty('--sheet-drag-y', '0px');
         panel.style.transform = '';
         panel.style.transition = '';
@@ -751,6 +753,7 @@
     function doesTrackMatchMood(tr, moodId) {
       if(window.TelefyRapCandidate&&!window.TelefyRapCandidate(tr))return false;
       if(window.TelefyPromotionExcluded?.(tr))return false;
+      if(moodId==='energy')return tr?.classificationVersion===4&&Array.isArray(tr.modes)&&(tr.modes.includes('energy')||tr.modes.includes('uncensored'));
       if(moodId && moodId!=='all')return tr?.classificationVersion===4&&Array.isArray(tr.modes)&&tr.modes.includes(moodId);
       if (!tr) return false;
       const m = moodId || 'all';
@@ -925,6 +928,7 @@
     }
 
     function playNext(fromTrackEnd = false) {
+      if(window.TelefyRecommendations?.active())return window.TelefyRecommendations.next(fromTrackEnd);
       if (fromTrackEnd && isRepeat) {
         playTrack(state.currentTrackId, state.sourceLabel, { fromHistory:true });
         return;
@@ -1106,6 +1110,7 @@
     }
 
     function applyStreamMode(moodId, autoPlay = true) {
+      if(moodId==='uncensored')moodId='energy';
       const idx = MOODS.findIndex(m => m.id === moodId);
       const safeIdx = idx >= 0 ? idx : 0;
       const mode = MOODS[safeIdx];
@@ -1260,6 +1265,7 @@
     }
 
     function getCatalogErrorText() {
+      if(state.catalogError==='session_expired')return state.lang==='en'?'Your session expired. Reopen the app.':'Сессия истекла. Открой приложение заново.';
       if (['soundcloud_forbidden','soundcloud_geo_blocked'].includes(state.catalogError)) {
         return state.lang==='en'?'The catalog is unavailable from this network.':'Каталог недоступен из текущей сети.';
       }
@@ -1460,12 +1466,26 @@
             ? (state.lang === 'en' ? 'Tracks you like will appear here' : 'Здесь появятся треки, которые ты добавишь в любимое')
             : (state.searchQuery.trim() ? `${t('searchEmpty')} «${state.searchQuery}»` : (state.lang === 'en' ? 'Find a track, artist or album' : 'Найди трек, исполнителя или альбом'));
         }
-        resContainer.replaceChildren(empty);
+        resContainer.replaceChildren(empty);resContainer._searchRows=[];resContainer.classList.add('search-was-empty');
       } else {
         const slice = filtered.slice(0, searchDisplayLimit);
-        resContainer.innerHTML = slice.map(createTrackRowHTML).join('');
-        bindTrackRowEvents(resContainer);
+        const rows=slice.map(createTrackRowHTML),previous=resContainer._searchRows||[];
+        if(previous.length<=rows.length&&previous.every((html,i)=>html===rows[i])&&!resContainer.classList.contains('search-was-empty')){
+          const template=document.createElement('template');template.innerHTML=rows.slice(previous.length).join('');
+          bindTrackRowEvents(template.content);resContainer.append(template.content);
+        }else{resContainer.innerHTML=rows.join('');bindTrackRowEvents(resContainer);}
+        resContainer._searchRows=rows;resContainer.classList.remove('search-was-empty');
       }
+      renderSearchMoreButton();
+    }
+
+    function renderSearchMoreButton(){
+      const box=document.getElementById('search-scroll-sentinel');if(!box)return;
+      let button=box.querySelector('button');if(!button){button=document.createElement('button');button.type='button';button.className='w-full py-4 text-sm text-[#2AABEE]';button.id='btn-search-load-more';button.onclick=()=>loadMoreSearchResults();box.append(button);}
+      const q=state.searchQuery.trim(),local=getFilteredSearchTracks().length>searchDisplayLimit;
+      const remote=q.length>=2&&searchPagination.query===q&&searchPagination.hasMore&&state.searchFilter!=='liked';
+      box.hidden=!(local||remote||state.isSearchParsing);button.disabled=searchPagination.loading||state.isSearchParsing;
+      button.textContent=button.disabled?(state.lang==='en'?'Loading…':'Загрузка…'):(state.lang==='en'?'Show more':'Показать ещё');
     }
 
     async function loadMoreSearchResults() {
@@ -1640,7 +1660,7 @@
     }
 
     function updateCollectionPresentation(){
-      const c=COLLECTIONS.find(c=>c.id===state.activeCollectionId)||USER_PLAYLISTS.find(c=>c.id===state.activeCollectionId);
+      const c=COLLECTIONS.find(c=>c.id===state.activeCollectionId)||USER_PLAYLISTS.find(c=>c.id===state.activeCollectionId)||(state.activeCollectionId==='recommendations'?window.TelefyRecommendations?.collection:null);
       const cover=document.getElementById('col-modal-cover');if(!c||!cover)return;
       const tr=(c.trackIds||[]).map(getTrack).find(t=>t?.coverImg);
       const url=c.coverImg||tr?.coverImg;
@@ -1650,7 +1670,7 @@
       document.getElementById('col-modal-description').textContent=c.shortDesc||c.subtitle||'';
     }
     function openCollectionModal(colId) {
-      const col = COLLECTIONS.find(c => c.id === colId);
+      const col = COLLECTIONS.find(c => c.id === colId)||(colId==='recommendations'?window.TelefyRecommendations?.collection:null);
       if (!col) return;
       state.activeCollectionId = colId;
       const cText = getColText(col);
@@ -3409,7 +3429,7 @@
       }
       modal.style.transform = '';
       modal.style.transition = '';
-      modal.classList.remove('hidden');
+      modal.classList.remove('hidden','is-closing');
       modal.classList.add('sheet-closed');
       modal.classList.remove('sheet-open');
       requestAnimationFrame(() => {
@@ -3749,30 +3769,13 @@
       });
     }
 
-    // Infinite scroll for Search across the entire library
-    (() => {
-      const sentinel = document.getElementById('search-scroll-sentinel');
-      if (sentinel && 'IntersectionObserver' in window) {
-        const obs = new IntersectionObserver((entries) => {
-          if (entries.some(en => en.isIntersecting) && state.activeTab === 'search') {
-            loadMoreSearchResults();
-          }
-        }, { rootMargin: '220px' });
-        obs.observe(sentinel);
-      }
-      window.addEventListener('scroll', () => {
-        if (state.activeTab !== 'search') return;
-        const nearBottom = (window.innerHeight + window.scrollY) >= (document.documentElement.scrollHeight - 280);
-        if (nearBottom) loadMoreSearchResults();
-      }, { passive: true });
-    })();
-
+    // Pagination is explicit: scrolling must never request music.
     document.getElementById('btn-close-col-modal').addEventListener('click', closeCollectionModal);
     document.getElementById('collection-modal').addEventListener('click', (e) => {
       if (e.target.id === 'collection-modal') closeCollectionModal();
     });
     document.getElementById('btn-play-collection').addEventListener('click', () => {
-      const col = COLLECTIONS.find(c => c.id === state.activeCollectionId);
+      const col = COLLECTIONS.find(c => c.id === state.activeCollectionId)||(state.activeCollectionId==='recommendations'?window.TelefyRecommendations?.collection:null);
       const upl = USER_PLAYLISTS.find(p => p.id === state.activeCollectionId);
       const source = col || upl;
       if (source && source.trackIds.length > 0) {
@@ -4351,19 +4354,23 @@
       const settle=()=>{
         panel.style.transition='transform .34s cubic-bezier(.22,1,.36,1)';
         panel.style.transform='translate3d(0,0,0)';panel.style.setProperty('--sheet-drag-y','0px');
-        clearTimeout(settleTimer);settleTimer=setTimeout(()=>{panel.style.transition='';panel.style.animation='';},350);
+        clearTimeout(settleTimer);settleTimer=setTimeout(()=>{panel.style.transition='';},350);
       };
       panel.addEventListener('pointerdown',e=>{
-        if(gesture||!e.isPrimary||e.button!==0||e.target.closest('button,a,input,textarea,select'))return;
+        if(modal._dismissMotion||modal.classList.contains('hidden')||modal.classList.contains('is-closing')||gesture||!e.isPrimary||e.button!==0||e.target.closest('button,a,input,textarea,select'))return;
         // Only the handle owns the gesture; lists retain native momentum scrolling.
         if(!handles.some(h=>h.contains(e.target)))return;
         clearTimeout(settleTimer);
-        gesture={id:e.pointerId,y:e.clientY,lastY:e.clientY,time:performance.now(),speed:0,dy:0};
+        const visibleTransform=getComputedStyle(panel).transform;
+        panel.style.animation='none';panel.style.transform=visibleTransform;
+        gesture={id:e.pointerId,onGrip:grip.contains(e.target),started:performance.now(),distance:0,x:e.clientX,y:e.clientY,lastY:e.clientY,time:performance.now(),speed:0,dy:0};
         panel.style.animation='none';panel.style.transition='none';
         panel.setPointerCapture?.(e.pointerId);
       });
       panel.addEventListener('pointermove',e=>{
         if(!gesture||gesture.id!==e.pointerId)return;
+        gesture.distance=Math.max(gesture.distance,Math.hypot(e.clientX-gesture.x,e.clientY-gesture.y));
+        if(Math.abs(e.clientX-gesture.x)>24&&Math.abs(e.clientX-gesture.x)>Math.abs(e.clientY-gesture.y)){finish(e,true);return;}
         const now=performance.now();gesture.speed=(e.clientY-gesture.lastY)/Math.max(1,now-gesture.time);
         gesture.lastY=e.clientY;gesture.time=now;
         gesture.dy=Math.max(0,e.clientY-gesture.y);
@@ -4375,7 +4382,7 @@
         const g=gesture;gesture=null;
         if(panel.hasPointerCapture?.(e.pointerId))panel.releasePointerCapture(e.pointerId);
         const speed=performance.now()-g.time<100?g.speed:0;
-        if(!cancelled&&(g.dy>Math.min(120,panel.offsetHeight*.23)||(g.dy>28&&speed>.55))){
+        if(!cancelled&&((g.distance<6&&g.onGrip&&performance.now()-g.started<300)||g.dy>Math.min(120,panel.offsetHeight*.23)||(g.dy>28&&speed>.55))){
           panel.style.transition='';
           (isPlayer?closeFullPlayer:(modalCloseMap[modal.id]||(()=>closeSheetModal(modal))))();
         }else settle();
