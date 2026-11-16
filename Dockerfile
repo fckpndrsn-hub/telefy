@@ -1,7 +1,7 @@
 FROM python:3.13-slim
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
-COPY music_export.py gemini_music.py music_features.py ./
+COPY music_export.py openai_music.py music_features.py ./
 COPY bot_operations.py ./
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt

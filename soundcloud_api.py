@@ -609,10 +609,11 @@ def discovery(kind,offset=0):
     if kind not in ('night','underground'):return _catalog_discovery(kind,offset)
     from datetime import datetime,timezone,timedelta
     from concurrent.futures import ThreadPoolExecutor
-    offset=max(0,min(int(offset),30));key=('modes-v2',kind,offset)
+    offset=max(0,min(int(offset),30));key=('modes-diverse-v3',kind,offset)
     cached=DISCOVERY_CACHE.get(key)
     if cached and cached[0]>time.time():return cached[1]
     queries=CHILL_ARTISTS[offset*2:offset*2+2]if kind=='night'else (TREND_PAGES[offset]if offset<len(TREND_PAGES)else [])
+    if kind=='underground' and offset==0:queries=list(queries)+['madk1d супермаркет','madk1d так похуй']
     artist_stats={}
     def get(q):
         params={'q':q,'access':'playable','limit':50,'linked_partitioning':'true'}
@@ -629,7 +630,7 @@ def discovery(kind,offset=0):
                     try:t=normalize_track(item)
                     except APIError:continue
                     cfg=scene_artist(q)
-                    if not ((cfg and scene_matches(t['artist'],cfg)) or tokens(q).issubset(tokens(t['artist']))):continue
+                    if not ((cfg and scene_matches(t['artist'],cfg)) or tokens('madk1d' if q.startswith('madk1d ') else q).issubset(tokens(t['artist']))):continue
                     if not rap_candidate(t):continue
                     if kind=='underground':
                         if t.get('playbackCount',0)<1000 and t.get('likesCount',0)<50:continue
@@ -640,13 +641,23 @@ def discovery(kind,offset=0):
             except APIError as e:
                 errors.append(e.code)
                 if e.status==429:break
-        if kind=='underground':result=sorted(result,key=lambda t:t.get('playbackCount',0)+30*t.get('likesCount',0),reverse=True)[:4]
+        if kind=='underground':result=sorted(result,key=lambda t:t.get('playbackCount',0)+30*t.get('likesCount',0),reverse=True)[:10]
         artist_stats[q]={'raw':raw_count,'accepted':len(result),'errors':errors}
         return result,raw_count,errors
     with ThreadPoolExecutor(max_workers=4)as pool:batches=list(pool.map(get,queries))
     tracks={t['soundcloudUrn']:t for batch,_,_ in batches for t in batch}
     errors=sorted(set(e for _,_,codes in batches for e in codes))
-    result=sorted(tracks.values(),key=lambda t:t.get('playbackCount',0)+30*t.get('likesCount',0),reverse=True)
+    result=[];seen=set()
+    # Round-robin artists instead of sorting the entire page by plays.
+    buckets=[list(batch)for batch,_,_ in batches]
+    while any(buckets):
+        for bucket in buckets:
+            if not bucket:continue
+            t=bucket.pop(0)
+            artist=scene_artist(t['artist']);artist=(artist['name']if artist else t['artist']).casefold()
+            title=re.sub(r'\([^)]*\)|\[[^]]*\]','',t['title'].casefold())
+            work_key=(artist,re.sub(r'[^\w]','',title))
+            if work_key not in seen:seen.add(work_key);result.append(t)
     MODE_DIAGNOSTICS[kind+':'+str(offset)]={'queries':queries,'raw':sum(n for _,n,_ in batches),'accepted':len(result),'errors':errors,'artists':artist_stats}
     if not result and errors:
         if 'soundcloud_rate_limited'in errors:raise APIError(429,'soundcloud_rate_limited')

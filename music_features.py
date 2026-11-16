@@ -9,8 +9,8 @@ class MusicMixin:
   user=self.bot_user()
   if not user:return
   if route.path=='/api/ai/status':
-   import gemini_music
-   self.reply(200,gemini_music.status());return
+   import openai_music
+   self.reply(200,openai_music.status());return
   import music_export
   pid=parse_qs(route.query).get('id',[''])[0]
   if len(pid)>64:self.reply(400,{'error':'invalid_job'});return
@@ -33,12 +33,12 @@ class MusicMixin:
     if not bot_reminders.store().prefs(user['telegram_id'])['chat_started']:self.reply(409,{'error':'bot_start_required'});return
     row=music_export.store().enqueue(user['telegram_id'],data.get('soundcloudUrn'))
     self.reply(202,{'id':row['id'],'status':row['status'],'error':row['error']});return
-   import gemini_music
-   if path=='/api/ai/description':result=gemini_music.description(data,data.get('lang','ru'))
+   import openai_music
+   if path=='/api/ai/description':result=openai_music.description(data,data.get('lang','ru'))
    else:
     candidates=data.get('candidates')
     if not isinstance(candidates,list)or len(candidates)>60 or any(not isinstance(t,dict)for t in candidates):raise ValueError()
-    result=gemini_music.rank(user['telegram_id'],candidates)
+    result=openai_music.rank(user['telegram_id'],candidates)
    self.reply(200,result)
   except ValueError as error:
    code=str(error)

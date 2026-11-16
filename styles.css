@@ -1090,3 +1090,10 @@ html[data-max-mode="pending"] #mytelefy-beta-state{display:block!important;}
 .max-beta-price strong{font-family:'SF Pro Rounded',system-ui,sans-serif;font-size:23px;font-weight:700;}
 .max-beta-price>span{display:block;font-size:10px;margin-top:4px;opacity:.9;white-space:nowrap;}
 html[data-max-mode="paid"] .max-beta-price{display:none;}
+
+/* A saved track has the same heart color in every view and theme. */
+:is(#mini-like-btn, #full-like-btn, [data-like])[class~="text-[#FF3B30]"],
+:is(#mini-like-btn, #full-like-btn, [data-like])[aria-pressed="true"] {
+ color:#ff3b30 !important;
+}
+:is(#mini-like-btn, #full-like-btn, [data-like]) .tg-ico { color:inherit; }

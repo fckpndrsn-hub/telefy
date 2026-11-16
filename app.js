@@ -756,11 +756,22 @@ try {
       return `${normalizeArtistToken(getPrimaryArtistName(tr.artist || ''))}::${normalizeTrackTitleKey(tr.title || '')}`;
     }
 
+    function flowRecentWorkKey(tr) {
+      const title=String(tr.title||'').toLowerCase().replace(/ё/g,'е').replace(/\([^)]*\)|\[[^\]]*\]/g,'').replace(/\s+(?:prod|feat|ft)\.?\s.*$/i,'').replace(/[^\p{L}\p{N}]/gu,'');
+      const artist=window.TelefySceneArtist?.(tr.artist)?.name || getPrimaryArtistName(tr.artist||'');
+      return normalizeArtistToken(artist)+'::'+title;
+    }
+    function flowRecentStorageKey(){return 'telefy_flow_recent_v3:'+String(window.Telegram?.WebApp?.initDataUnsafe?.user?.id||'browser');}
+    function readFlowRecent(){try{return JSON.parse(localStorage.getItem(flowRecentStorageKey())||'{}')||{};}catch(_){return {};}}
+    function flowWorkCoolingDown(tr){return Date.now()-(Number(readFlowRecent()[flowRecentWorkKey(tr)])||0)<24*60*60*1000;}
+    function rememberFlowWork(tr){try{const recent=readFlowRecent();recent[flowRecentWorkKey(tr)]=Date.now();const entries=Object.entries(recent).filter(([,time])=>Date.now()-time<86400000).sort((a,b)=>b[1]-a[1]).slice(0,200);localStorage.setItem(flowRecentStorageKey(),JSON.stringify(Object.fromEntries(entries)));}catch(_){}}
+
     function isFlowTrackUnplayed(tr) {
       if(window.TelefyRapCandidate&&!window.TelefyRapCandidate(tr))return false;
       if(window.TelefyPromotionExcluded?.(tr))return false;
       if (!tr || !tr.id || tr.disliked) return false;
       if (tr.id === state.currentTrackId) return false;
+      if (flowWorkCoolingDown(tr)) return false;
       if (playedFlowTrackIds.has(tr.id)) return false;
       const k = getTrackUniqueKey(tr);
       if (k && playedFlowTrackKeys.has(k)) return false;
@@ -769,6 +780,7 @@ try {
 
     function markFlowTrackPlayed(tr) {
       if (!tr || !tr.id) return;
+      rememberFlowWork(tr);
       playedFlowTrackIds.add(tr.id);
       const k = getTrackUniqueKey(tr);
       if (k) {
@@ -1032,6 +1044,7 @@ try {
       // Update all heart buttons for this track in-place across all views & open modals (zero DOM flash)
       document.querySelectorAll(`[data-like="${id}"]`).forEach(btn => {
         btn.classList.toggle('text-[#FF3B30]', tr.liked);
+      btn.setAttribute('aria-pressed', String(tr.liked));
         btn.classList.toggle('text-muted', !tr.liked);
         btn.classList.toggle('opacity-40', !tr.liked);
         btn.classList.toggle('hover:opacity-80', !tr.liked);
@@ -1610,6 +1623,7 @@ try {
       syncHeroDiscAnimation(state.isPlaying);
       const miniLike = document.getElementById('mini-like-btn');
       miniLike.classList.toggle('text-[#FF3B30]', current.liked);
+      miniLike.setAttribute('aria-pressed', String(current.liked));
       miniLike.classList.toggle('text-muted', !current.liked);
       miniLike.innerHTML = `<span class="tg-ico text-[20px]">${current.liked ? '&#xF016;' : '&#xF1D9;'}</span>`;
 
@@ -1645,6 +1659,7 @@ try {
       document.getElementById('full-explicit-badge').classList.remove('hidden');
       const fullLike = document.getElementById('full-like-btn');
       fullLike.classList.toggle('text-[#FF3B30]', current.liked);
+      fullLike.setAttribute('aria-pressed', String(current.liked));
       fullLike.classList.toggle('text-muted', !current.liked);
       fullLike.innerHTML = `<span class="tg-ico text-[22px]">${current.liked ? '&#xF016;' : '&#xF1D9;'}</span>`;
 
