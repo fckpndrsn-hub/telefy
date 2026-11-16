@@ -839,8 +839,10 @@ def freshmen(offset=0):
 
 """Durable application OAuth session; serialized refresh across service instances."""
 _file_access_token=access_token
-OAUTH_STORAGE={'backend':'file','state':'idle'}
+OAUTH_STORAGE={'backend':'file','state':'idle','storeVersion':2}
+OAUTH_TABLE_READY=False
 def _durable_access_token(invalidate=None,credentials=None):
+    global OAUTH_TABLE_READY
     cfg=credentials or settings()
     if not os.environ.get('DATABASE_URL'):
         return _file_access_token(invalidate,credentials)
@@ -848,8 +850,12 @@ def _durable_access_token(invalidate=None,credentials=None):
     fingerprint=hashlib.sha256((cfg['client_id']+'\0'+cfg['client_secret']).encode()).hexdigest()
     error=None;result=None
     try:
-        db=UserDatabase();db.ensure()
+        db=UserDatabase()
         with db.connect()as conn:
+            if not OAUTH_TABLE_READY:
+                # This module owns its migration; old profile schemas remain compatible.
+                if db.url:db.execute(conn,'SELECT pg_advisory_xact_lock(734620106)')
+                db.execute(conn,'CREATE TABLE IF NOT EXISTS telefy_service_sessions (service_key TEXT PRIMARY KEY,session_json TEXT NOT NULL,retry_at BIGINT NOT NULL DEFAULT 0)')
             db.execute(conn,'INSERT INTO telefy_service_sessions(service_key,session_json,retry_at) VALUES(%s,%s,%s) ON CONFLICT(service_key) DO NOTHING',('soundcloud:'+fingerprint,'{}',0))
             row=db.execute(conn,'SELECT session_json,retry_at FROM telefy_service_sessions WHERE service_key=%s FOR UPDATE',('soundcloud:'+fingerprint,)).fetchone()
             stored=json.loads(row['session_json']);local=read_json(DATA/'soundcloud-session.json')
@@ -876,9 +882,17 @@ def _durable_access_token(invalidate=None,credentials=None):
                         retry_at=int(time.time()+getattr(e,'retry_after',60))
                         db.execute(conn,'UPDATE telefy_service_sessions SET session_json=%s,retry_at=%s WHERE service_key=%s',(json.dumps(stored),retry_at,'soundcloud:'+fingerprint))
                         OAUTH_STORAGE.update(backend='postgres',state='cooldown',retryAt=retry_at)
+        OAUTH_TABLE_READY=True
     except APIError:raise
-    except Exception:
-        OAUTH_STORAGE.update(backend='postgres',state='storage_unavailable')
+    except Exception as failure:
+        reason=('sql_'+failure.sqlstate)if getattr(failure,'sqlstate',None)else type(failure).__name__
+        OAUTH_STORAGE.update(backend='postgres',state='storage_unavailable',reason=reason)
+        print('OAuth storage failure '+json.dumps({'reason':reason,'storeVersion':2}),flush=True)
+        # Reusing an already valid local token does not issue another grant.
+        local=read_json(DATA/'soundcloud-session.json')
+        if local.get('fingerprint')==fingerprint and local.get('expires_at',0)>time.time()+60 and local.get('access_token')and local['access_token']!=invalidate:
+            OAUTH_STORAGE.update(backend='file',state='reused_during_database_failure')
+            return local['access_token']
         # Do not fall back to repeated client_credentials exchanges if durable storage fails.
         raise APIError(503,'oauth_storage_unavailable')from None
     if error:raise error
