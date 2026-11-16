@@ -50,6 +50,10 @@ class LibraryStore:
                 self.db.execute(c,'''CREATE TABLE IF NOT EXISTS telefy_user_libraries (
                   telegram_id BIGINT PRIMARY KEY REFERENCES telefy_users(telegram_id) ON DELETE CASCADE,
                   revision BIGINT NOT NULL, library_json TEXT NOT NULL, updated_at BIGINT NOT NULL)''')
+                self.db.execute(c,'''CREATE TABLE IF NOT EXISTS telefy_library_imports (
+                  telegram_id BIGINT NOT NULL REFERENCES telefy_users(telegram_id) ON DELETE CASCADE,
+                  import_id TEXT NOT NULL, imported_at BIGINT NOT NULL,
+                  PRIMARY KEY(telegram_id,import_id))''')
             self.initialized=True
     def read(self,uid):
         self.ensure()
@@ -73,6 +77,31 @@ class LibraryStore:
             self.db.execute(c,'''INSERT INTO telefy_user_libraries VALUES(%s,%s,%s,%s)
               ON CONFLICT(telegram_id) DO UPDATE SET revision=excluded.revision,library_json=excluded.library_json,updated_at=excluded.updated_at''',(uid,revision,json.dumps(value,ensure_ascii=False),int(time.time())))
             return {'revision':revision,'library':value}
+    def import_legacy(self,uid,import_id,value):
+        if not isinstance(import_id,str)or not re.fullmatch(r'[a-zA-Z0-9_-]{16,100}',import_id):raise LibraryError(400,'invalid_import')
+        value=library(value);self.ensure()
+        with self.db.connect()as c:
+            self.db.execute(c,'SELECT telegram_id FROM telefy_users WHERE telegram_id=%s'+(' FOR UPDATE'if self.db.url else ''),(uid,))
+            current=self._read(c,uid)
+            done=self.db.execute(c,'SELECT import_id FROM telefy_library_imports WHERE telegram_id=%s AND import_id=%s',(uid,import_id)).fetchone()
+            # A lost HTTP response must not resurrect a later removed like/playlist.
+            if done:return current
+            merged=json.loads(json.dumps(current['library']))
+            keys={t['key']for t in merged['likes']}
+            for t in value['likes']:
+                if t['key']not in keys:merged['likes'].append(t);keys.add(t['key'])
+            ids={p['id']for p in merged['playlists']};personal=any(p['personal']for p in merged['playlists'])
+            for p in value['playlists']:
+                if p['id']in ids or (p['personal']and personal):continue
+                merged['playlists'].append(p);ids.add(p['id']);personal=personal or p['personal']
+            # Validate the total too: never truncate a user's library silently.
+            merged=library(merged)
+            revision=current['revision']+(merged!=current['library'])
+            if revision!=current['revision']:
+                self.db.execute(c,'''INSERT INTO telefy_user_libraries VALUES(%s,%s,%s,%s)
+                  ON CONFLICT(telegram_id) DO UPDATE SET revision=excluded.revision,library_json=excluded.library_json,updated_at=excluded.updated_at''',(uid,revision,json.dumps(merged,ensure_ascii=False),int(time.time())))
+            self.db.execute(c,'INSERT INTO telefy_library_imports VALUES(%s,%s,%s)',(uid,import_id,int(time.time())))
+            return {'revision':revision,'library':merged}
 
 class LibraryMixin:
     def library_context(self):
@@ -92,7 +121,8 @@ class LibraryMixin:
         except LibraryError as e:self.reply(e.status,{'error':e.error})
         except Exception:self.reply(503,{'error':'database_unavailable'})
     def do_POST(self):
-        if urlsplit(self.path).path!='/api/me/library':return super().do_POST()
+        route=urlsplit(self.path).path
+        if route not in ('/api/me/library','/api/me/library/import'):return super().do_POST()
         if not self.same_origin():self.reply(403,{'error':'origin_rejected'});return
         try:
             uid,store=self.library_context()
@@ -102,6 +132,10 @@ class LibraryMixin:
                 body=json.loads(self.rfile.read(n))
                 if not isinstance(body,dict):raise ValueError()
             except (ValueError,TypeError):raise LibraryError(400,'invalid_request')from None
+            if route=='/api/me/library/import':
+                # Restore saved data even after expiry. This grants no Max entitlement;
+                # the existing feature gates and normal playlist writes remain unchanged.
+                self.reply(200,store.import_legacy(uid,body.get('import_id'),body.get('library')));return
             import max_billing
             can_edit=max_billing.STORE.status(uid)['active']
             self.reply(200,store.write(uid,body.get('revision'),body.get('library'),can_edit))

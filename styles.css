@@ -1069,12 +1069,24 @@ html,body{overscroll-behavior-y:none;}
 #mytelefy-upsell-modal h3 { font-size:18px;line-height:24px; }
 #btn-close-upsell-modal { box-shadow:none; }
 
-.library-import{display:block;width:100%;border:0;border-radius:12px;padding:14px;margin-block:12px;color:#2AABEE;background:var(--tg-theme-secondary-bg-color,#fff);font:inherit;text-align:center;}
-
 /* Catalog-wide advisory label. This does not change provider metadata or age access. */
-.telefy-explicit{display:inline-flex;flex-shrink:0;align-items:center;justify-content:center;width:13px;height:13px;border-radius:3px;background:rgba(127,145,164,.24);color:var(--text-muted,#7f91a4);font-family:system-ui,sans-serif;font-size:9px;font-weight:700;line-height:1;vertical-align:middle;}
+#full-explicit-badge,.telefy-explicit{display:inline-flex;flex-shrink:0;align-items:center;justify-content:center;width:13px;height:13px;border-radius:4px;background:rgba(127,145,164,.24);color:var(--text-muted,#7f91a4);font-family:'SF Pro Rounded',system-ui,sans-serif;font-size:9px;font-weight:700;line-height:1;vertical-align:middle;}
 .telefy-explicit-meta{display:flex;align-items:center;gap:5px;min-width:0;}
 .telefy-explicit-meta>p{min-width:0;}
 .telefy-explicit-meta:has(#hero-track-artist){justify-content:center;margin-top:2px;}
 #flow-discovery-card .telefy-explicit{color:inherit;background:rgb(127 145 164 / 26%);}
-[data-pick-track] p.text-xs::before{content:'E';display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;border-radius:3px;background:rgba(127,145,164,.24);margin-right:5px;font:700 9px/1 system-ui;vertical-align:middle;}
+[data-pick-track] [data-pick-title]+p::before{content:'E';display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;border-radius:4px;background:rgba(127,145,164,.24);margin-right:5px;font:700 9px/1 'SF Pro Rounded',system-ui,sans-serif;vertical-align:middle;}
+
+/* Beta is automatic: keep the brand card, suppress every purchase surface. */
+html[data-max-mode]:not([data-max-mode="paid"]) #mytelefy-promo-state,
+html[data-max-mode]:not([data-max-mode="paid"]) #mytelefy-upsell-modal,
+html[data-max-mode]:not([data-max-mode="paid"]) #btn-subscribe-max,
+html[data-max-mode]:not([data-max-mode="paid"]) #btn-modal-subscribe-max,
+html[data-max-mode]:not([data-max-mode="paid"]) #btn-renew-max {display:none!important;}
+html[data-max-mode="pending"] #mytelefy-beta-state{display:block!important;}
+.max-beta-price{flex-shrink:0;text-align:right;line-height:1.2;color:#fff;}
+.max-beta-price>div{display:flex;gap:7px;align-items:baseline;justify-content:flex-end;white-space:nowrap;}
+.max-beta-price s{font-size:13px;opacity:.7;text-decoration-thickness:1.5px;}
+.max-beta-price strong{font-family:'SF Pro Rounded',system-ui,sans-serif;font-size:23px;font-weight:700;}
+.max-beta-price>span{display:block;font-size:10px;margin-top:4px;opacity:.9;white-space:nowrap;}
+html[data-max-mode="paid"] .max-beta-price{display:none;}

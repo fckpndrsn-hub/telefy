@@ -1922,6 +1922,8 @@ try {
     document.getElementById('qa-mytelefy').addEventListener('click', resetAndShuffleMusicalPreferences);
     document.getElementById('qa-bot').addEventListener('click', notifyTrackOfflineExport);
     function openUpsellModal() {
+      if(document.documentElement.dataset.maxMode!=='paid'){window.TelefyMax?.refresh();return;}
+
       openSheetModal('mytelefy-upsell-modal', 'medium');
     }
     function closeUpsellModal() {

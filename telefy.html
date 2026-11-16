@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html data-max-mode="pending" lang="ru">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
@@ -8,7 +8,7 @@
 
     <!-- Embedded SF Pro fonts: Latin and Cyrillic, no external font requests. -->
 
-  <link rel="stylesheet" href="assets/styles.css?v=e03858ddd43b">
+  <link rel="stylesheet" href="assets/styles.css?v=9b554e48c081">
   <link rel="stylesheet" href="assets/max-logo.css?v=64a86089965c">
                                             <meta name="telefy-build" content="telegram-ui-20261114-2">
 </head>
@@ -365,7 +365,8 @@
                 </div>
                 <p id="max-active-until-pill" data-i18n="maxActiveUntilPill" class="text-[12px] text-white/80 mt-0.5">Подписка не активна</p>
               </div>
-              <button id="btn-renew-max" type="button" data-i18n="maxRenewBtn" class="px-3.5 py-1.5 rounded-full text-[12px] font-rounded bg-white text-[#2E1065] shrink-0 active:scale-95 transition cursor-pointer">
+              <div class="max-beta-price" aria-label="Telefy Max бесплатно на время бета-теста"><div><s>99 ₽</s><strong>0 ₽</strong></div><span data-max-beta-caption>на бета-тест</span></div>
+              <button id="btn-renew-max" hidden disabled type="button" data-i18n="maxRenewBtn" class="px-3.5 py-1.5 rounded-full text-[12px] font-rounded bg-white text-[#2E1065] shrink-0 active:scale-95 transition cursor-pointer">
                 Продлить
               </button>
             </div>
@@ -1036,7 +1037,7 @@
   <script src="assets/telegram-layout.js?v=210a9254d1a7" defer></script>
   <script src="assets/music-policy.js?v=88d9187f01f3" defer></script>
   <script src="assets/first-run.js?v=d12d6a59cd45" defer></script>
-  <script src="assets/app.js?v=97940d6a7881" defer></script>
+  <script src="assets/app.js?v=13c80347de4c" defer></script>
   <script src="assets/player-controls.js?v=38f1a02f2bce" defer></script>
   <script src="assets/max-logo.js?v=1baf79ecf8e6" defer></script>
   <script src="assets/flow-discovery.js?v=c2ee0ce89749" defer></script>
@@ -1046,9 +1047,9 @@
 <script src="assets/freshmen.js?v=aa59def4cdc8" defer></script>
 <script src="assets/personal-vibe.js?v=e88615075136" defer></script>
 <script src="assets/discovery.js?v=629a605d5379" defer></script>
-<script src="assets/library-client.js?v=6b281b89ceb5" defer></script>
+<script src="assets/library-client.js?v=090dd004842a" defer></script>
 <script src="assets/user-profile.js?v=7aeacda46430" defer></script>
 <script>document.addEventListener('DOMContentLoaded',()=>window.TelefyFirstRun?.boot());</script>
-<script src="assets/max-client.js?v=e38dacfbf3af" defer></script>
+<script src="assets/max-client.js?v=ab72939efc7c" defer></script>
 </body>
 </html>

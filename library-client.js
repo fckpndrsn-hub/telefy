@@ -1,7 +1,7 @@
 /* Personal data lives on the authenticated server; catalog cache is not a library. */
 (() => {
  let uid=null,ready=false,revision=0,epoch=0,pending=0,tail=Promise.resolve(),committed=null,desired='',loading=false;
- const clone=x=>JSON.parse(JSON.stringify(x));
+ let migrationTimer=null,migrationAttempts=0,migrationWarning=false;
  const account=()=>String(window.TelefyProfile?.user?.telegram_id||'');
  const snapshot=t=>({key:getTrackUniqueKey(t),title:t.title||'',artist:t.artist||t.primaryArtist||'',primaryArtist:t.primaryArtist||'',album:t.album||'',soundcloudUrn:t.soundcloudUrn||'',coverImg:t.coverImg?.startsWith('https://')?t.coverImg:'',duration:Number(t.duration)||0});
  const empty=()=>({likes:[],playlists:[]});
@@ -15,16 +15,23 @@
   USER_PLAYLISTS.splice(0,USER_PLAYLISTS.length,...data.playlists.map(p=>({...p,trackKeys:p.tracks.map(t=>t.key),trackIds:p.tracks.map(materialize)})));
   desired=JSON.stringify(pack());paint();
  }
- async function request(data){const r=await fetch('/api/me/library',{method:data?'POST':'GET',credentials:'same-origin',cache:'no-store',headers:data?{'Content-Type':'application/json'}:undefined,body:data?JSON.stringify(data):undefined,signal:AbortSignal.timeout(20000)});if(!r.ok){const error=new Error('library_'+r.status);error.status=r.status;throw error;}return r.json();}
+ async function request(data,path='/api/me/library'){const r=await fetch(path,{method:data?'POST':'GET',credentials:'same-origin',cache:'no-store',headers:data?{'Content-Type':'application/json'}:undefined,body:data?JSON.stringify(data):undefined,signal:AbortSignal.timeout(20000)});if(!r.ok){const error=new Error('library_'+r.status);error.status=r.status;throw error;}return r.json();}
  function message(error){showToast(error?.status===409?'Библиотека изменилась на другом устройстве. Повтори действие.':error?.status===403?'Для изменения плейлистов нужен Telefy Max.':'Не удалось сохранить в профиль. Проверь подключение и повтори.');}
  async function restore(force=false){
   const current=account();if(!current||loading||pending)return;
   if(uid!==current){uid=current;ready=false;epoch++;committed=null;apply(empty());}
+  claimLegacy(current);
   if(ready&&!force)return;
   loading=true;const generation=epoch;
-  try{const data=await request();if(generation!==epoch||current!==account()||pending||(ready&&data.revision<revision))return;revision=data.revision;committed=data.library;ready=true;apply(committed);window.dispatchEvent(new Event('telefy:library-ready'));offerMigration();}
+  try{
+   const data=await request();if(generation!==epoch||current!==account()||pending||(ready&&data.revision<revision))return;
+   revision=data.revision;committed=data.library;ready=false;apply(committed);
+   await migrateLegacy(generation,current);
+   if(generation!==epoch||current!==account())return;
+   ready=true;apply(committed);window.dispatchEvent(new Event('telefy:library-ready'));
+  }
   catch(_){if(!ready)showToast('Библиотека пока недоступна. Открой профиль повторно после подключения.');}
-  finally{loading=false;}
+  finally{loading=false;if(current!==account())queueMicrotask(()=>restore());}
  }
  function save(){
   if(!ready||uid!==account()){if(committed)apply(committed);message();return Promise.resolve(false);}
@@ -46,31 +53,59 @@
    if(!Array.isArray(keys)||!Array.isArray(catalog)||!Array.isArray(playlists))return null;
    const liked=new Set(keys);catalog.forEach(t=>{if(t.liked)liked.add(getTrackUniqueKey(t));});
    const byKey=new Map(catalog.map(t=>[getTrackUniqueKey(t),t]));
-   const likes=[...liked].map(k=>byKey.get(k)||(()=>{const [artist,title]=k.split('::');return artist&&title?{artist,title}:null;})()).filter(Boolean).map(snapshot);
-   const list=playlists.filter(p=>!['upl_night','upl_bass','upl_chill','upl_uncut'].includes(p.id)&&!p.personal).map(p=>({...p,tracks:(p.trackKeys?p.trackKeys.map(k=>byKey.get(k)):(p.trackIds||[]).map(id=>catalog.find(t=>t.id===id))).filter(Boolean).map(snapshot)}));
-   return {likes,playlists:list};
+   const resolve=k=>byKey.get(k)||(()=>{const [artist,title]=k.split('::');return artist&&title?{artist,title}:null;})();
+   const unique=list=>[...new Map(list.filter(Boolean).map(t=>{const row=snapshot(t);return [row.key,row];})).values()];
+   const likes=unique([...liked].map(resolve));
+   const list=playlists.filter(p=>!['upl_night','upl_bass','upl_chill','upl_uncut'].includes(p.id)).map(p=>({...p,coverImg:p.coverImg||'',tracks:unique(p.trackKeys?p.trackKeys.map(resolve):(p.trackIds||[]).map(id=>catalog.find(t=>t.id===id)))}));
+   let personal=false;const filtered=list.filter(p=>{if(!p.personal)return true;if(personal)return false;personal=true;return true;});
+   return {likes,playlists:filtered};
   }catch(_){return null;}
  }
- let migrationOffered=false;
- function offerMigration(){
-  if(migrationOffered)return;const data=legacy();if(!data||(!data.likes.length&&!data.playlists.length))return;migrationOffered=true;
-  // Legacy browser data has no owner: obtain an explicit account choice once.
-  const button=document.createElement('button');button.type='button';button.className='library-import';button.textContent='Перенести музыку из этого браузера в профиль';
-  document.getElementById('view-mytelefy')?.prepend(button);
-  button.onclick=async()=>{
-   if(!ready||pending)return;
-   const name=window.TelefyProfile.user.username?'@'+window.TelefyProfile.user.username:window.TelefyProfile.user.first_name;
-   if(!confirm(`Сохранить ${data.likes.length} любимых треков и ${data.playlists.length} плейлистов в профиль ${name}?`))return;
-   if(data.playlists.length&&!state.isMaxSubscribed){showToast('Для переноса плейлистов нужен Telefy Max. Данные браузера сохранены.');return;}
-   const target=clone(committed),known=new Set(target.likes.map(t=>t.key));data.likes.forEach(t=>{if(!known.has(t.key)){target.likes.push(t);known.add(t.key);}});
-   const ids=new Set(target.playlists.map(p=>p.id));data.playlists.forEach(p=>{if(!ids.has(p.id)){target.playlists.push(p);ids.add(p.id);}});
-   apply(target);desired=JSON.stringify(committed);button.disabled=true;
-   if(await save()){localStorage.removeItem('telefy_user_liked_keys_v8');localStorage.removeItem('telefy_user_playlists_v6');localStorage.removeItem('telefy_legacy_library_pending_v1');window.TelefyLegacyLibrary=null;saveParsedCatalogCache();button.remove();showToast('Музыка сохранена в профиле.');}else button.disabled=false;
-  };
+ function claimLegacy(current){
+  const captured=window.TelefyLegacyLibrary;
+  if(!captured)return null;
+  const value=legacy();if(!value||(!value.likes.length&&!value.playlists.length))return null;
+  // Bind previously unowned browser data once, to the first verified account.
+  // A later account on this device must not inherit a failed pending import.
+  try{
+   const stored=JSON.parse(localStorage.getItem('telefy_legacy_library_pending_v1')||'null');
+   const claim=JSON.parse(localStorage.getItem('telefy_legacy_library_owner_v1')||'null');
+   if(claim?.owner&&String(claim.owner)!==current)return null;
+   if(claim?.done){window.TelefyLegacyLibrary=null;return null;}
+   if(stored?.owner&&String(stored.owner)!==current)return null;
+   if(captured.owner&&String(captured.owner)!==current)return null;
+   captured.owner=current;captured.importId=claim?.importId||stored?.importId||captured.importId||globalThis.crypto?.randomUUID?.()||('legacy_'+Date.now()+'_'+Math.random().toString(36).slice(2));
+   localStorage.setItem('telefy_legacy_library_owner_v1',JSON.stringify({owner:current,importId:captured.importId,done:false}));
+   localStorage.setItem('telefy_legacy_library_pending_v1',JSON.stringify(captured));
+  }catch(_){return null;}
+  return {captured,value};
+ }
+ async function migrateLegacy(generation,current){
+  const migration=claimLegacy(current);if(!migration)return;
+  const {captured,value}=migration;
+  clearTimeout(migrationTimer);
+  try{
+   const data=await request({import_id:captured.importId,library:value},'/api/me/library/import');
+   if(generation!==epoch||current!==account())return;
+   revision=data.revision;committed=data.library;migrationAttempts=0;
+   const stored=JSON.parse(localStorage.getItem('telefy_legacy_library_pending_v1')||'null');
+   if(stored?.importId===captured.importId&&String(stored.owner)===current){
+    localStorage.setItem('telefy_legacy_library_owner_v1',JSON.stringify({owner:current,importId:captured.importId,done:true}));
+    localStorage.removeItem('telefy_user_liked_keys_v8');localStorage.removeItem('telefy_user_playlists_v6');localStorage.removeItem('telefy_legacy_library_pending_v1');
+   }
+   window.TelefyLegacyLibrary=null;saveParsedCatalogCache();
+  }catch(error){
+   if(generation!==epoch||current!==account())return;
+   if(!migrationWarning){migrationWarning=true;showToast('Синхронизация старой библиотеки задерживается. Данные сохранены.');}
+   if((!error.status||error.status>=500||error.status===429)&&++migrationAttempts<=4){
+    const retry=()=>{if(current!==account())return;if(loading||pending){migrationTimer=setTimeout(retry,1000);return;}restore(true);};
+    migrationTimer=setTimeout(retry,[2000,8000,30000,60000][migrationAttempts-1]);
+   }
+  }
  }
  window.TelefyLibrary={save,get ready(){return ready&&uid===account();},restore};
  window.addEventListener('telefy:profile-ready',()=>{
-  if(uid!==account()){uid=account();epoch++;ready=false;committed=null;apply(empty());document.querySelector('.library-import')?.remove();migrationOffered=false;}
+  if(uid!==account()){uid=account();epoch++;ready=false;committed=null;apply(empty());clearTimeout(migrationTimer);migrationAttempts=0;migrationWarning=false;}
   restore();
  });
  window.addEventListener('focus',()=>restore(true));

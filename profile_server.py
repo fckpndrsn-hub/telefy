@@ -40,7 +40,7 @@ class Handler(LibraryMixin,MaxBillingMixin,base.Handler):
     def do_GET(self):
         route=urlsplit(self.path).path
         if route=='/health':
-            self.reply(200,{'ok':True,'build':'telefy-profile-db-v1','library_build':'telefy-library-db-v1','music_build':'telefy-oauth-db-v4-20261116','recommendations_period_hours':6,'oauth_storage':dict(getattr(base.sc,'OAUTH_STORAGE',{})),'soundcloud_limits':dict(getattr(base.sc,'RATE_WINDOWS',{})),'soundcloud_last_rate_limit':dict(getattr(base.sc,'LAST_RATE_LIMIT',{})),'soundcloud_retry_after':max(0,int(getattr(base.sc,'SOUNDCLOUD_RETRY_AT',0)-time.time())),'database_configured':bool(os.environ.get('DATABASE_URL')),'telegram_configured':bool(os.environ.get('BOT_TOKEN'))});return
+            self.reply(200,{'ok':True,'build':'telefy-profile-db-v1','library_build':'telefy-library-auto-v2','max_build':'telefy-free-beta-v1','music_build':'telefy-oauth-db-v4-20261116','recommendations_period_hours':6,'oauth_storage':dict(getattr(base.sc,'OAUTH_STORAGE',{})),'soundcloud_limits':dict(getattr(base.sc,'RATE_WINDOWS',{})),'soundcloud_last_rate_limit':dict(getattr(base.sc,'LAST_RATE_LIMIT',{})),'soundcloud_retry_after':max(0,int(getattr(base.sc,'SOUNDCLOUD_RETRY_AT',0)-time.time())),'database_configured':bool(os.environ.get('DATABASE_URL')),'telegram_configured':bool(os.environ.get('BOT_TOKEN'))});return
         if route=='/api/me/taste':
             try:
                 user=DB.profile(self.cookie_token())

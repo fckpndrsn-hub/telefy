@@ -9,6 +9,13 @@ from http.cookies import SimpleCookie
 from user_database import UserDatabase
 
 PRICE=9900
+def beta_enabled():
+    # Default launch mode: free access for every authenticated Telefy user.
+    return os.environ.get('TELEFY_MAX_BETA','true').strip().lower()not in ('false','0','off')
+
+def beta_status(now=None):
+    return {'active':True,'beta':True,'expires_at':None,'server_time':int(time.time())if now is None else int(now),'amount':'0.00','regular_amount':'99.00','currency':'RUB','recurring':False,'period':'beta'}
+
 class BillingError(Exception):
     def __init__(self,status,code):self.status,self.code=status,code
 def month_after(timestamp):
@@ -29,6 +36,7 @@ class MaxStore:
     def _user_lock(self,conn,uid):
         if self.db.url:self.db.execute(conn,'SELECT telegram_id FROM telefy_users WHERE telegram_id=%s FOR UPDATE',(uid,))
     def handoff(self,uid):
+        if beta_enabled():raise BillingError(409,'payments_disabled_beta')
         self.ensure();token=secrets.token_urlsafe(32);now=int(time.time())
         with self.db.connect()as c:
             self.db.execute(c,'DELETE FROM telefy_max_handoffs WHERE expires_at<%s',(now,))
@@ -43,6 +51,7 @@ class MaxStore:
             user=self.db.execute(c,'SELECT * FROM telefy_users WHERE telegram_id=%s',(row['telegram_id'],)).fetchone()
         return dict(user)if user else None
     def new_order(self,uid,request_key):
+        if beta_enabled():raise BillingError(409,'payments_disabled_beta')
         if not re.fullmatch(r'[a-zA-Z0-9_-]{16,80}',str(request_key)):raise BillingError(400,'invalid_request_key')
         self.ensure()
         with self.db.connect()as c:
@@ -86,6 +95,7 @@ class MaxStore:
             self._user_lock(c,order['telegram_id'])
             self.db.execute(c,'UPDATE telefy_max_orders SET status=%s WHERE order_id=%s',('refunded',order['order_id']))
     def status(self,uid,now=None):
+        if beta_enabled():return beta_status(now)
         self.ensure();now=int(time.time())if now is None else now
         with self.db.connect()as c:rows=self.db.execute(c,'SELECT paid_at FROM telefy_max_orders WHERE telegram_id=%s AND status=%s ORDER BY paid_at,order_id',(uid,'paid')).fetchall()
         end=0
@@ -95,6 +105,7 @@ class MaxStore:
 def configured():return bool(os.environ.get('YOOKASSA_SHOP_ID')and os.environ.get('YOOKASSA_SECRET_KEY')and os.environ.get('TELEFY_PUBLIC_URL','').startswith('https://')and os.environ.get('TELEFY_MAX_TERMS_URL','').startswith('https://')and os.environ.get('YOOKASSA_TEST_MODE')in ('true','false'))
 def test_mode():return os.environ.get('YOOKASSA_TEST_MODE','true').lower()!='false'
 def provider(method,path,data=None,idempotency=None):
+    if beta_enabled()and method.upper()=='POST':raise BillingError(409,'payments_disabled_beta')
     if not configured():raise BillingError(503,'payments_not_configured')
     auth=base64.b64encode((os.environ['YOOKASSA_SHOP_ID']+':'+os.environ['YOOKASSA_SECRET_KEY']).encode()).decode()
     headers={'Authorization':'Basic '+auth,'Content-Type':'application/json'}
@@ -125,6 +136,9 @@ class MaxBillingMixin:
         route=urlsplit(self.path)
         try:
             if route.path=='/max':
+                if beta_enabled():
+                    from pathlib import Path
+                    self.max_reply_html(Path(__file__).with_name('max-beta.html').read_text(encoding='utf-8'));return
                 token=parse_qs(route.query).get('handoff',[''])[0]
                 if token:
                     user=STORE.consume(token)
@@ -137,8 +151,9 @@ class MaxBillingMixin:
             if route.path=='/api/max/status':
                 user=self.max_user(web=parse_qs(route.query).get('web',['0'])[0]=='1')
                 if not user:raise BillingError(401,'login_required')
-                self.reply(200,{**STORE.status(user['telegram_id']),'payments_configured':configured(),'terms_url':os.environ.get('TELEFY_MAX_TERMS_URL','')});return
+                self.reply(200,{**STORE.status(user['telegram_id']),'payments_configured':False if beta_enabled()else configured(),'terms_url':'' if beta_enabled()else os.environ.get('TELEFY_MAX_TERMS_URL','')});return
             if route.path.startswith('/api/billing/orders/'):
+                if beta_enabled():raise BillingError(409,'payments_disabled_beta')
                 user=self.max_user(web=True)
                 if not user:raise BillingError(401,'login_required')
                 order=STORE.order(route.path.rsplit('/',1)[-1],user['telegram_id'])
@@ -174,6 +189,7 @@ class MaxBillingMixin:
                         else:print('Telefy Max partial refund: manual review for order '+order['order_id'],flush=True)
                 self.reply(200,{'ok':True});return
             if path not in ('/api/max/checkout-link','/api/billing/orders'):return super().do_POST()
+            if beta_enabled():raise BillingError(409,'payments_disabled_beta')
             if not self.same_origin():raise BillingError(403,'origin_rejected')
             user=self.max_user(web=path=='/api/billing/orders')
             if not user:raise BillingError(401,'login_required')
