@@ -270,7 +270,7 @@ try {
         perk4Desc: 'Слушай музыку и «Мой поток» без суточного лимита.',
         perk5Title: 'Рекомендации от Telefy AI',
         perk5Desc: 'Уникальные подборки с описанием каждого трека и его вайба.',
-        maxSubDefault: 'Максимум возможностей музыки в Telegram.',
+        maxSubDefault: 'Максимум возможностей музыки в Telegram',
         maxSubActive: 'Telefy Max активен',
         maxBtnDefault: 'Оформить за 99 ₽/мес',
         maxBtnActive: 'Подписка Max активна ✓',
@@ -1228,7 +1228,7 @@ try {
             <div class="min-w-0 flex-1">
               <p class="text-[14px] font-medium ${isCurrent ? 'text-[#2AABEE]' : ''} truncate">${t.title}</p>
               <div class="flex items-center gap-1.5 mt-0.5 min-w-0">
-                ${t.uncensored ? '<span class="shrink-0 w-3.5 h-3.5 squircle rounded-[5px] bg-[#7F91A4]/35 text-white text-[9px] font-bold flex items-center justify-center">E</span>' : ''}
+                <span class="telefy-explicit" title="Может содержать ненормативную лексику" aria-label="Возможна ненормативная лексика">E</span>
                 <p class="text-xs text-muted truncate">${subMeta}</p>
               </div>
             </div>
@@ -1641,7 +1641,7 @@ try {
         const artistAvatarUrl = getArtistAvatarUrl(current.artist) || current.coverImg;
         applyCoverStyle(artistBtn, { coverImg: artistAvatarUrl, cover: current.cover || '#2AABEE' });
       }
-      document.getElementById('full-explicit-badge').classList.toggle('hidden', !current.uncensored);
+      document.getElementById('full-explicit-badge').classList.remove('hidden');
       const fullLike = document.getElementById('full-like-btn');
       fullLike.classList.toggle('text-[#FF3B30]', current.liked);
       fullLike.classList.toggle('text-muted', !current.liked);
@@ -3169,7 +3169,7 @@ try {
               <div class="min-w-0 flex-1">
                 <p class="text-[14px] font-medium ${isCurrent ? 'text-[#2AABEE]' : ''} truncate">${tr.title}</p>
                 <div class="flex items-center gap-1.5 mt-0.5">
-                  ${tr.uncensored ? '<span class="shrink-0 w-3.5 h-3.5 squircle rounded-[5px] bg-[#7F91A4]/35 text-white text-[9px] font-bold flex items-center justify-center">E</span>' : ''}
+                  <span class="telefy-explicit" title="Может содержать ненормативную лексику" aria-label="Возможна ненормативная лексика">E</span>
                   <p class="text-xs text-muted truncate">${tr.artist}</p>
                 </div>
               </div>

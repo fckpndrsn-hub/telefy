@@ -8,7 +8,7 @@
  function paint(){
   const yes=active(),date=verified?.expires_at?new Date(verified.expires_at*1000).toLocaleDateString(state.lang==='en'?'en-GB':'ru-RU'):'';
   const text=state.lang==='en'?(yes?'Active until '+date:'Max is not active'):(yes?'Подписка активна до '+date:'Подписка не активна');
-  const status=document.getElementById('max-status-text');if(status)status.textContent=yes?text:(state.lang==='en'?'99 ₽ for one month. No automatic charges.':'99 ₽ за месяц. Без автосписаний.');
+  const status=document.getElementById('max-status-text');if(status)status.textContent=yes?text:(state.lang==='en'?'Get more from music in Telegram':'Максимум возможностей музыки в Telegram');
   const pill=document.getElementById('max-active-until-pill');if(pill)pill.textContent=text;
   document.querySelector('[data-i18n="maxRowExpireDate"]')?.replaceChildren(document.createTextNode(date||'—'));
   const label=document.querySelector('[data-i18n="maxRowExpireTitle"]');if(label)label.textContent=state.lang==='en'?'Access expires':'Срок действия подписки';

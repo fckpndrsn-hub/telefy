@@ -1070,3 +1070,11 @@ html,body{overscroll-behavior-y:none;}
 #btn-close-upsell-modal { box-shadow:none; }
 
 .library-import{display:block;width:100%;border:0;border-radius:12px;padding:14px;margin-block:12px;color:#2AABEE;background:var(--tg-theme-secondary-bg-color,#fff);font:inherit;text-align:center;}
+
+/* Catalog-wide advisory label. This does not change provider metadata or age access. */
+.telefy-explicit{display:inline-flex;flex-shrink:0;align-items:center;justify-content:center;width:13px;height:13px;border-radius:3px;background:rgba(127,145,164,.24);color:var(--text-muted,#7f91a4);font-family:system-ui,sans-serif;font-size:9px;font-weight:700;line-height:1;vertical-align:middle;}
+.telefy-explicit-meta{display:flex;align-items:center;gap:5px;min-width:0;}
+.telefy-explicit-meta>p{min-width:0;}
+.telefy-explicit-meta:has(#hero-track-artist){justify-content:center;margin-top:2px;}
+#flow-discovery-card .telefy-explicit{color:inherit;background:rgb(127 145 164 / 26%);}
+[data-pick-track] p.text-xs::before{content:'E';display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;border-radius:3px;background:rgba(127,145,164,.24);margin-right:5px;font:700 9px/1 system-ui;vertical-align:middle;}
