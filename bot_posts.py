@@ -5,7 +5,7 @@ LOCK=threading.Lock()
 
 def store():
  import bot_reminders as rem
- db=rem.store().db
+ root=rem.store();root.ensure();db=root.db
  with LOCK:
   if not getattr(db,'posts_store',None):db.posts_store=PostStore(db)
   result=db.posts_store
@@ -133,6 +133,8 @@ def deliver(uid,payload):
 
 def run_one():
  import telefy_bot as bot,bot_reminders as rem
+ import bot_operations
+ if bot_operations.store().status()['maintenance']:return False
  s=store();job=s.claim(int(time.time()))
  if not job:return False
  try:
@@ -156,7 +158,7 @@ def say(uid,text,rows=None):
 def button(text,data):return {'text':text,'callback_data':data}
 
 def panel(uid):
- say(uid,'Управление Telefy',[[button('📣 Новый пост','post_new')],[button('🗂 Мои посты','post_list')],[button('✏️ Приветствие и напоминания','post_templates')],[button('🎛 Кнопки бота','btn_menu')]])
+ say(uid,'Управление Telefy',[[button('📊 Сводка пользователей','ops_stats')],[button('🛠 Управление Mini App','ops_menu')],[button('📣 Новый пост','post_new')],[button('🗂 Мои посты','post_list')],[button('✏️ Приветствие и напоминания','post_templates')],[button('🎛 Кнопки бота','btn_menu')]])
 
 def draft(uid,pid):
  p=store().post(uid,pid)
@@ -184,6 +186,8 @@ def review_panel(uid,pid):
 
 def handle(update):
  import telefy_bot as bot,bot_reminders as rem
+ import bot_operations
+ if bot_operations.handle(update):return True
  import bot_buttons
  if bot_buttons.handle(update):return True
  cb=update.get('callback_query')or{};msg=update.get('message')or{};user=cb.get('from')or msg.get('from')or{}

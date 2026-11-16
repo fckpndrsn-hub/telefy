@@ -111,6 +111,9 @@ def send_welcome(user,preview=False):
 def show_menu(user):
     store().remember(user)
     reminders.register(user['id'])
+    import bot_operations
+    if bot_operations.store().status()['maintenance']:
+        api('sendMessage',chat_id=user['id'],text='🛠 Telefy находится на технических работах. Скоро вернёмся!',reply_markup={'remove_keyboard':True});return
     send_welcome(user)
     api('setChatMenuButton',chat_id=user['id'],menu_button={'type':'web_app','text':'Открыть Telefy','web_app':{'url':BASE+'/telefy.html'}})
 def show_gate(user):
@@ -121,6 +124,8 @@ def show_gate(user):
 def same_channel(chat):return ('@'+str(chat.get('username',''))).casefold()==CHANNEL.casefold()or str(chat.get('id'))==CHANNEL
 def valid_user(user):return isinstance(user,dict)and type(user.get('id'))is int and 0<user['id']<2**53 and user.get('is_bot')is not True
 def handle(update):
+    import bot_operations
+    bot_operations.record(update)
     if reminders.handle(update):return
     own=update.get('my_chat_member')
     if isinstance(own,dict)and same_channel(own.get('chat',{})):

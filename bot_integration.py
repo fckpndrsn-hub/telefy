@@ -40,6 +40,22 @@ class BotMixin:
         except Exception:self.reply(503,{'error':'verification_unavailable'});return False
     def do_GET(self):
         route=urlsplit(self.path);path=route.path
+        if path=='/api/app/status':
+            try:
+                import bot_operations
+                self.reply(200,bot_operations.store().status())
+            except Exception:self.reply(503,{'error':'app_status_unavailable'})
+            return
+        if path in('/','/telefy.html','/bot/launch')or path.startswith('/api/'):
+            try:
+                import bot_operations
+                control=bot_operations.store().status()
+                if control['maintenance']:
+                    if path.startswith('/api/'):self.reply(503,{'error':'app_maintenance'})
+                    else:self.bot_html(bot_operations.maintenance_page(),503)
+                    return
+            except Exception:
+                self.reply(503,{'error':'app_status_unavailable'});return
         if path=='/api/me/reminders':
             user=self.bot_user()
             if not user:return
@@ -54,7 +70,9 @@ class BotMixin:
             import profile_server
             page=Path(profile_server.base.WEB)/'telefy.html'
             if not page.is_file():self.reply(404,{'error':'not_found'});return
-            self.bot_html(page.read_text(encoding='utf-8'));return
+            body=page.read_text(encoding='utf-8')
+            body=body.replace('</head>','<script>window.TELEFY_APP_CONTROL='+json.dumps(control)+';</script></head>',1)
+            self.bot_html(body);return
         if path=='/bot/launch':
             if not bot.enabled():self.bot_html(bot.gate_html('configuration_required'),503);return
             ticket=parse_qs(route.query).get('ticket',[''])[0]
@@ -86,6 +104,11 @@ class BotMixin:
         return super().do_GET()
     def do_POST(self):
         path=urlsplit(self.path).path
+        if path.startswith('/api/')and path not in('/api/me/library','/api/me/library/import','/api/me/taste'):
+            try:
+                import bot_operations
+                if bot_operations.store().status()['maintenance']:self.reply(503,{'error':'app_maintenance'});return
+            except Exception:self.reply(503,{'error':'app_status_unavailable'});return
         if path=='/internal/reminders/tick':
             expected='Bearer '+bot.secret('reminders-tick-v1').hex()
             if not bot.enabled()or not hmac.compare_digest(self.headers.get('Authorization','').encode(),expected.encode()):self.reply(403,{'error':'tick_rejected'});return

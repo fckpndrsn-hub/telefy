@@ -63,6 +63,8 @@ def run_one(now=None):
  import telefy_bot as bot
  now=int(time.time())if now is None else int(now)
  if not enabled()or not bot.enabled():return False
+ import bot_operations
+ if bot_operations.store().status()['maintenance']:return False
  s=store();row=s.candidate(now)
  if not row:return False
  try:

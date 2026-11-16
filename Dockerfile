@@ -1,5 +1,7 @@
 FROM python:3.13-slim
 WORKDIR /app
+COPY bot_operations.py ./
+COPY app-control.js ./web/assets/app-control.js
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 COPY telefy_bot.py bot_store.py bot_integration.py reminder_store.py bot_reminders.py bot_posts.py bot_buttons.py ./
