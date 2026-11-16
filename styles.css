@@ -1068,3 +1068,5 @@ html,body{overscroll-behavior-y:none;}
 #mytelefy-upsell-modal > .col-sheet-panel { border-radius:24px 24px 0 0;box-shadow:none!important; }
 #mytelefy-upsell-modal h3 { font-size:18px;line-height:24px; }
 #btn-close-upsell-modal { box-shadow:none; }
+
+.library-import{display:block;width:100%;border:0;border-radius:12px;padding:14px;margin-block:12px;color:#2AABEE;background:var(--tg-theme-secondary-bg-color,#fff);font:inherit;text-align:center;}

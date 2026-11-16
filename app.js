@@ -1,3 +1,8 @@
+// Capture legacy data before startup catalog refresh changes numeric IDs.
+try {
+ window.TelefyLegacyLibrary = JSON.parse(localStorage.getItem('telefy_legacy_library_pending_v1')||'null') || { keys:localStorage.getItem('telefy_user_liked_keys_v8'), playlists:localStorage.getItem('telefy_user_playlists_v6'), catalog:localStorage.getItem('telefy_parsed_catalog_v8') };
+ if(window.TelefyLegacyLibrary.keys||window.TelefyLegacyLibrary.playlists)localStorage.setItem('telefy_legacy_library_pending_v1',JSON.stringify(window.TelefyLegacyLibrary));
+} catch (_) {}
 
     // Purge legacy broken cover/playlist caches from earlier versions so stale/mismatched covers never appear
     try {
@@ -167,15 +172,11 @@
     ];
 
     function savedKeys(key){try{const a=JSON.parse(localStorage.getItem(key)||'[]');return Array.isArray(a)?a.filter(x=>typeof x==='string'):[];}catch(_){return [];}}
-    const userLikedTrackKeys = new Set(savedKeys('telefy_user_liked_keys_v8'));
+    const userLikedTrackKeys = new Set();
     const userListenedTrackKeys = new Set(savedKeys('telefy_qualified_listens_v1'));
     const userListenedTrackIds = new Set();
 
-    function saveUserLikedKeys() {
-      try {
-        localStorage.setItem('telefy_user_liked_keys_v8', JSON.stringify(Array.from(userLikedTrackKeys)));
-      } catch (_) {}
-    }
+    function saveUserLikedKeys() { return window.TelefyLibrary?.save() || Promise.resolve(false); }
 
     function saveUserListenedKeys() {
       try {
@@ -498,21 +499,8 @@
     }
 
     const DEFAULT_USER_PLAYLISTS = [];
-    let USER_PLAYLISTS = (() => {
-      try {
-        const raw = localStorage.getItem('telefy_user_playlists_v6');
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed)) {
-            return parsed.filter(p=>!['upl_night','upl_bass','upl_chill','upl_uncut'].includes(p.id)).map(p => ({ ...p, coverImg: (p.coverImg && p.coverImg.startsWith('http')) ? p.coverImg : null }));
-          }
-        }
-      } catch {}
-      return DEFAULT_USER_PLAYLISTS.map(p => ({ ...p, trackIds: [...p.trackIds] }));
-    })();
-    function saveUserPlaylists() {
-      try { localStorage.setItem('telefy_user_playlists_v6', JSON.stringify(USER_PLAYLISTS)); } catch {}
-    }
+    let USER_PLAYLISTS = [];
+    function saveUserPlaylists() { return window.TelefyLibrary?.save() || Promise.resolve(false); }
 
     let state = {
       theme: savedPrefs.theme === 'dark' ? 'dark' : 'light',
@@ -1027,7 +1015,8 @@
       el.classList.add(isLiked ? 'anim-like-pop' : 'anim-like-unpop');
     }
 
-    function toggleLike(id) {
+    async function toggleLike(id) {
+      if(!window.TelefyLibrary?.ready){showToast('Подключаем библиотеку. Повтори через несколько секунд.');window.TelefyLibrary?.restore();return;}
       triggerHaptic('light');
       const tr = getTrack(id);
       tr.liked = !tr.liked;
@@ -1035,7 +1024,7 @@
       if (k) {
         if (tr.liked) userLikedTrackKeys.add(k);
         else userLikedTrackKeys.delete(k);
-        saveUserLikedKeys();
+        if(!await saveUserLikedKeys())return;
       }
       saveParsedCatalogCache();
       showToast(tr.liked ? `${t('toastSaved')}: ${tr.title}` : t('toastRemoved'));
@@ -2058,7 +2047,7 @@
     function saveParsedCatalogCache() {
       try {
         if (tracks.length > 0) {
-          localStorage.setItem('telefy_parsed_catalog_v8', JSON.stringify(tracks.slice(0, 320)));
+          localStorage.setItem('telefy_parsed_catalog_v8', JSON.stringify(tracks.slice(0, 320).map(t=>({...t,liked:false}))));
         }
       } catch {}
     }
@@ -2335,7 +2324,7 @@
 
       USER_PLAYLISTS.forEach(pl => {
         if (pl.trackIds && pl.trackIds[0] === trackId) {
-          if (tr.coverImg) pl.coverImg = tr.coverImg;
+          if (tr.coverImg && !pl.coverImg) pl.coverImg = tr.coverImg;
           const plEl = document.querySelector(`[data-playlist-cover="${pl.id}"]`);
           if (plEl && tr.coverImg) {
             applyCoverStyle(plEl, { coverImg: tr.coverImg, cover: pl.cover, coverStatus: 'loaded' });
@@ -2625,9 +2614,9 @@
       });
 
       USER_PLAYLISTS.forEach(pl=>{
-        if(pl.trackKeys)pl.trackIds=tracks.filter(tr=>pl.trackKeys.includes(getTrackUniqueKey(tr))).map(tr=>tr.id);
+        if(pl.trackKeys)pl.trackIds=pl.trackKeys.map(k=>tracks.find(tr=>getTrackUniqueKey(tr)===k)?.id).filter(id=>id!==undefined);
       });
-      saveUserPlaylists();
+      // IDs are browser-local; catalog hydration never writes the account library.
 
       if (!tracks.some(t => t.id === state.currentTrackId)) {
         state.currentTrackId = tracks[0].id;
@@ -4052,12 +4041,12 @@
       });
     }
 
-    function removeConfirmedPlaylist(plId) {
+    async function removeConfirmedPlaylist(plId) {
       const idx = USER_PLAYLISTS.findIndex(p => p.id === plId);
       if (idx === -1) return;
       const removed = USER_PLAYLISTS[idx];
       USER_PLAYLISTS.splice(idx, 1);
-      saveUserPlaylists();
+      if(!await saveUserPlaylists())return;
       triggerHaptic('medium');
       if (state.activeCollectionId === plId) closeCollectionModal();
       closeCreatePlaylistModal();
@@ -4081,7 +4070,8 @@
     document.getElementById('btn-delete-active-playlist')?.addEventListener('click', () => {
       if (state.activeCollectionId) deleteUserPlaylist(state.activeCollectionId);
     });
-    document.getElementById('btn-confirm-create-playlist').addEventListener('click', () => {
+    document.getElementById('btn-confirm-create-playlist').addEventListener('click', async () => {
+      if(!window.TelefyLibrary?.ready){showToast('Подключаем библиотеку. Повтори через несколько секунд.');return;}
       const nameInput = document.getElementById('input-playlist-name');
       const subInput = document.getElementById('input-playlist-subtitle');
       const rawName = (nameInput?.value || '').trim();
@@ -4095,8 +4085,9 @@
           pl.title = rawName || pl.title;
           pl.subtitle = rawSub || (state.lang === 'en' ? 'Personal playlist · Telefy Max' : 'Личный плейлист · Telefy Max');
           pl.trackIds = selectedIds;
+          pl.trackKeys = selectedIds.map(id=>getTrackUniqueKey(getTrack(id)));
           if (firstTrack && firstTrack.coverImg) pl.coverImg = firstTrack.coverImg;
-          saveUserPlaylists();
+          if(!await saveUserPlaylists())return;
           closeCreatePlaylistModal();
           renderMaxBetaView();
           showToast((state.lang === 'en' ? 'Playlist updated: ' : 'Плейлист обновлён: ') + pl.title);
@@ -4113,7 +4104,7 @@
         coverImg: (firstTrack && firstTrack.coverImg) || null,
         trackIds: selectedIds.length ? selectedIds : tracks.slice(0, 6).map(tr => tr.id)
       });
-      saveUserPlaylists();
+      if(!await saveUserPlaylists())return;
       if (nameInput) nameInput.value = '';
       if (subInput) subInput.value = '';
       closeCreatePlaylistModal();

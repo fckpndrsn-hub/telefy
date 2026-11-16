@@ -25,6 +25,7 @@
  }
  getMyVibeTracksPool=pool;
  function updatePlaylist(){
+  if(!window.TelefyLibrary?.ready)return;
   if(typeof USER_PLAYLISTS==='undefined')return;
   const old=USER_PLAYLISTS.find(p=>p.personal);
   const keep=USER_PLAYLISTS.filter(p=>!p.personal);const changed=keep.length!==USER_PLAYLISTS.length;
@@ -41,6 +42,7 @@
  }
  async function cloudRestore(){const account=storageKey();cloudUser=null;restore();try{const r=await fetch('/api/me/taste',{cache:'no-store'});if(r.ok){const data=await r.json();if(storageKey()!==account)return;history=unique([...(data.history||[]),...history]);save();}}catch(_){}if(storageKey()!==account)return;cloudUser=account;updatePlaylist();if(ready())scheduleRefill();}
  window.addEventListener('telefy:profile-ready',cloudRestore);
+ window.addEventListener('telefy:library-ready',updatePlaylist);
  if(window.TelefyProfile?.user)cloudRestore();
  function record(tr){
   const eventId=globalThis.crypto?.randomUUID?.()||('play_'+Date.now()+'_'+Math.random().toString(36).slice(2));

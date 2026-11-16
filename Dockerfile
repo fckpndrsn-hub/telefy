@@ -7,6 +7,8 @@ COPY server.py soundcloud_api.py max_billing.py max-checkout.html ./
 COPY web/ ./web/
 COPY audio-player.js ./web/assets/audio-player.js
 COPY telefy.html ./web/telefy.html
+COPY library_store.py ./
+COPY library-client.js ./web/assets/library-client.js
 COPY max-client.js ./web/assets/max-client.js
 COPY styles.css telegram-layout.js player-controls.js app.js freshmen.js discovery.js user-profile.js music-policy.js soundcloud-catalog.js personal-vibe.js first-run.js ./web/assets/
 ENV PYTHONUNBUFFERED=1 TELEFY_PRIVATE_DIR=/tmp/telefy-private
