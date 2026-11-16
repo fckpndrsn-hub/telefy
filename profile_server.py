@@ -4,6 +4,7 @@ from http.cookies import SimpleCookie,CookieError
 from urllib.parse import urlsplit
 from http.server import ThreadingHTTPServer
 import server as base
+from max_billing import MaxBillingMixin
 from telegram_auth import verify_init_data,AuthError
 from user_database import UserDatabase,DatabaseUnavailable
 
@@ -16,7 +17,7 @@ try{const r=await fetch('/api/auth/telegram',{method:'POST',headers:{'Content-Ty
 if(!r.ok){status.textContent=r.status===403?'Подпишись на @telefy_news и открой приложение снова через бота.':'Не удалось подключить профиль. Открой приложение заново; если ошибка повторяется, напиши @telefy_support.';return;}
 location.replace('/telefy.html'+location.search);}catch(_){status.textContent='Не удалось подключиться. Попробуй открыть приложение снова.';}})();</script>'''
 
-class Handler(base.Handler):
+class Handler(MaxBillingMixin,base.Handler):
     def cookie_token(self):
         try:return SimpleCookie(self.headers.get('Cookie',''))['telefy_user_session'].value
         except (KeyError,ValueError,CookieError):return ''
@@ -38,7 +39,7 @@ class Handler(base.Handler):
     def do_GET(self):
         route=urlsplit(self.path).path
         if route=='/health':
-            self.reply(200,{'ok':True,'build':'telefy-profile-db-v1','music_build':'telefy-request-budget-v3-20261116','recommendations_period_hours':6,'soundcloud_limits':dict(getattr(base.sc,'RATE_WINDOWS',{})),'soundcloud_last_rate_limit':dict(getattr(base.sc,'LAST_RATE_LIMIT',{})),'soundcloud_retry_after':max(0,int(getattr(base.sc,'SOUNDCLOUD_RETRY_AT',0)-time.time())),'database_configured':bool(os.environ.get('DATABASE_URL')),'telegram_configured':bool(os.environ.get('BOT_TOKEN'))});return
+            self.reply(200,{'ok':True,'build':'telefy-profile-db-v1','music_build':'telefy-oauth-db-v4-20261116','recommendations_period_hours':6,'oauth_storage':dict(getattr(base.sc,'OAUTH_STORAGE',{})),'soundcloud_limits':dict(getattr(base.sc,'RATE_WINDOWS',{})),'soundcloud_last_rate_limit':dict(getattr(base.sc,'LAST_RATE_LIMIT',{})),'soundcloud_retry_after':max(0,int(getattr(base.sc,'SOUNDCLOUD_RETRY_AT',0)-time.time())),'database_configured':bool(os.environ.get('DATABASE_URL')),'telegram_configured':bool(os.environ.get('BOT_TOKEN'))});return
         if route=='/api/me/taste':
             try:
                 user=DB.profile(self.cookie_token())

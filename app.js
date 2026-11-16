@@ -270,10 +270,10 @@
         perk5Title: 'Рекомендации от Telefy AI',
         perk5Desc: 'Уникальные подборки с описанием каждого трека и его вайба.',
         maxSubDefault: 'Максимум возможностей музыки в Telegram.',
-        maxSubActive: 'Ваша подписка Max активна. Следующее списание: 13.12.2026.',
+        maxSubActive: 'Telefy Max активен',
         maxBtnDefault: 'Оформить за 99 ₽/мес',
         maxBtnActive: 'Подписка Max активна ✓',
-        maxActiveUntilPill: 'Подписка активна до 13.12.2026',
+        maxActiveUntilPill: 'Telefy Max',
         maxStatLibrary: 'В библиотеке',
         maxStatPlaylists: 'Плейлистов',
         maxStatLiked: 'Любимое',
@@ -283,7 +283,7 @@
         maxRowLibrarySub: 'Безлимитное хранение и офлайн-бот',
         maxRowExpireTitle: 'Срок действия подписки',
         maxRowExpireSub: 'Автопродление · 99 ₽/мес',
-        maxRowExpireDate: 'до 13.12.2026',
+        maxRowExpireDate: '—',
         maxTabPlaylists: 'Плейлисты',
         maxTabLiked: 'Любимое',
         maxPlaylistsHeading: 'Мои плейлисты',
@@ -389,10 +389,10 @@
         perk5Title: 'Telefy AI Recommendations',
         perk5Desc: 'Unique mixes with a vibe breakdown for every track.',
         maxSubDefault: 'Unlock the full power of music in Telegram.',
-        maxSubActive: 'Your Max subscription is active. Next billing: 13.12.2026.',
+        maxSubActive: 'Telefy Max активен',
         maxBtnDefault: 'Subscribe for 99 ₽/mo',
         maxBtnActive: 'Max Subscription Active ✓',
-        maxActiveUntilPill: 'Active until 13.12.2026',
+        maxActiveUntilPill: 'Telefy Max',
         maxStatLibrary: 'In Library',
         maxStatPlaylists: 'Playlists',
         maxStatLiked: 'Favorites',
@@ -402,7 +402,7 @@
         maxRowLibrarySub: 'Unlimited storage & offline bot',
         maxRowExpireTitle: 'Subscription Valid Until',
         maxRowExpireSub: 'Auto-renews · 99 ₽/mo',
-        maxRowExpireDate: 'until 13.12.2026',
+        maxRowExpireDate: '—',
         maxTabPlaylists: 'Playlists',
         maxTabLiked: 'Favorites',
         maxPlaylistsHeading: 'My Playlists',
@@ -3779,6 +3779,7 @@
     document.getElementById('btn-play-collection').addEventListener('click', () => {
       const col = COLLECTIONS.find(c => c.id === state.activeCollectionId)||(state.activeCollectionId==='recommendations'?window.TelefyRecommendations?.collection:null);
       const upl = USER_PLAYLISTS.find(p => p.id === state.activeCollectionId);
+      if(upl&&!state.isMaxSubscribed){openUpsellModal();return;}
       const source = col || upl;
       if (source && source.trackIds.length > 0) {
         const title = col ? getColText(col).title : upl.title;
@@ -3795,21 +3796,7 @@
       }
     });
 
-    function activateMaxSubscription() {
-      triggerHaptic('heavy');
-      state.isMaxSubscribed = true;
-      buildPersonalPlaylists();
-      closeUpsellModal();
-      switchTab('mytelefy');
-      renderAll();
-      const betaEl = document.getElementById('mytelefy-beta-state');
-      if (betaEl) {
-        betaEl.classList.remove('sheet-entering');
-        void betaEl.offsetWidth;
-        betaEl.classList.add('sheet-entering');
-      }
-      showToast(t('toastMaxOn'));
-    }
+    function activateMaxSubscription(){return window.TelefyMax?.purchase();}
 
     document.getElementById('btn-subscribe-max').addEventListener('click', () => {
       activateMaxSubscription();
@@ -3821,7 +3808,7 @@
 
     document.getElementById('btn-renew-max')?.addEventListener('click', () => {
       triggerHaptic('light');
-      openSheetModal('in-dev-modal', 'light');
+      window.TelefyMax?.purchase();
     });
     document.getElementById('btn-close-in-dev-modal')?.addEventListener('click', () => {
       closeSheetModal('in-dev-modal');
@@ -4024,6 +4011,7 @@
     });
 
     function openCreatePlaylistModal(plId = null) {
+      if(!state.isMaxSubscribed){openUpsellModal();return;}
       const cm = document.getElementById('create-playlist-modal');
       if (!cm) return;
       editingPlaylistId = typeof plId === 'string' ? plId : null;
@@ -4154,6 +4142,7 @@
       }
     }
     function openLibraryModal() {
+      if(!state.isMaxSubscribed){openUpsellModal();return;}
       renderLibraryModalTracks();
       openSheetModal('library-modal', 'light');
     }

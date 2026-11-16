@@ -28,7 +28,8 @@
   if(typeof USER_PLAYLISTS==='undefined')return;
   const old=USER_PLAYLISTS.find(p=>p.personal);
   const keep=USER_PLAYLISTS.filter(p=>!p.personal);const changed=keep.length!==USER_PLAYLISTS.length;
-  if(!ready()||!state.isMaxSubscribed){if(changed){USER_PLAYLISTS.splice(0,USER_PLAYLISTS.length,...keep);saveUserPlaylists();}return;}
+  if(!state.isMaxSubscribed)return;
+  if(!ready()){if(window.TelefyTaste?.restored&&changed){USER_PLAYLISTS.splice(0,USER_PLAYLISTS.length,...keep);saveUserPlaylists();}return;}
   const heard=new Set(history.map(h=>h.key));
   const candidates=tracks.filter(allowed).map(tr=>({tr,n:score(tr)})).filter(x=>x.n>=.6||heard.has(getTrackUniqueKey(x.tr))).sort((a,b)=>b.n-a.n).map(x=>x.tr);
   const selected=[...candidates.filter(t=>!heard.has(getTrackUniqueKey(t))).slice(0,12),...candidates.filter(t=>heard.has(getTrackUniqueKey(t))).slice(0,8)];

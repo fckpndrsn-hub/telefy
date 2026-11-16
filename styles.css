@@ -1057,3 +1057,14 @@ html.telefy-sheet-open, html.telefy-sheet-open body { overflow:hidden; }
 
 /* Preserve native scrolling without browser pull-to-refresh. */
 html,body{overscroll-behavior-y:none;}
+
+/* Max uses the same restrained grouped surfaces as Telegram settings. */
+#mytelefy-promo-state > .tg-card,#mytelefy-upsell-modal .tg-card { border-radius:16px;box-shadow:none;border:0; }
+#mytelefy-promo-state .tg-row,#mytelefy-upsell-modal .tg-row { min-height:68px;padding-top:13px;padding-bottom:13px; }
+#mytelefy-promo-state .tg-row+.tg-row,#mytelefy-upsell-modal .tg-row+.tg-row { border-top:0; }
+#max-hero-card,#modal-max-hero-card { border-radius:24px;corner-shape:round;box-shadow:none!important; }
+#btn-subscribe-max,#btn-modal-subscribe-max { min-height:50px;border-radius:14px;font-size:16px;box-shadow:none; }
+#max-status-text { font-size:14px;line-height:20px; }
+#mytelefy-upsell-modal > .col-sheet-panel { border-radius:24px 24px 0 0;box-shadow:none!important; }
+#mytelefy-upsell-modal h3 { font-size:18px;line-height:24px; }
+#btn-close-upsell-modal { box-shadow:none; }
