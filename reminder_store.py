@@ -3,6 +3,7 @@ import time,threading,secrets
 from max_billing import month_after
 
 STAGES=('48h','3d','7d','14d','1m')
+MEDIA_STAGES=('welcome',)+STAGES
 NEVER=9223372036854770000
 def deadlines(anchor):return (anchor+48*3600,anchor+3*86400,anchor+7*86400,anchor+14*86400,month_after(anchor))
 def next_due(anchor,mask):return next((at for i,at in enumerate(deadlines(anchor))if not mask&(1<<i)),NEVER)
@@ -102,13 +103,13 @@ class ReminderStore:
      self.db.execute(c,'DELETE FROM telefy_reminder_deliveries WHERE delivery_id=%s',(job['id'],))
    self.db.execute(c,'DELETE FROM telefy_reminder_deliveries WHERE created_at<%s',(now-90*86400,))
  def media(self,stage):
-  if stage not in STAGES:raise ValueError('invalid_stage')
+  if stage not in MEDIA_STAGES:raise ValueError('invalid_stage')
   self.ensure()
   with self.db.connect()as c:row=self.db.execute(c,'SELECT kind,file_id FROM telefy_reminder_media WHERE stage=%s',(stage,)).fetchone()
   return dict(row)if row else None
  def upload_stage(self,admin,stage):
   self.ensure()
-  if stage not in STAGES:raise ValueError('invalid_stage')
+  if stage not in MEDIA_STAGES:raise ValueError('invalid_stage')
   with self.db.connect()as c:self.db.execute(c,'INSERT INTO telefy_reminder_uploads VALUES(%s,%s,%s) ON CONFLICT(admin_id) DO UPDATE SET stage=excluded.stage,expires_at=excluded.expires_at',(admin,stage,int(time.time())+600))
  def pending_upload(self,admin):
   self.ensure()
@@ -118,12 +119,12 @@ class ReminderStore:
   self.ensure()
   with self.db.connect()as c:self.db.execute(c,'DELETE FROM telefy_reminder_uploads WHERE admin_id=%s',(admin,))
  def set_media(self,stage,kind,file_id,admin):
-  if stage not in STAGES or kind not in('photo','video','animation','audio','document')or not isinstance(file_id,str)or not 0<len(file_id)<=4096:raise ValueError('invalid_media')
+  if stage not in MEDIA_STAGES or kind not in('photo','video','animation','audio','document')or not isinstance(file_id,str)or not 0<len(file_id)<=4096:raise ValueError('invalid_media')
   self.ensure()
   with self.db.connect()as c:
    self.db.execute(c,'INSERT INTO telefy_reminder_media VALUES(%s,%s,%s,%s,%s) ON CONFLICT(stage) DO UPDATE SET kind=excluded.kind,file_id=excluded.file_id,updated_by=excluded.updated_by,updated_at=excluded.updated_at',(stage,kind,file_id,admin,int(time.time())))
    self.db.execute(c,'DELETE FROM telefy_reminder_uploads WHERE admin_id=%s',(admin,))
  def clear_media(self,stage):
-  if stage not in STAGES:raise ValueError('invalid_stage')
+  if stage not in MEDIA_STAGES:raise ValueError('invalid_stage')
   self.ensure()
   with self.db.connect()as c:self.db.execute(c,'DELETE FROM telefy_reminder_media WHERE stage=%s',(stage,))

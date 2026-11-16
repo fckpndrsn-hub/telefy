@@ -96,7 +96,9 @@ class BotMixin:
                 end=time.monotonic()+45
                 for _ in range(50):
                     if time.monotonic()>=end:break
-                    if not bot_reminders.run_one():break
+                    import bot_posts
+                    reminder=bot_reminders.run_one();post=bot_posts.run_one()
+                    if not reminder and not post:break
                     count+=1;time.sleep(.25)
                 self.reply(200,{'ok':True,'processed':count})
             except Exception:self.reply(503,{'error':'reminders_unavailable'})

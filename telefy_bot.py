@@ -30,7 +30,7 @@ def store():
         return db.bot_store
 def secret(label):return hmac.new(TOKEN.encode(),label.encode(),hashlib.sha256).digest()
 def webhook_secret():return secret('telefy-webhook-v2').hex()
-def api(method,**data):
+def _api(method,**data):
     if not TOKEN:raise BotError('bot_not_configured')
     try:
         req=Request('https://api.telegram.org/bot'+TOKEN+'/'+method,data=json.dumps(data).encode(),headers={'Content-Type':'application/json'})
@@ -43,6 +43,22 @@ def api(method,**data):
         return result['result']
     except BotError:raise
     except Exception:raise BotError()from None
+
+def api(method,**data):
+    try:return _api(method,**data)
+    except BotError as error:
+        # A definitive rejection is safe to retry without premium button icons.
+        # Timeouts and rate limits are never retried by this fallback.
+        markup=data.get('reply_markup')or{}
+        rows=markup.get('keyboard',markup.get('inline_keyboard',[]))
+        if not(error.definitive and error.status==400 and any(isinstance(b,dict)and'icon_custom_emoji_id'in b for row in rows for b in row)):raise
+        clean=json.loads(json.dumps(data))
+        for row in clean['reply_markup'].get('keyboard',clean['reply_markup'].get('inline_keyboard',[])):
+            for button in row:
+                if isinstance(button,dict):button.pop('icon_custom_emoji_id',None)
+        result=_api(method,**clean)
+        DIAGNOSTIC['button_icon_fallbacks']=DIAGNOSTIC.get('button_icon_fallbacks',0)+1
+        return result
 def active(member):return member.get('status')in('creator','administrator','member')or(member.get('status')=='restricted'and member.get('is_member')is True)
 def subscribed(uid,cached=False):
     with LOCK:entry=MEMBERS.get(uid)
@@ -71,16 +87,36 @@ def launch_url(user,screen):
     ticket=signed(p);store().register_launch(ticket,user['id'],p['exp'])
     return BASE+'/bot/launch?'+urlencode({'ticket':ticket})
 def keyboard(user):
-    def button(text,screen):return {'text':text,'web_app':{'url':launch_url(user,screen)}}
+    import bot_buttons
+    def button(text,screen):return bot_buttons.make(screen,text,web_app={'url':launch_url(user,screen)})
     return {'keyboard':[[button('🎧 Открыть Mini App','home')],[button('👤 Мой профиль','profile'),button('⚙️ Настройки','settings')],[button('⭐ Telefy Max','max'),button('💬 Поддержка','support')]],'resize_keyboard':True,'is_persistent':True,'input_field_placeholder':'Выбери раздел Telefy'}
+def welcome_text(user):
+    custom=reminders.custom_text('welcome')
+    if custom:return html.escape(custom.replace('{name}',user.get('first_name')or'друг'))
+    return 'Привет, '+html.escape(user.get('first_name')or'друг')+'! 👋\n\n<b>Telefy</b> — твоя музыка без цензуры в Telegram.\n\nВо время бета-теста Telefy Max бесплатный. Открывай приложение и выбирай, что слушать.'
+
+def send_welcome(user,preview=False):
+    import bot_buttons
+    markup={'inline_keyboard':[[bot_buttons.make('open',web_app={'url':BASE+'/telefy.html'})]]}if preview else keyboard(user)
+    common={'chat_id':user['id'],'parse_mode':'HTML','reply_markup':markup}
+    text=welcome_text(user);media=reminders.store().media('welcome')
+    if media:
+        methods={'photo':'sendPhoto','video':'sendVideo','animation':'sendAnimation','audio':'sendAudio','document':'sendDocument'}
+        try:
+            api(methods[media['kind']],**common,**{media['kind']:media['file_id']},caption=text);return
+        except BotError as e:
+            if not(e.definitive and e.status==400):raise
+    api('sendMessage',**common,text=text)
+
 def show_menu(user):
     store().remember(user)
     reminders.register(user['id'])
-    api('sendMessage',chat_id=user['id'],parse_mode='HTML',text='Привет, '+html.escape(user.get('first_name')or'друг')+'! 👋\n\n<b>Telefy</b> — твоя музыка без цензуры в Telegram.\n\nВо время бета-теста Telefy Max бесплатный. Открывай приложение и выбирай, что слушать.',reply_markup=keyboard(user))
+    send_welcome(user)
     api('setChatMenuButton',chat_id=user['id'],menu_button={'type':'web_app','text':'Открыть Telefy','web_app':{'url':BASE+'/telefy.html'}})
 def show_gate(user):
+    import bot_buttons
     api('sendMessage',chat_id=user['id'],text='Чтобы открыть Telefy, подпишись на @telefy_news.',reply_markup={'remove_keyboard':True})
-    api('sendMessage',chat_id=user['id'],text='После подписки нажми «Проверить подписку».',reply_markup={'inline_keyboard':[[{'text':'Подписаться на канал','url':CHANNEL_URL}],[{'text':'Проверить подписку','callback_data':'check_subscription'}]]})
+    api('sendMessage',chat_id=user['id'],text='После подписки нажми «Проверить подписку».',reply_markup={'inline_keyboard':[[bot_buttons.make('join',url=CHANNEL_URL)],[bot_buttons.make('check',callback_data='check_subscription')]]})
     api('setChatMenuButton',chat_id=user['id'],menu_button={'type':'commands'})
 def same_channel(chat):return ('@'+str(chat.get('username',''))).casefold()==CHANNEL.casefold()or str(chat.get('id'))==CHANNEL
 def valid_user(user):return isinstance(user,dict)and type(user.get('id'))is int and 0<user['id']<2**53 and user.get('is_bot')is not True
@@ -124,7 +160,7 @@ def setup():
         if str(me.get('username','')).casefold()!=BOT_USERNAME.casefold():DIAGNOSTIC.update(state='bot_username_mismatch');return False
         if api('getChatMember',chat_id=CHANNEL,user_id=me['id']).get('status')not in('administrator','creator'):DIAGNOSTIC.update(state='channel_admin_required');return False
         api('setMyCommands',commands=[{'command':'start','description':'Открыть Telefy'},{'command':'help','description':'Меню Telefy'}])
-        for uid in reminders.admins():api('setMyCommands',scope={'type':'chat','chat_id':uid},commands=[{'command':'start','description':'Открыть Telefy'},{'command':'id','description':'Мой Telegram ID'},{'command':'reminders_admin','description':'Медиа для напоминаний'}])
+        for uid in reminders.admins():api('setMyCommands',scope={'type':'chat','chat_id':uid},commands=[{'command':'start','description':'Открыть Telefy'},{'command':'id','description':'Мой Telegram ID'},{'command':'admin','description':'Управление Telefy'},{'command':'reminders_admin','description':'Приветствие и напоминания'}])
         api('setChatMenuButton',menu_button={'type':'web_app','text':'Открыть Telefy','web_app':{'url':BASE+'/telefy.html'}})
         api('setWebhook',url=BASE+'/bot/webhook',secret_token=webhook_secret(),allowed_updates=['message','callback_query','chat_member','my_chat_member'],drop_pending_updates=False)
         DIAGNOSTIC.update(state='ready');print('Telefy bot: webhook configured.',flush=True);return True
