@@ -76,5 +76,12 @@ class UserDatabase:
                         self.execute(conn,'DELETE FROM telefy_taste_events WHERE telegram_id=%s AND event_id=%s',(uid,row['event_id']))
             else:return self.taste(uid)
             self.execute(conn,'INSERT INTO telefy_taste_events VALUES(%s,%s,%s,%s) ON CONFLICT(telegram_id,event_id) DO NOTHING',(uid,record['eventId'],record['at'],json.dumps(record)))
-            self.execute(conn,'DELETE FROM telefy_taste_events WHERE telegram_id=%s AND event_id NOT IN (SELECT event_id FROM telefy_taste_events WHERE telegram_id=%s ORDER BY played_at DESC,event_id DESC LIMIT 20)',(uid,uid))
+            self.execute(conn,'DELETE FROM telefy_taste_events WHERE telegram_id=%s AND played_at < %s AND event_id NOT IN (SELECT event_id FROM telefy_taste_events WHERE telegram_id=%s ORDER BY played_at DESC,event_id DESC LIMIT 20)',(uid,int(__import__('time').time()*1000)-21600000,uid))
         return self.taste(uid)
+
+    def taste_recent(self,uid):
+        import json,time
+        self.ensure()
+        with self.connect() as conn:
+            rows=self.execute(conn,'SELECT record_json FROM telefy_taste_events WHERE telegram_id=%s AND played_at>=%s ORDER BY played_at DESC LIMIT 500',(uid,int(time.time()*1000)-21600000)).fetchall()
+        return list(reversed([json.loads(row['record_json']) for row in rows]))

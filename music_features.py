@@ -5,9 +5,12 @@ from urllib.parse import urlsplit,parse_qs
 class MusicMixin:
  def do_GET(self):
   route=urlsplit(self.path)
-  if route.path not in('/api/music/export','/api/ai/status'):return super().do_GET()
+  if route.path not in('/api/music/export','/api/ai/status','/api/ai/recent'):return super().do_GET()
   user=self.bot_user()
   if not user:return
+  if route.path=='/api/ai/recent':
+   import profile_server
+   self.reply(200,{'history':profile_server.DB.taste_recent(user['telegram_id'])});return
   if route.path=='/api/ai/status':
    import openai_music
    self.reply(200,openai_music.status());return
@@ -38,7 +41,7 @@ class MusicMixin:
    else:
     candidates=data.get('candidates')
     if not isinstance(candidates,list)or len(candidates)>60 or any(not isinstance(t,dict)for t in candidates):raise ValueError()
-    result=openai_music.rank(user['telegram_id'],candidates)
+    result=openai_music.rank(user['telegram_id'],candidates,data.get('context','vibe'))
    self.reply(200,result)
   except ValueError as error:
    code=str(error)

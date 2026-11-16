@@ -4412,3 +4412,30 @@ try {
     renderAll();
     window.TelefySoundCloud.initialize();
   
+
+/* AI ranks real source candidates; deterministic artist diversity remains mandatory. */
+window.TelefySmartSelection=(()=>{
+ const cache=new Map(),pending=new Map(),scores=new Map();
+ const artist=t=>normalizeArtistToken(findRosterConfig(t.primaryArtist||t.artist)?.name||getPrimaryArtistName(t.primaryArtist||t.artist||''));
+ function diverse(list,limit=60){
+  const pool=[],seen=new Set();for(const t of list){const k=getTrackUniqueKey(t);if(!seen.has(k)){seen.add(k);pool.push(t);}}
+  const result=[],counts=new Map();let last='';const cap=Math.max(3,Math.ceil(limit*.2));
+  while(pool.length&&result.length<limit){let i=pool.findIndex(t=>artist(t)!==last&&(counts.get(artist(t))||0)<cap);if(i<0)i=pool.findIndex(t=>(counts.get(artist(t))||0)<cap);if(i<0)break;const t=pool.splice(i,1)[0];last=artist(t);counts.set(last,(counts.get(last)||0)+1);result.push(t);}
+  return result;
+ }
+ async function rank(list,context){
+  const account=String(window.TelefyProfile?.user?.telegram_id||'');
+  const candidates=diverse(list,60);if(!account||candidates.length<2)return candidates;
+  const key=JSON.stringify([account,context,Math.floor(Date.now()/21600000),window.TelefyTaste?.history?.map(h=>h.key),candidates.map(t=>t.soundcloudUrn)]);
+  if(cache.has(key))return cache.get(key);if(pending.has(key))return pending.get(key);
+  const task=(async()=>{try{
+   const r=await fetch('/api/ai/rank',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({context,candidates:candidates.map(t=>({soundcloudUrn:t.soundcloudUrn,title:t.title,artist:t.artist,genre:t.genre,tag_list:t.tag_list,playbackCount:t.playbackCount,likesCount:t.likesCount}))}),signal:AbortSignal.timeout(8000)});
+   if(!r.ok)throw Error('rank');const data=await r.json();if(String(window.TelefyProfile?.user?.telegram_id||'')!==account)return [];
+   const used=new Set(),ordered=[];for(const i of data.order||[])if(Number.isInteger(i)&&candidates[i]&&!used.has(i)){used.add(i);ordered.push(candidates[i]);}
+   const result=diverse(data.filtered?ordered:[...ordered,...candidates.filter((_,i)=>!used.has(i))],60);
+   if(context==='vibe'&&data.personalized){scores.clear();result.forEach((t,i)=>scores.set(account+':'+t.soundcloudUrn,4*(1-i/result.length)));}
+   if(cache.size>30)cache.clear();cache.set(key,result);return result;
+  }catch(_){cache.set(key,candidates);setTimeout(()=>cache.delete(key),300000);return candidates;}finally{pending.delete(key);}})();pending.set(key,task);return task;
+ }
+ return {artist,diverse,rank,score:t=>scores.get(String(window.TelefyProfile?.user?.telegram_id||'')+':'+t.soundcloudUrn)||0};
+})();

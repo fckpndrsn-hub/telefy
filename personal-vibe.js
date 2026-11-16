@@ -9,19 +9,19 @@
  const ready=()=>history.length>=20;
  const allowed=t=>t&&!t.disliked&&!window.TelefyPromotionExcluded?.(t)&&(!window.TelefyRapCandidate||window.TelefyRapCandidate(t));
  const artistKey=s=>normalizeArtistToken(findRosterConfig(s)?.name||getPrimaryArtistName(s));
- function score(tr){let n=window.TelefyAI?.score(tr)||0;const artist=artistKey(tr.primaryArtist||tr.artist);history.forEach((h,i)=>{const w=(i+1)/20;if(artistKey(h.artist)===artist)n+=3*w;n+=(tr.modes||[]).filter(m=>(h.modes||[]).includes(m)).length*.55*w;if(h.genre&&tr.genre&&h.genre.toLowerCase()===tr.genre.toLowerCase())n+=.25*w;});return n;}
+ function score(tr){let n=window.TelefyAI?.score(tr)||0;const artist=artistKey(tr.primaryArtist||tr.artist);history.forEach((h,i)=>{const w=(i+1)/20;if(artistKey(h.artist)===artist)n+=3*w;n+=(tr.modes||[]).filter(m=>(h.modes||[]).includes(m)).length*.55*w;if(h.genre&&tr.genre&&h.genre.toLowerCase()===tr.genre.toLowerCase())n+=.25*w;});return n/Math.max(1,history.length/3)+(window.TelefySmartSelection?.score(tr)||0);}
  const shuffle=list=>{const a=list.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;};
  function pool(){
   let candidates=tracks.filter(allowed),heard=new Set(history.map(h=>h.key));
   const recent=new Set([...sessionKeys.slice(-30),...(typeof recentFlowHistoryIds!=='undefined'?recentFlowHistoryIds.slice(-10).map(id=>tracks.find(t=>t.id===id)).filter(Boolean).map(getTrackUniqueKey):[])]);
   const unseenRecent=candidates.filter(t=>!recent.has(getTrackUniqueKey(t)));
   if(unseenRecent.length)candidates=unseenRecent;
-  if(!ready())return shuffle(candidates);
+  if(!ready())return window.TelefySmartSelection.diverse(shuffle(candidates),60);
   const rank=list=>list.map(tr=>({tr,n:score(tr)})).filter(x=>x.n>=.6).sort((a,b)=>b.n-a.n).slice(0,100).map(x=>x.tr);
   const fresh=rank(candidates.filter(t=>!heard.has(getTrackUniqueKey(t)))),familiar=rank(candidates.filter(t=>heard.has(getTrackUniqueKey(t))));
   // New discoveries lead, familiar tracks remain a minority when available.
   const result=[];while(fresh.length||familiar.length){result.push(...fresh.splice(0,3));if(familiar.length)result.push(familiar.shift());}
-  return result.length?result:shuffle(candidates);
+  return window.TelefySmartSelection.diverse(result.length?result:shuffle(candidates),60);
  }
  getMyVibeTracksPool=pool;
  function updatePlaylist(){
@@ -36,7 +36,7 @@
   const selected=[...candidates.filter(t=>!heard.has(getTrackUniqueKey(t))).slice(0,12),...candidates.filter(t=>heard.has(getTrackUniqueKey(t))).slice(0,8)];
   for(const t of candidates)if(selected.length<20&&!selected.some(x=>getTrackUniqueKey(x)===getTrackUniqueKey(t)))selected.push(t);
   // Never publish a tiny automatic playlist while discovery is still loading.
-  if(selected.length<20)return;
+  const varied=window.TelefySmartSelection.diverse(candidates,20);if(varied.length<20)return;selected.splice(0,selected.length,...varied);
   const pl={...(old||{}),id:old?.id||'personal_vibe_1',title:'Мой вайб #1',subtitle:'Музыка в твоём вкусе',cover:'#2AABEE',coverImg:old?.coverImg||selected[0]?.coverImg||null,trackIds:selected.map(t=>t.id),trackKeys:selected.map(getTrackUniqueKey),personal:true};
   USER_PLAYLISTS.splice(0,USER_PLAYLISTS.length,...keep,pl);saveUserPlaylists();
  }
@@ -61,7 +61,7 @@
    const seeds=shuffle(['PHARAOH','9mice','Kai Angel','madk1d','FORTUNA 812','OG Buda','SODA LUV','Boulevard Depo','Big Baby Tape','ЛСП','Markul']);
    const queries=[...favorite,...seeds.filter(a=>!favorite.includes(a)).slice(0,2)];
    await Promise.allSettled(queries.map(async q=>{const r=await fetch('/api/soundcloud/search?'+new URLSearchParams({q,limit:50}),{signal:AbortSignal.timeout(25000)});if(r.ok){const data=await r.json();mergeParsedTracksIntoCatalog(data.tracks||[]);}}));
-   updatePlaylist();if(typeof renderMaxBetaView==='function')renderMaxBetaView();
+   await window.TelefySmartSelection.rank(pool(),'vibe');updatePlaylist();if(typeof renderMaxBetaView==='function')renderMaxBetaView();
   })().finally(()=>{busy=null;});return busy;
  }
  async function start(){
@@ -72,7 +72,8 @@
   const subtitle=document.getElementById('home-stream-desc');if(subtitle)subtitle.textContent=desc;
   if(typeof renderMoodChips==='function')renderMoodChips();
   let candidates=pool().filter(t=>t.id!==state.currentTrackId);
-  if(candidates.length<20){await refill();if(!isMyVibeStreamActive())return;candidates=pool().filter(t=>t.id!==state.currentTrackId);}
+  if(candidates.length<20||new Set(candidates.map(window.TelefySmartSelection.artist)).size<4){await refill();if(!isMyVibeStreamActive())return;candidates=pool().filter(t=>t.id!==state.currentTrackId);}
+  candidates=await window.TelefySmartSelection.rank(candidates,'vibe');if(!isMyVibeStreamActive())return;
   if(candidates.length){state.queueIds=candidates.slice(1,41).map(t=>t.id);sessionKeys.push(getTrackUniqueKey(candidates[0]));playTrack(candidates[0].id,label);}
   else{state.isPlaying=false;syncRealAudio();}
   if(ready())scheduleRefill();

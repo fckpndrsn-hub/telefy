@@ -1,14 +1,14 @@
 /* Account-scoped, six-hour recommendations with incremental discovery. */
 (() => {
  const id='recommendations',period=()=>Math.floor(Date.now()/21600000),uid=()=>String(window.TelefyProfile?.user?.telegram_id||'local');
- const key=()=> 'telefy_recommendations_v4_'+uid();let generation=0,snapshot=null,busy=null,failed=false,retryAt=0;
+ const key=()=> 'telefy_recommendations_v5_'+uid();let generation=0,snapshot=null,busy=null,failed=false,retryAt=0;
  const title=()=>state.lang==='en'?'Recommended for you':'Рекомендуем послушать';
  const collection={id,title:title(),tag:'Обновляется каждые 6 часов',shortDesc:'Новые треки и артисты в твоём вкусе',trackIds:[],cover:'#197D91',coverImg:null,icon:'<span class="tg-ico">&#xF0BA;</span>'};
  function restore(){generation++;busy=null;failed=false;collection.coverImg=null;try{snapshot=JSON.parse(localStorage.getItem(key())||'null');if(!snapshot){const old=JSON.parse(localStorage.getItem('telefy_freshmen_v2')||'null');if(old)snapshot={period:old.period,tracks:old.tracks||[]};}}catch(_){snapshot=null;}snapshot={period:period(),tracks:[],played:[],cursor:0,plan:null,...snapshot};mergeParsedTracksIntoCatalog(snapshot.tracks||[]);sync();}
  function save(){try{localStorage.setItem(key(),JSON.stringify(snapshot));}catch(_){}}
  const allowed=t=>!window.telefySongBlocked?.(t)&&!window.TelefyPromotionExcluded?.(t)&&(!window.TelefyRapCandidate||window.TelefyRapCandidate(t));
  function plan(){
-  const history=window.TelefyTaste?.history||[],weights=new Map(),moods=new Map();
+  const history=(snapshot?.recentHistory||window.TelefyTaste?.history||[]).filter(h=>Number(h.at)>=Date.now()-21600000),weights=new Map(),moods=new Map();
   history.forEach((h,i)=>{weights.set(h.artist,(weights.get(h.artist)||0)+i+1);(h.modes||[]).forEach(m=>moods.set(m,(moods.get(m)||0)+i+1));});
   const favorite=[...weights].sort((a,b)=>b[1]-a[1]).slice(0,6).map(x=>x[0]);
   const dominant=[...moods].sort((a,b)=>b[1]-a[1])[0]?.[0];
@@ -21,7 +21,7 @@
   return {personal:history.length>0,artists,heard:history.map(h=>h.key),history};
  }
  function sync(){
-  collection.title=title();const urns=new Set((snapshot?.tracks||[]).map(t=>t.soundcloudUrn));collection.trackIds=tracks.filter(t=>urns.has(t.soundcloudUrn)&&allowed(t)).sort((a,b)=>(window.TelefyAI?.score(b)||0)-(window.TelefyAI?.score(a)||0)).map(t=>t.id);
+  collection.title=title();const urns=new Set((snapshot?.tracks||[]).map(t=>t.soundcloudUrn));collection.trackIds=tracks.filter(t=>urns.has(t.soundcloudUrn)&&allowed(t)).sort((a,b)=>snapshot.tracks.findIndex(t=>t.soundcloudUrn===a.soundcloudUrn)-snapshot.tracks.findIndex(t=>t.soundcloudUrn===b.soundcloudUrn)).map(t=>t.id);
   collection.coverImg=snapshot?.coverImg||collection.coverImg;
  }
  function pool(){const heard=new Set(snapshot.plan?.heard||[]),played=new Set(snapshot.played||[]);return collection.trackIds.map(id=>tracks.find(t=>t.id===id)).filter(t=>t&&!t.disliked&&!heard.has(getTrackUniqueKey(t))&&!played.has(getTrackUniqueKey(t)));}
@@ -39,7 +39,8 @@
   if(!snapshot.plan)snapshot.plan=plan();
   const pending=(async()=>{
    try{
-    const freshPeriod=period()!==snapshot.period,working=freshPeriod?{period:period(),tracks:[],played:snapshot.played||[],cursor:0,plan:plan(),coverImg:snapshot.coverImg}:snapshot;
+    try{const r=await fetch('/api/ai/recent',{signal:AbortSignal.timeout(5000)});if(r.ok){const d=await r.json();if(token!==generation||account!==uid())return;snapshot.recentHistory=d.history||[];snapshot.plan=plan();}}catch(_){}
+    const freshPeriod=period()!==snapshot.period,working=freshPeriod?{period:period(),tracks:[],recentHistory:snapshot.recentHistory,played:snapshot.played||[],cursor:0,plan:plan(),coverImg:snapshot.coverImg}:snapshot;
     const cursor=working.cursor;let candidates=[];
     const request=async(q,offset=0)=>{const r=await fetch('/api/soundcloud/search?'+new URLSearchParams({q,offset,limit:50}),{signal:AbortSignal.timeout(90000)});const d=await r.json();if(!r.ok)throw Error(d.error||'recommendations');return d;};
     if(cursor===0&&!working.plan.personal)candidates=(await request('telefy:freshmen')).tracks||[];
@@ -50,7 +51,7 @@
     if(token!==generation||account!==uid())return;
     const heard=new Set(working.plan.heard),played=new Set(working.played),existing=new Set(working.tracks.map(getTrackUniqueKey));
     candidates=candidates.filter(t=>allowed(t)&&!heard.has(getTrackUniqueKey(t))&&!played.has(getTrackUniqueKey(t))&&!existing.has(getTrackUniqueKey(t)));
-    mergeParsedTracksIntoCatalog(candidates);const incoming=new Set(candidates.map(t=>t.soundcloudUrn));const mixed=interleaveByArtist(tracks.filter(t=>incoming.has(t.soundcloudUrn)));working.tracks.push(...mixed);working.tracks=working.tracks.slice(-300);working.cursor=cursor+1;
+    mergeParsedTracksIntoCatalog(candidates);const incoming=new Set(candidates.map(t=>t.soundcloudUrn));const mixed=await window.TelefySmartSelection.rank(interleaveByArtist(tracks.filter(t=>incoming.has(t.soundcloudUrn))),'recommendations');if(token!==generation||account!==uid())return;working.tracks.push(...mixed);working.tracks=working.tracks.slice(-300);working.cursor=cursor+1;
     if(freshPeriod&&!working.tracks.length)working.tracks=snapshot.tracks.slice();
     if(!working.coverImg)working.coverImg=mixed.find(t=>t.coverImg)?.coverImg||null;snapshot=working;retryAt=0;save();sync();
    }catch(_){if(token===generation){failed=true;retryAt=Date.now()+300000;}}
