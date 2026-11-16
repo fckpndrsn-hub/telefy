@@ -446,7 +446,7 @@ def discovery_metadata(raw):
     fresh=0<=age(raw.get('release_date') or (date if raw.get('release_month') else None) or created)<=180
     if raw.get('release_year') and int(raw['release_year'])<datetime.now(timezone.utc).year-1:fresh=False
     credit=raw.get('metadata_artist') or ''
-    russian=bool(re.search('[а-яё]',text)) or bool(scene_artist(credit)) or any(tokens(a).issubset(tokens(credit)) for a in LEGENDS_ARTISTS+HITS_ADDITIONS+['9mice','FRIENDLY THUG 52 NGG','BUSHIDO ZHO','ALBLAK 52','MAYOT','SALUKI','OBLADAET','GONE.Fludd','Toxi$','Aarne'])
+    russian=bool(re.search('[а-яё]',text)) or bool(scene_artist(credit)) or any(tokens(a).issubset(tokens(credit)) for a in LEGENDS_ARTISTS+HITS_ADDITIONS+['Villian','baby cute','Toxi$','9mice','FRIENDLY THUG 52 NGG','BUSHIDO ZHO','ALBLAK 52','MAYOT','SALUKI','OBLADAET','GONE.Fludd','Toxi$','Aarne'])
     modes=[]
     if energy:modes.append('energy')
     if chill:modes.append('night')
@@ -463,12 +463,13 @@ def discovery(kind,offset=0):
     if cached and cached[0]>time.time():return cached[1]
     artists=['PHARAOH','ЛСП','Big Baby Tape','KIZARU','Скриптонит','fortune 812','Markul','OG Buda','SALUKI','9mice','Kai Angel','madk1d','Boulevard Depo','GONE.Fludd','BUSHIDO ZHO','ALBLAK 52','FRIENDLY THUG 52 NGG','MAYOT','Aarne','Toxi$','SODA LUV','OBLADAET','FEDUK','темный принц','Платина','LIL KRYSTALLL','ATL','Хаски']
     scene_queries=[c['name'] for c in SCENE_ROSTER]
+    energy_queries=list(dict.fromkeys(scene_queries+['russian drill','русский фонк','BUSHIDO ZHO','ALBLAK 52','russian rage']))
     telescope_queries=scene_queries+[a for a in artists if not scene_artist(a)]
     hits_queries=list(dict.fromkeys(HITS_ADDITIONS+telescope_queries))
     trends_queries=list(dict.fromkeys(scene_queries+artists))
     queries={
       'scene':scene_queries[offset*4:offset*4+4],
-      'energy':(scene_queries+['russian drill','русский фонк','BUSHIDO ZHO','ALBLAK 52'])[offset*4:offset*4+4],
+      'energy':energy_queries[offset*4:offset*4+4],
       'night':['русский chill','russian lofi rap','русский rnb','jazz rap русский'],
       'uncensored':([c['name'] for c in SCENE_ROSTER if c['style']=='hard']+['russian rage'])[offset*4:offset*4+4],
       'underground':trends_queries[offset*4:offset*4+4],
@@ -508,7 +509,8 @@ def discovery(kind,offset=0):
         if kind=='legends' and re.search(r'(?<![\w])(?:каста|kasta|гуф|guf|кравц|kravz)(?![\w])',credit):continue
         if t['soundcloudUrn'] in seen:continue
         if kind in ('hits','legends','premiere') and not any(tokens(q).issubset(tokens(t.get('artist',''))) for q in queries):continue
-        if kind in ('energy','night','uncensored','underground') and kind not in t.get('modes',[]):continue
+        if kind=='energy' and not set(t.get('modes',[])).intersection(('energy','uncensored')):continue
+        if kind in ('night','uncensored','underground') and kind not in t.get('modes',[]):continue
         if kind in ('hits','premiere'):
             try:date=datetime.fromisoformat(str(t.get('releaseDate')).replace('Z','+00:00')).date()
             except (ValueError,TypeError):
@@ -522,7 +524,7 @@ def discovery(kind,offset=0):
         seen.add(t['soundcloudUrn']);result.append(t)
     if not result and source_errors:raise source_errors[0]
     result.sort(key=lambda t:t.get('releaseDate') or '',reverse=True) if kind=='premiere' else result.sort(key=lambda t:t.get('playbackCount',0)+t.get('likesCount',0)*30,reverse=True)
-    data={'tracks':result[:250],'hasMore':((offset+1)*4<len(LEGENDS_ARTISTS if kind=='legends' else hits_queries if kind=='hits' else trends_queries if kind=='underground' else scene_queries if kind=='scene' else scene_queries+['russian rage'] if kind in ('energy','uncensored') else telescope_queries) and kind!='night'),'nextOffset':offset+1,'source':'soundcloud','selection':'metadata-and-editorial'}
+    data={'tracks':result[:250],'hasMore':((offset+1)*4<len(LEGENDS_ARTISTS if kind=='legends' else hits_queries if kind=='hits' else trends_queries if kind=='underground' else scene_queries if kind=='scene' else energy_queries if kind=='energy' else scene_queries+['russian rage'] if kind=='uncensored' else telescope_queries) and kind!='night'),'nextOffset':offset+1,'source':'soundcloud','selection':'metadata-and-editorial'}
     DISCOVERY_CACHE[key]=(time.time()+600,data)
     return data
 
@@ -547,7 +549,7 @@ def rap_candidate(track):
     if 'night' in track.get('modes',[]) and any(tokens(a).issubset(tokens(credit)) for a in CHILL_ARTISTS) and not re.search(r'rock|metal',text,re.I):return True
     cfg=scene_artist(credit)
     # Missing genre can use a known rap artist; explicit rock/pop genre does not.
-    return not text.strip() and (bool(cfg and cfg.get('style')=='hard') or any(tokens(a).issubset(tokens(credit)) for a in LEGENDS_ARTISTS+HITS_ADDITIONS))
+    return not text.strip() and (bool(cfg and cfg.get('style')=='hard') or any(tokens(a).issubset(tokens(credit)) for a in LEGENDS_ARTISTS+HITS_ADDITIONS+['Villian','baby cute','Toxi$']))
 
 def smart_queries(query):
     import difflib
@@ -596,6 +598,12 @@ search=smart_search
 """Mode-specific candidate retrieval and aggregate diagnostics."""
 MODE_DIAGNOSTICS={}
 CHILL_ARTISTS=['PHARAOH','ЛСП','SALUKI','Boulevard Depo','Markul','Mnogoznaal','SODA LUV','Miyagi','OG Buda','Big Baby Tape','KIZARU','FRIENDLY THUG 52 NGG']
+TREND_FIRST=['madk1d','Villian','Kai Angel','9mice','темный принц','FORTUNA 812','OG Buda','baby cute','Toxi$']
+TREND_SECOND=['Big Baby Tape','KIZARU','PHARAOH','RMW','huzzy b']
+_previous_trend_order=list(dict.fromkeys(['madk1d','Villian','OG Buda','темный принц','FORTUNA 812','FRIENDLY THUG 52 NGG','9mice','Kai Angel','Big Baby Tape','PHARAOH','SODA LUV']+[c['name'] for c in SCENE_ROSTER]+LEGENDS_ARTISTS))
+_prioritized={a.casefold()for a in TREND_FIRST+TREND_SECOND}
+_trend_rest=[a for a in _previous_trend_order if a.casefold()not in _prioritized]
+TREND_PAGES=[TREND_FIRST,TREND_SECOND]+[_trend_rest[i:i+4]for i in range(0,len(_trend_rest),4)]
 _catalog_discovery=discovery
 def discovery(kind,offset=0):
     if kind not in ('night','underground'):return _catalog_discovery(kind,offset)
@@ -604,11 +612,10 @@ def discovery(kind,offset=0):
     offset=max(0,min(int(offset),30));key=('modes-v2',kind,offset)
     cached=DISCOVERY_CACHE.get(key)
     if cached and cached[0]>time.time():return cached[1]
-    seeds=CHILL_ARTISTS if kind=='night' else list(dict.fromkeys(['9mice','Kai Angel','madk1d','FORTUNA 812','FRIENDLY THUG 52 NGG','OG Buda','Big Baby Tape','PHARAOH','SODA LUV']+[c['name'] for c in SCENE_ROSTER]+LEGENDS_ARTISTS))
-    queries=seeds[offset*2:offset*2+2]
+    queries=CHILL_ARTISTS[offset*2:offset*2+2]if kind=='night'else (TREND_PAGES[offset]if offset<len(TREND_PAGES)else [])
+    artist_stats={}
     def get(q):
         params={'q':q,'access':'playable','limit':50,'linked_partitioning':'true'}
-        if kind=='underground':params['created_at[from]']=(datetime.now(timezone.utc)-timedelta(days=180)).strftime('%Y-%m-%d %H:%M:%S')
         # Explicit soft tags retrieve a different set from a broad relevance search.
         requests=[params] if kind=='underground' else [params,{**params,'tags':'chill'}]
         result=[];raw_count=0;errors=[]
@@ -623,22 +630,28 @@ def discovery(kind,offset=0):
                     except APIError:continue
                     cfg=scene_artist(q)
                     if not ((cfg and scene_matches(t['artist'],cfg)) or tokens(q).issubset(tokens(t['artist']))):continue
-                    if not rap_candidate(t) or kind not in t.get('modes',[]):continue
+                    if not rap_candidate(t):continue
+                    if kind=='underground':
+                        if t.get('playbackCount',0)<1000 and t.get('likesCount',0)<50:continue
+                        if 'underground'not in t['modes']:t['modes'].append('underground')
+                    elif kind not in t.get('modes',[]):continue
                     if re.search(r'remix|sped|slowed|karaoke|instrumental',t['title'],re.I):continue
                     result.append(t)
             except APIError as e:
                 errors.append(e.code)
                 if e.status==429:break
+        if kind=='underground':result=sorted(result,key=lambda t:t.get('playbackCount',0)+30*t.get('likesCount',0),reverse=True)[:4]
+        artist_stats[q]={'raw':raw_count,'accepted':len(result),'errors':errors}
         return result,raw_count,errors
     with ThreadPoolExecutor(max_workers=4)as pool:batches=list(pool.map(get,queries))
     tracks={t['soundcloudUrn']:t for batch,_,_ in batches for t in batch}
     errors=sorted(set(e for _,_,codes in batches for e in codes))
     result=sorted(tracks.values(),key=lambda t:t.get('playbackCount',0)+30*t.get('likesCount',0),reverse=True)
-    MODE_DIAGNOSTICS[kind+':'+str(offset)]={'queries':queries,'raw':sum(n for _,n,_ in batches),'accepted':len(result),'errors':errors}
+    MODE_DIAGNOSTICS[kind+':'+str(offset)]={'queries':queries,'raw':sum(n for _,n,_ in batches),'accepted':len(result),'errors':errors,'artists':artist_stats}
     if not result and errors:
         if 'soundcloud_rate_limited'in errors:raise APIError(429,'soundcloud_rate_limited')
         raise APIError(502,'mode_sources_unavailable')
-    data={'tracks':result,'hasMore':(offset+1)*2<len(seeds),'nextOffset':offset+1,'selection':'soundcloud-metadata'}
+    data={'tracks':result,'hasMore':(offset+1)*2<len(CHILL_ARTISTS)if kind=='night'else offset+1<len(TREND_PAGES),'nextOffset':offset+1,'selection':'soundcloud-metadata'}
     DISCOVERY_CACHE[key]=(time.time()+(600 if result else 30),data)
     return data
 
@@ -823,3 +836,53 @@ def freshmen(offset=0):
                 if old[0]=='bounded'and old[1]<period-1:FRESHMEN_CACHE.pop(old,None)
     if result:FRESHMEN_LAST_GOOD[batch]=(time.time(),data)
     return data
+
+"""Durable application OAuth session; serialized refresh across service instances."""
+_file_access_token=access_token
+OAUTH_STORAGE={'backend':'file','state':'idle'}
+def _durable_access_token(invalidate=None,credentials=None):
+    cfg=credentials or settings()
+    if not os.environ.get('DATABASE_URL'):
+        return _file_access_token(invalidate,credentials)
+    from user_database import UserDatabase
+    fingerprint=hashlib.sha256((cfg['client_id']+'\0'+cfg['client_secret']).encode()).hexdigest()
+    error=None;result=None
+    try:
+        db=UserDatabase();db.ensure()
+        with db.connect()as conn:
+            db.execute(conn,'INSERT INTO telefy_service_sessions(service_key,session_json,retry_at) VALUES(%s,%s,%s) ON CONFLICT(service_key) DO NOTHING',('soundcloud:'+fingerprint,'{}',0))
+            row=db.execute(conn,'SELECT session_json,retry_at FROM telefy_service_sessions WHERE service_key=%s FOR UPDATE',('soundcloud:'+fingerprint,)).fetchone()
+            stored=json.loads(row['session_json']);local=read_json(DATA/'soundcloud-session.json')
+            # Migrate an existing file into durable storage on the first successful request.
+            if local.get('fingerprint')==fingerprint and (local.get('expires_at',0)>stored.get('expires_at',0) or not stored.get('refresh_token')):stored=local
+            if stored.get('access_token')and stored.get('expires_at',0)>time.time()+60 and stored['access_token']!=invalidate:
+                write_json(DATA/'soundcloud-session.json',stored);result=stored['access_token']
+                db.execute(conn,'UPDATE telefy_service_sessions SET session_json=%s,retry_at=0 WHERE service_key=%s',(json.dumps(stored),'soundcloud:'+fingerprint))
+                OAUTH_STORAGE.update(backend='postgres',state='reused')
+            elif row['retry_at']>time.time():
+                error=APIError(429,'soundcloud_rate_limited');error.retry_after=int(row['retry_at']-time.time())
+                OAUTH_STORAGE.update(backend='postgres',state='cooldown',retryAt=row['retry_at'])
+            else:
+                if stored.get('access_token')or stored.get('refresh_token'):write_json(DATA/'soundcloud-session.json',stored)
+                try:
+                    result=_file_access_token(invalidate,credentials)
+                    session=read_json(DATA/'soundcloud-session.json')
+                    if not session.get('access_token'):raise APIError(503,'oauth_storage_unavailable')
+                    db.execute(conn,'UPDATE telefy_service_sessions SET session_json=%s,retry_at=0 WHERE service_key=%s',(json.dumps(session),'soundcloud:'+fingerprint))
+                    OAUTH_STORAGE.update(backend='postgres',state='saved')
+                except APIError as e:
+                    error=e
+                    if e.status==429:
+                        retry_at=int(time.time()+getattr(e,'retry_after',60))
+                        db.execute(conn,'UPDATE telefy_service_sessions SET session_json=%s,retry_at=%s WHERE service_key=%s',(json.dumps(stored),retry_at,'soundcloud:'+fingerprint))
+                        OAUTH_STORAGE.update(backend='postgres',state='cooldown',retryAt=retry_at)
+    except APIError:raise
+    except Exception:
+        OAUTH_STORAGE.update(backend='postgres',state='storage_unavailable')
+        # Do not fall back to repeated client_credentials exchanges if durable storage fails.
+        raise APIError(503,'oauth_storage_unavailable')from None
+    if error:raise error
+    return result
+
+def access_token(invalidate=None,credentials=None):
+    with LOCK:return _durable_access_token(invalidate,credentials)

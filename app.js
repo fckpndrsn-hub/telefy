@@ -753,6 +753,7 @@
     function doesTrackMatchMood(tr, moodId) {
       if(window.TelefyRapCandidate&&!window.TelefyRapCandidate(tr))return false;
       if(window.TelefyPromotionExcluded?.(tr))return false;
+      if(moodId==='underground'&&!window.TelefyTrendMembership?.has(tr?.soundcloudUrn))return false;
       if(moodId==='energy')return tr?.classificationVersion===4&&Array.isArray(tr.modes)&&(tr.modes.includes('energy')||tr.modes.includes('uncensored'));
       if(moodId && moodId!=='all')return tr?.classificationVersion===4&&Array.isArray(tr.modes)&&tr.modes.includes(moodId);
       if (!tr) return false;
@@ -990,7 +991,7 @@
       const unplayedMatching = interleaveByArtist(
         tracks.filter(tr => isFlowTrackUnplayed(tr) && doesTrackMatchMood(tr, moodId))
       );
-      const fallbackUnplayed = unplayedMatching.length > 0
+      const fallbackUnplayed = flowActive&&moodId==='underground'?unplayedMatching:unplayedMatching.length > 0
         ? unplayedMatching
         : interleaveByArtist(tracks.filter(tr => isFlowTrackUnplayed(tr)));
 
@@ -1004,6 +1005,7 @@
         if (leastRecent) playTrack(leastRecent.id, state.sourceLabel);
       } else {
         // Trigger background fetch for more mood tracks and immediately advance to least-recently-played mood track so UI never stalls
+        if(moodId==='underground'){state.isPlaying=false;syncRealAudio();silentlyRefillFlowQueue(true);return;}
         silentlyRefillFlowQueue(false);
         const immediate = pickLeastRecentMoodFallback(moodId);
         if (immediate) playTrack(immediate.id, state.sourceLabel);
