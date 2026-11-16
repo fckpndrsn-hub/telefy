@@ -6,7 +6,7 @@
   let enabled = true, request = 0, activeId = null;
   let progressFrame = null;
   let hls = null, streamController = null;
-  let sourceReady = false;
+  let sourceReady = false, switchingSource = false;
   let pausePoint = null, resumePoint = null;
   function prepareSource(url, signal, requestId) {
     return new Promise((resolve,reject) => {
@@ -58,7 +58,7 @@
   function syncProgress() {
     if (enabled && activeId === state.currentTrackId && !scrubbing && !audio.seeking) {
       state.progressSec = audio.paused && pausePoint?.id === activeId ? pausePoint.time : audio.currentTime;
-      updateProgressUI();
+      updateProgressUI(); syncMediaPosition();
     }
   }
   function stopProgressFrames() {
@@ -103,7 +103,7 @@
     try {
       const hasSource=Boolean(hls || audio.srcObject || audio.currentSrc || audio.getAttribute('src'));
       if (reset || activeId !== track.id || !hasSource || !sourceReady) {
-        sourceReady=false;
+        sourceReady=false; switchingSource=true;
         scrubbing = false; scrubTarget = null; scrubPointer = null;
         audio.pause();
         if (hls) { hls.destroy(); hls=null; }
@@ -148,9 +148,10 @@
         audio.currentTime=restoreAt;state.progressSec=restoreAt;updateProgressUI();
         pausePoint=null;
       }
-      await audio.play(); if (currentRequest === request) renderPlayerUI();
+      await audio.play(); if (currentRequest === request) { switchingSource=false; renderPlayerUI(); }
     } catch (error) {
       if (currentRequest !== request || error.name === 'AbortError') return;
+      switchingSource=false;
       if(!sourceReady){activeId=null;if(hls){hls.destroy();hls=null;}}
       fail(error.name === 'NotAllowedError' ? 'Нажми ▶ ещё раз для запуска звука' : (error.message || 'Не удалось загрузить аудио'));
     }
@@ -158,7 +159,15 @@
   const on = (name, handler) => audio.addEventListener(name, handler, { signal: events.signal });
   on('timeupdate', syncProgress);
   on('seeked', syncProgress);
-  on('pause', () => { stopProgressFrames(); syncProgress(); });
+  on('pause', () => {
+    stopProgressFrames();
+    // Source replacement also emits pause; it must not cancel a new track load.
+    if (enabled && sourceReady && !switchingSource && activeId === state.currentTrackId && audio.paused && !audio.ended) {
+      pausePoint={id:activeId,time:audio.currentTime}; resumePoint=null;
+      state.isPlaying=false; renderPlayerUI();
+    }
+    syncProgress();
+  });
   on('ended', stopProgressFrames);
   on('error', stopProgressFrames);
   on('playing', startProgressFrames);
@@ -173,7 +182,7 @@
         if(Math.abs(audio.currentTime-resumePoint.time)>.25)audio.currentTime=resumePoint.time;
         resumePoint=null;
       }
-      state.isPlaying = true; renderPlayerUI();
+      pausePoint=null; state.isPlaying = true; bindMediaActions(); renderPlayerUI();
     }
   });
   on('ended', () => { if (!scrubbing && activeId === state.currentTrackId) playNext(true); });
@@ -216,7 +225,90 @@
   }, { signal:events.signal });
   seekSlider.addEventListener('blur', commitScrub, { signal:events.signal });
   document.addEventListener('visibilitychange', () => { if (document.hidden) cancelScrub(); }, { signal:events.signal });
+  // Headphones and lock-screen controls share the app's existing playback queue.
+  const mediaSession = window.navigator?.mediaSession;
+  const originalDocumentTitle = document.title;
+  let metadataKey = null;
+  const mediaActions = {
+    play: () => {
+      if (!enabled || (!audio.paused && state.isPlaying)) return;
+      state.isPlaying=true; syncRealAudio(false); renderPlayerUI();
+    },
+    pause: () => {
+      if (!enabled) return;
+      state.isPlaying=false; syncRealAudio(false); renderPlayerUI();
+    },
+    nexttrack: () => { if (enabled) playNext(false); },
+    previoustrack: () => { if (enabled) playPrev(); },
+    seekto: details => {
+      if (!enabled || !sourceReady || activeId !== state.currentTrackId || !Number.isFinite(details.seekTime)) return;
+      const target=Math.max(0,Math.min(duration(),details.seekTime));
+      if (audio.paused) pausePoint={id:activeId,time:target};
+      resumePoint=null; audio.currentTime=target; state.progressSec=target;
+      updateProgressUI(); syncMediaPosition();
+    }
+  };
+  function bindMediaActions() {
+    if (!enabled || !mediaSession) return;
+    // Keep track navigation available instead of advertising +/-10s buttons.
+    for (const action of ['seekbackward','seekforward']) {
+      try { mediaSession.setActionHandler(action,null); } catch (_) {}
+    }
+    for (const [action,handler] of Object.entries(mediaActions)) {
+      try { mediaSession.setActionHandler(action,handler); } catch (_) {}
+    }
+  }
+  function syncMediaPosition() {
+    if (!enabled || !mediaSession?.setPositionState || !sourceReady || activeId !== state.currentTrackId) return;
+    const length=duration();
+    if (!Number.isFinite(length) || length<=0) return;
+    const position=audio.paused && pausePoint?.id===activeId ? pausePoint.time : audio.currentTime;
+    try { mediaSession.setPositionState({duration:length,playbackRate:audio.playbackRate||1,position:Math.max(0,Math.min(length,position||0))}); } catch (_) {}
+  }
+  function syncMediaSession() {
+    if (!enabled) return;
+    const track=getTrack(state.currentTrackId);
+    // Embedded browsers sometimes use the page title as Now Playing fallback.
+    if (track?.id && track.title) document.title=[track.title,track.artist,'Telefy'].filter(Boolean).join(' — ');
+    if (!mediaSession) return;
+    if (track?.id && window.MediaMetadata) {
+      const artwork=/^https:\/\//.test(track.coverImg||'') ? [{src:track.coverImg}] : [];
+      const data={title:track.title||'Telefy',artist:track.artist||'',album:track.album||'',artwork};
+      const key=JSON.stringify([track.id,data]);
+      if (key!==metadataKey) {
+        try { mediaSession.metadata=new window.MediaMetadata(data); metadataKey=key; } catch (_) {}
+      }
+    }
+    try { mediaSession.playbackState=!audio.paused && !audio.ended ? 'playing' : 'paused'; } catch (_) {}
+    syncMediaPosition();
+  }
+  function releaseMediaSession() {
+    document.title=originalDocumentTitle;
+    if (!mediaSession) return;
+    for (const action of Object.keys(mediaActions)) {
+      try { mediaSession.setActionHandler(action,null); } catch (_) {}
+    }
+    try { mediaSession.playbackState='none'; mediaSession.metadata=null; mediaSession.setPositionState?.(); } catch (_) {}
+  }
+  renderPlayerUI = function(...args) {
+    const result=original.render(...args); syncMediaSession(); return result;
+  };
+  function restoreSystemPlayer() {
+    if (enabled && !document.hidden && sourceReady && !switchingSource && activeId===state.currentTrackId && !audio.ended) {
+      state.isPlaying=!audio.paused;
+      if(audio.paused)pausePoint={id:activeId,time:audio.currentTime};
+      bindMediaActions(); renderPlayerUI();
+    }
+  }
+  document.addEventListener('visibilitychange',restoreSystemPlayer,{signal:events.signal});
+  window.addEventListener('pageshow',restoreSystemPlayer,{signal:events.signal});
+  on('loadedmetadata',syncMediaSession);
+  on('durationchange',syncMediaPosition);
+  on('ratechange',syncMediaPosition);
+  bindMediaActions();
+
   window.TelefyAudio = { disable() {
+    releaseMediaSession();
     enabled = false; scrubbing = false; scrubTarget = null; scrubPointer = null;
     pausePoint=null;resumePoint=null;
     request++; streamController?.abort(); if (hls) { hls.destroy(); hls=null; } stopProgressFrames(); audio.pause(); audio.removeAttribute('src'); audio.load(); events.abort();

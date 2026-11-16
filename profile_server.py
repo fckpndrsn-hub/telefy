@@ -1,5 +1,8 @@
 """Adds verified Telegram profiles to the existing server without replacing its routes."""
-import os,json,time,threading
+import os,json,time,threading,sys
+if __name__=='__main__':sys.modules['profile_server']=sys.modules[__name__]
+import telefy_bot as tbot
+from bot_integration import BotMixin
 from http.cookies import SimpleCookie,CookieError
 from urllib.parse import urlsplit
 from http.server import ThreadingHTTPServer
@@ -18,13 +21,12 @@ try{const r=await fetch('/api/auth/telegram',{method:'POST',headers:{'Content-Ty
 if(!r.ok){status.textContent=r.status===403?'Подпишись на @telefy_news и открой приложение снова через бота.':'Не удалось подключить профиль. Открой приложение заново; если ошибка повторяется, напиши @telefy_support.';return;}
 location.replace('/telefy.html'+location.search);}catch(_){status.textContent='Не удалось подключиться. Попробуй открыть приложение снова.';}})();</script>'''
 
-class Handler(LibraryMixin,MaxBillingMixin,base.Handler):
+class ProfileHandler(LibraryMixin,MaxBillingMixin,base.Handler):
     def cookie_token(self):
         try:return SimpleCookie(self.headers.get('Cookie',''))['telefy_user_session'].value
         except (KeyError,ValueError,CookieError):return ''
     def membership(self,uid):
-        bot=getattr(base,'tbot',None)
-        return not bot or not bot.enabled() or bot.subscribed(uid,cached=True)
+        return bool(tbot.TOKEN) and tbot.subscribed(uid,cached=True)
     def authenticated(self):
         token=self.cookie_token()
         if token:
@@ -34,13 +36,13 @@ class Handler(LibraryMixin,MaxBillingMixin,base.Handler):
             except Exception:pass
         return super().authenticated()
     def bootstrap(self):
-        body=(base.LOGIN+BOOT).encode()
+        body=('<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Telefy</title><style>body{font:16px/1.5 system-ui;background:#f2f2f7;color:#17212b;max-width:420px;margin:12vh auto;padding:24px}a{display:block;color:#168acd;margin:14px 0}</style><h1>Telefy</h1><p id="s">Открой приложение через @TelefyApp_Bot.</p><a href="https://t.me/TelefyApp_Bot?start=menu">Открыть бота</a><a href="https://t.me/telefy_news">Канал Telefy</a>'+BOOT).encode()
         self.send_response(200);self.send_header('Content-Type','text/html; charset=utf-8')
         self.send_header('Cache-Control','no-store');self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body)
     def do_GET(self):
         route=urlsplit(self.path).path
         if route=='/health':
-            self.reply(200,{'ok':True,'build':'telefy-profile-db-v1','library_build':'telefy-library-auto-v2','max_build':'telefy-free-beta-v1','music_build':'telefy-oauth-db-v4-20261116','recommendations_period_hours':6,'oauth_storage':dict(getattr(base.sc,'OAUTH_STORAGE',{})),'soundcloud_limits':dict(getattr(base.sc,'RATE_WINDOWS',{})),'soundcloud_last_rate_limit':dict(getattr(base.sc,'LAST_RATE_LIMIT',{})),'soundcloud_retry_after':max(0,int(getattr(base.sc,'SOUNDCLOUD_RETRY_AT',0)-time.time())),'database_configured':bool(os.environ.get('DATABASE_URL')),'telegram_configured':bool(os.environ.get('BOT_TOKEN'))});return
+            self.reply(200,{'ok':True,'build':'telefy-profile-db-v1','library_build':'telefy-library-auto-v2','max_build':'telefy-free-beta-v1','music_build':'telefy-oauth-db-v4-20261116','recommendations_period_hours':6,'oauth_storage':dict(getattr(base.sc,'OAUTH_STORAGE',{})),'soundcloud_limits':dict(getattr(base.sc,'RATE_WINDOWS',{})),'soundcloud_last_rate_limit':dict(getattr(base.sc,'LAST_RATE_LIMIT',{})),'soundcloud_retry_after':max(0,int(getattr(base.sc,'SOUNDCLOUD_RETRY_AT',0)-time.time())),'database_configured':bool(os.environ.get('DATABASE_URL')),'telegram_configured':bool(os.environ.get('BOT_TOKEN')),'bot_build':'telefy-bot-integrated-v2','player_build':'telefy-system-player-v2','reminders_build':'telefy-reminders-v1','bot':dict(tbot.DIAGNOSTIC)});return
         if route=='/api/me/taste':
             try:
                 user=DB.profile(self.cookie_token())
@@ -119,8 +121,10 @@ class Handler(LibraryMixin,MaxBillingMixin,base.Handler):
         self.send_header('Set-Cookie',f'telefy_user_session={token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age={age}')
         self.end_headers();self.wfile.write(body)
 
+class Handler(BotMixin,ProfileHandler):
+    pass
+
 if __name__=='__main__':
     # Do not spend search/stream quota on every deploy just to probe readiness.
-    bot=getattr(base,'tbot',None)
-    if bot:threading.Thread(target=bot.setup,daemon=True).start()
+    tbot.start()
     ThreadingHTTPServer(('0.0.0.0',int(os.environ.get('PORT','10000'))),Handler).serve_forever()

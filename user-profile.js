@@ -11,7 +11,7 @@
   if(avatar){
    avatar.replaceChildren();const initial=document.createElement('span');
    initial.className='font-rounded text-[28px] text-white tracking-tight';initial.textContent=Array.from(user.first_name||'T')[0].toLocaleUpperCase();avatar.append(initial);
-   if(user.photo_url?.startsWith('https://')){const img=document.createElement('img');img.alt='';img.referrerPolicy='no-referrer';img.className='w-full h-full object-cover';img.src=user.photo_url;img.onerror=()=>{img.remove();initial.hidden=false;};initial.hidden=true;avatar.append(img);}
+   if(user.photo_url?.startsWith('https://')||user.photo_url==='/api/me/avatar'){const img=document.createElement('img');img.alt='';img.referrerPolicy='no-referrer';img.className='w-full h-full object-cover';img.src=user.photo_url;img.onerror=()=>{img.remove();initial.hidden=false;};initial.hidden=true;avatar.append(img);}
   }
   window.TelefyProfile={user};window.dispatchEvent(new Event('telefy:profile-ready'));
  }
