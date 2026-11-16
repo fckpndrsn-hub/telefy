@@ -25,7 +25,9 @@ def avatar(uid):
         return data,mime
     except Exception:return None
 
-class BotMixin:
+from music_features import MusicMixin
+
+class BotMixin(MusicMixin):
     def bot_html(self,body,status=200):
         data=body.encode();self.send_response(status);self.send_header('Content-Type','text/html; charset=utf-8');self.send_header('Cache-Control','no-store');self.send_header('Referrer-Policy','no-referrer');self.send_header('Content-Length',str(len(data)));self.end_headers();self.wfile.write(data)
     def bot_user(self,allow_admin=False,web=False):

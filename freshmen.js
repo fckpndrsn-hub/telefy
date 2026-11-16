@@ -21,7 +21,7 @@
   return {personal:history.length>0,artists,heard:history.map(h=>h.key),history};
  }
  function sync(){
-  collection.title=title();const urns=new Set((snapshot?.tracks||[]).map(t=>t.soundcloudUrn));collection.trackIds=tracks.filter(t=>urns.has(t.soundcloudUrn)&&allowed(t)).map(t=>t.id);
+  collection.title=title();const urns=new Set((snapshot?.tracks||[]).map(t=>t.soundcloudUrn));collection.trackIds=tracks.filter(t=>urns.has(t.soundcloudUrn)&&allowed(t)).sort((a,b)=>(window.TelefyAI?.score(b)||0)-(window.TelefyAI?.score(a)||0)).map(t=>t.id);
   collection.coverImg=snapshot?.coverImg||collection.coverImg;
  }
  function pool(){const heard=new Set(snapshot.plan?.heard||[]),played=new Set(snapshot.played||[]);return collection.trackIds.map(id=>tracks.find(t=>t.id===id)).filter(t=>t&&!t.disliked&&!heard.has(getTrackUniqueKey(t))&&!played.has(getTrackUniqueKey(t)));}

@@ -91,7 +91,7 @@
       window.TelefyFlowDescriptions.setProvider(async track => {
         const response = await fetch('/api/ai/description', {
           method:'POST', headers:{'Content-Type':'application/json'},
-          body:JSON.stringify(track), signal:AbortSignal.timeout(30000)
+          body:JSON.stringify({...track,lang:state.lang}), signal:AbortSignal.timeout(30000)
         });
         if (!response.ok) throw new Error('Description unavailable');
         return (await response.json()).description;

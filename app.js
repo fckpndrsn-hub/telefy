@@ -1851,13 +1851,8 @@ try {
     });
 
     function notifyTrackOfflineExport() {
-      triggerHaptic('medium');
-      const current = getTrack(state.currentTrackId);
-      const trackLabel = current && current.id ? `«${current.title}» — ${current.artist}` : '';
-      const msg = state.lang === 'en'
-        ? `Offline Mode: ${trackLabel || 'Track'} uploaded to @TelefyApp_Bot`
-        : `Офлайн-режим: трек ${trackLabel} выгружен в @TelefyApp_Bot`;
-      showToast(msg);
+      if(window.TelefyExport)return window.TelefyExport.start();
+      showToast('Подключаем выгрузку. Попробуй ещё раз через секунду.');
     }
 
     function startMyVibeMode(){window.TelefyTaste?.start();}

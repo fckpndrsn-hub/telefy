@@ -126,6 +126,9 @@ def valid_user(user):return isinstance(user,dict)and type(user.get('id'))is int 
 def handle(update):
     import bot_operations
     bot_operations.record(update)
+    callback=update.get('callback_query')or{}
+    if callback.get('data')=='export_profile_help' and (callback.get('message')or{}).get('chat',{}).get('type')=='private' and valid_user(callback.get('from')):
+        api('answerCallbackQuery',callback_query_id=callback['id'],text='Открой это аудио в плеере Telegram и выбери «Добавить в профиль». Подтверждение выполняется в самом Telegram.',show_alert=True);return
     if reminders.handle(update):return
     own=update.get('my_chat_member')
     if isinstance(own,dict)and same_channel(own.get('chat',{})):
@@ -175,6 +178,8 @@ def start():
     if STARTED:return
     STARTED=True
     reminders.start()
+    import music_export
+    music_export.start()
     def worker():
         next_setup=0
         while True:

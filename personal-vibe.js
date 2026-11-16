@@ -9,7 +9,7 @@
  const ready=()=>history.length>=20;
  const allowed=t=>t&&!t.disliked&&!window.TelefyPromotionExcluded?.(t)&&(!window.TelefyRapCandidate||window.TelefyRapCandidate(t));
  const artistKey=s=>normalizeArtistToken(findRosterConfig(s)?.name||getPrimaryArtistName(s));
- function score(tr){let n=0;const artist=artistKey(tr.primaryArtist||tr.artist);history.forEach((h,i)=>{const w=(i+1)/20;if(artistKey(h.artist)===artist)n+=3*w;n+=(tr.modes||[]).filter(m=>(h.modes||[]).includes(m)).length*.55*w;if(h.genre&&tr.genre&&h.genre.toLowerCase()===tr.genre.toLowerCase())n+=.25*w;});return n;}
+ function score(tr){let n=window.TelefyAI?.score(tr)||0;const artist=artistKey(tr.primaryArtist||tr.artist);history.forEach((h,i)=>{const w=(i+1)/20;if(artistKey(h.artist)===artist)n+=3*w;n+=(tr.modes||[]).filter(m=>(h.modes||[]).includes(m)).length*.55*w;if(h.genre&&tr.genre&&h.genre.toLowerCase()===tr.genre.toLowerCase())n+=.25*w;});return n;}
  const shuffle=list=>{const a=list.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;};
  function pool(){
   let candidates=tracks.filter(allowed),heard=new Set(history.map(h=>h.key));

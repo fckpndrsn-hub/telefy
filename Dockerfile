@@ -1,5 +1,8 @@
 FROM python:3.13-slim
 WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
+COPY music_export.py gemini_music.py music_features.py ./
+COPY music-features.js flow-discovery.js ./web/assets/
 COPY bot_operations.py ./
 COPY app-control.js ./web/assets/app-control.js
 COPY requirements.txt ./
