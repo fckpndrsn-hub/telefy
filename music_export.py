@@ -5,7 +5,7 @@ from urllib.request import Request,build_opener,HTTPRedirectHandler,urlopen
 from urllib.parse import urlsplit
 
 LOCK=threading.Lock();STARTED=False
-CAPTION='🎧 Сохрани аудио в Telegram для прослушивания офлайн.\nДля музыки в профиле открой трек и выбери «Добавить в профиль».'
+CAPTION='🎧 Сохрани аудио в Telegram для прослушивания офлайн.\nДля музыки в профиле открой трек и выбери «Добавить в профиль».\n\n<b><a href="https://t.me/TelefyApp_Bot">Трек выгружен с помощью Telefy</a></b>'
 
 def markup():return {'inline_keyboard':[[{'text':'В профиль','style':'success','callback_data':'export_profile_help'}]]}
 
@@ -101,7 +101,7 @@ def prepare(track,url,directory):
 def upload(uid,path,thumb,track):
  import telefy_bot as bot
  boundary='Telefy'+secrets.token_hex(16);parts=[]
- fields={'chat_id':str(uid),'title':track['title'][:200],'performer':track['artist'][:200],'duration':str(round(track['duration'])),'caption':CAPTION,'reply_markup':json.dumps(markup(),ensure_ascii=False)}
+ fields={'chat_id':str(uid),'title':track['title'][:200],'performer':track['artist'][:200],'duration':str(round(track['duration'])),'caption':CAPTION,'parse_mode':'HTML','reply_markup':json.dumps(markup(),ensure_ascii=False)}
  files={'audio':path}
  if thumb:files['thumbnail']=thumb
  for key,value in fields.items():parts.append(f'--{boundary}\r\nContent-Disposition: form-data; name="{key}"\r\n\r\n{value}\r\n'.encode())
@@ -127,7 +127,7 @@ def run_one():
   cached=s.cached(job['urn'])
   if cached:
    track={'title':cached['title'],'artist':cached['artist'],'duration':cached['duration']};s.finish(job,'sending');sending=True
-   try:result=bot.api('sendAudio',chat_id=job['telegram_id'],audio=cached['file_id'],title=track['title'],performer=track['artist'],caption=CAPTION,reply_markup=markup())
+   try:result=bot.api('sendAudio',chat_id=job['telegram_id'],audio=cached['file_id'],title=track['title'],performer=track['artist'],caption=CAPTION,parse_mode='HTML',reply_markup=markup())
    except bot.BotError as error:
     if error.definitive and error.status==400:
      with s.db.connect()as c:s.db.execute(c,'DELETE FROM telefy_audio_files WHERE urn=%s',(job['urn'],))

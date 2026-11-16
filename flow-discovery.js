@@ -1,4 +1,4 @@
-/* Independent discovery presentation. AI text can be supplied by a server provider. */
+/* telefy-flow-ai-v3: bounded waiting, copied after legacy web assets. */
 (() => {
   const card = document.getElementById('flow-discovery');
   const backdrop = document.getElementById('flow-discovery-backdrop');
