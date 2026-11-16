@@ -66,15 +66,21 @@
       const cacheKey = `${track.id}:${state.lang}`;
       let text = descriptions.get(cacheKey);
       if (!text) {
-        text = await provider({ id:track.id, title:track.title, artist:track.artist, album:track.album, language:state.lang });
-        if (typeof text !== 'string' || !text.trim()) return;
+        let timer;
+        try {
+          text = await Promise.race([
+            provider({ id:track.id, soundcloudUrn:track.soundcloudUrn, title:track.title, artist:track.artist, album:track.album, genre:track.genre, tag_list:track.tag_list, language:state.lang }),
+            new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('Description timeout')),30000);})
+          ]);
+        } finally { clearTimeout(timer); }
+        if (typeof text !== 'string' || !text.trim()) throw new Error('Empty description');
         text = text.trim().slice(0, 260); descriptions.set(cacheKey,text);
       }
       if (token !== generation) return;
       description.textContent = text;
       source.textContent = 'Telefy AI';
     } catch (_) {
-      if (token === generation) description.textContent = english ? `A short note about “${track.title}” will appear here.` : `Короткая заметка о «${track.title}» скоро появится здесь.`;
+      if (token === generation) description.textContent = english ? 'Description is temporarily unavailable.' : 'Описание пока недоступно.';
     }
   }
   window.TelefyFlowDescriptions = {
