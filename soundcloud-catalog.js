@@ -1,14 +1,14 @@
 /* SoundCloud search/catalog integration, separate from Deezer metadata helpers. */
 (() => {
   const seeds = ['PHARAOH','9mice','Kai Angel','madk1d','fortune 812','темный принц','ЛСП','Big Baby Tape'];
-  const pages = new Map();
+  const pages = new Map(),searchPageCache=new Map();
   let refillBusy = false, seedIndex = 0, queryRevision = 0;
   async function request(query, offset=0, limit=25) {
     const response = await fetch(`/api/soundcloud/search?${new URLSearchParams({q:query,offset,limit})}`, {
       signal:typeof AbortSignal.timeout==='function'?AbortSignal.timeout(22000):undefined
     });
     const data = await response.json();
-    if (response.status===401 && data.error==='bridge_unauthorized') { location.replace('/'); throw new Error('session_expired'); }
+    if(response.status===401){const e=Error('session_expired');e.code='session_expired';throw e;}
     if (!response.ok) {
       const error=new Error(data.error || 'soundcloud_unavailable'); error.code=data.error; throw error;
     }
@@ -29,7 +29,9 @@
     if (!more) { searchPagination.nextIndex=0; searchPagination.hasMore=true; }
     state.isSearchParsing=true; renderSearchView();
     try {
-      const data=await request(query,offset);
+      const cacheKey=query.toLowerCase()+'::'+offset,cached=searchPageCache.get(cacheKey);
+      const data=cached&&Date.now()-cached.at<21600000?cached.data:await request(query,offset);
+      if(!cached||data!==cached.data){searchPageCache.set(cacheKey,{at:Date.now(),data});if(searchPageCache.size>64)searchPageCache.delete(searchPageCache.keys().next().value);}
       if (revision!==queryRevision) return;
       window.TelefySearchAliases={query,artists:data.queryArtists||[]};
       importTracks(data.tracks,null,true);
@@ -80,7 +82,7 @@
       // A legacy Deezer metadata card is not a verified playable SoundCloud item.
       tracks=tracks.filter(track=>track.soundcloudUrn);
       state.queueIds=(state.queueIds || []).filter(id=>tracks.some(track=>track.id===id));
-      if (!tracks.some(track=>track.id===state.currentTrackId)) state.currentTrackId=tracks[0]?.id || 0;
+      if (!tracks.some(track=>track.id===state.currentTrackId)) state.currentTrackId=window.TelefyFirstRun?.pending?0:(tracks[0]?.id || 0);
       state.isCatalogParsing=true; renderAll();
       // One seed initializes the screen. Further candidates load on demand.
       if(!tracks.length&&!window.TelefyFirstRun?.pending){const data=await request(seeds[Math.floor(Math.random()*seeds.length)],0,50);importTracks(data.tracks);}

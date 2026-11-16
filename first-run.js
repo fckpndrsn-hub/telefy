@@ -1,23 +1,31 @@
-/* This script loads before app.js; the boot hook is called after the app exists. */
+/* Every app opening starts in Trends; old cached songs never become the hero. */
 (() => {
- const key='telefy_first_track_v1';let started=false;
- let pending=false;try{pending=!localStorage.getItem(key)&&!JSON.parse(localStorage.getItem('telefy_qualified_listens_v1')||'[]').length;}catch(_){pending=true;}
- function setLoading(loading){document.querySelectorAll('#btn-hero-play,#mini-play-btn,#btn-full-play').forEach(b=>b.disabled=loading);}
- function finish(){pending=false;try{localStorage.setItem(key,'1');}catch(_){}setLoading(false);}
- window.TelefyFirstRun={get pending(){return pending;},async boot(){
-  if(started||!pending)return;started=true;setLoading(true);
-  const original=playTrack;playTrack=function(id,...args){if(tracks.some(t=>t.id===id))finish();return original(id,...args);};
+ let started=false,pending=true,loading=false,failed=false;
+ const controls=()=>['btn-hero-play','mini-play-btn','btn-full-play'].map(id=>document.getElementById(id)).filter(Boolean);
+ function unlock(){pending=false;loading=false;failed=false;controls().forEach(b=>b.disabled=false);}
+ async function boot(retry=false){
+  if((started&&!retry)||loading)return;started=true;loading=true;failed=false;
+  state.activeMood='underground';flowModeIndex=MOODS.findIndex(m=>m.id==='underground');
+  state.sourceLabel=getMoodText('underground').streamTitle;state.currentTrackId=0;state.queueIds=[];state.progressSec=0;state.isPlaying=false;
+  document.getElementById('home-stream-title').textContent=state.sourceLabel;
+  document.getElementById('home-stream-desc').textContent=getMoodText('underground').shortDesc;
+  controls().forEach(b=>b.disabled=true);renderMoodChips();renderFlowMode();renderAll();
   try{
-   const response=await fetch('/api/soundcloud/search?q=telefy%3Awelcome',{signal:AbortSignal.timeout(45000)});
-   if(!response.ok)throw Error('welcome');const data=await response.json();mergeParsedTracksIntoCatalog(data.tracks||[]);
-   const found=tracks.find(t=>t.soundcloudUrn===data.tracks?.[0]?.soundcloudUrn);
-   if(!found)throw Error('empty_welcome');
-   if(pending&&found){state.currentTrackId=found.id;state.progressSec=0;state.isPlaying=false;finish();renderAll();}
-  }catch(_){if(pending){
-   const candidates=tracks.filter(t=>!window.TelefyPromotionExcluded?.(t)&&!window.telefySongBlocked?.(t)&&/rap|hip.?hop|trap|plugg|drill|rage|рэп|трэп/i.test(t.genre||''));
-   if(candidates.length){state.currentTrackId=candidates[Math.floor(Math.random()*candidates.length)].id;state.isPlaying=false;state.progressSec=0;finish();}
-   else {pending=false;setLoading(false);state.isCatalogParsing=false;state.catalogError=tracks.length?null:'network';}
-   renderAll();
-  }}
- }};
+   await window.TelefySoundCloud.refill(false);
+   if(!pending||state.activeMood!=='underground')return;
+   const candidates=[...new Set(state.queueIds)].map(id=>tracks.find(t=>t.id===id)).filter(t=>t&&doesTrackMatchMood(t,'underground'));
+   const first=candidates[0];if(!first)throw Error('trends_unavailable');
+   state.currentTrackId=first.id;state.queueIds=candidates.slice(1).map(t=>t.id);state.progressSec=0;state.isPlaying=false;
+   unlock();try{localStorage.setItem('telefy_first_track_v1','1');}catch(_){}
+  }catch(_){if(pending&&state.activeMood==='underground'){failed=true;state.currentTrackId=0;state.queueIds=[];state.isPlaying=false;}}
+  finally{loading=false;controls().forEach(b=>b.disabled=false);if(state.activeMood!=='underground')unlock();renderAll();}
+ }
+ window.TelefyFirstRun={boot,cancel:unlock,get pending(){return pending;},get failed(){return failed;},get loading(){return loading;}};
+ document.addEventListener('DOMContentLoaded',()=>{
+  const original=playTrack;
+  playTrack=function(id,...args){if(tracks.some(t=>t.id===id))unlock();return original(id,...args);};
+  controls().forEach(button=>button.addEventListener('click',event=>{
+   if(!pending)return;event.preventDefault();event.stopImmediatePropagation();boot(true);
+  },true));
+ });
 })();

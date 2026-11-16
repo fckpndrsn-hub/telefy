@@ -510,17 +510,17 @@ try {
       isMaxSubscribed: false,
       maxBetaTab: 'playlists',
       activeTab: 'home',
-      activeMood: 'all',
+      activeMood: 'underground',
       searchFilter: 'all',
       searchQuery: '',
-      currentTrackId: tracks[0]?.id || 1,
+      currentTrackId: 0,
       isPlaying: false,
       progressSec: 0,
-      sourceLabel: 'Мой поток',
+      sourceLabel: 'Тренды',
       selectedCoverPreset: COVER_PRESETS[0].bg,
       discovery: 50,
       energy: 60,
-      queueIds: tracks.slice(1, 7).map(t => t.id),
+      queueIds: [],
       activeCollectionId: null,
       isCatalogParsing: tracks.length === 0
     };
@@ -565,7 +565,7 @@ try {
     };
 
     function getTrack(id) {
-      if(window.TelefyFirstRun?.pending)return {...PARSING_FALLBACK_TRACK,title:state.lang==='en'?'Picking a track…':'Подбираем трек…'};
+      if(window.TelefyFirstRun?.pending&&(id===state.currentTrackId||!id))return {...PARSING_FALLBACK_TRACK,title:window.TelefyFirstRun.failed?(state.lang==='en'?'Trends unavailable':'Тренды временно недоступны'):(state.lang==='en'?'Loading trends…':'Загружаем тренды…'),artist:window.TelefyFirstRun.failed?(state.lang==='en'?'Tap Play to retry':'Нажми Play, чтобы повторить'):'',album:''};
       if (!tracks.length) {
         if (state.isCatalogParsing) return PARSING_FALLBACK_TRACK;
         return { ...PARSING_FALLBACK_TRACK, title:state.lang==='en'?'Catalog unavailable':'Каталог недоступен',
@@ -1101,6 +1101,7 @@ try {
     }
 
     function applyStreamMode(moodId, autoPlay = true) {
+      if(moodId!=='underground')window.TelefyFirstRun?.cancel();
       if(moodId==='uncensored')moodId='energy';
       const idx = MOODS.findIndex(m => m.id === moodId);
       const safeIdx = idx >= 0 ? idx : 0;
@@ -1291,7 +1292,7 @@ try {
       bindTrackRowEvents(container);
     }
 
-    let flowModeIndex = 0;
+    let flowModeIndex = MOODS.findIndex(m=>m.id==='underground');
 
     function renderFlowMode() {
       const mode = MOODS[flowModeIndex] || MOODS[0];
@@ -2621,7 +2622,7 @@ try {
       // IDs are browser-local; catalog hydration never writes the account library.
 
       if (!tracks.some(t => t.id === state.currentTrackId)) {
-        state.currentTrackId = tracks[0].id;
+        state.currentTrackId = window.TelefyFirstRun?.pending ? 0 : tracks[0].id;
       }
       const validQueue = (state.queueIds || []).filter(id => {
         const tr = tracks.find(t => t.id === id);
