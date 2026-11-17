@@ -18,14 +18,20 @@ class GrantStore:
      'CREATE TABLE IF NOT EXISTS telefy_max_grant_drafts(id TEXT PRIMARY KEY,admin_id BIGINT NOT NULL,telegram_id BIGINT NOT NULL,days INTEGER NOT NULL,expires_at BIGINT NOT NULL,state TEXT NOT NULL)',
      'CREATE TABLE IF NOT EXISTS telefy_max_grant_inputs(admin_id BIGINT PRIMARY KEY,phase TEXT NOT NULL,target_id BIGINT NOT NULL,expires_at BIGINT NOT NULL)',
      'CREATE TABLE IF NOT EXISTS telefy_max_price(id INTEGER PRIMARY KEY,amount INTEGER NOT NULL,version INTEGER NOT NULL)',
-     'CREATE TABLE IF NOT EXISTS telefy_max_price_changes(id TEXT PRIMARY KEY,admin_id BIGINT NOT NULL,amount INTEGER NOT NULL,version INTEGER NOT NULL,expires_at BIGINT NOT NULL,state TEXT NOT NULL,applied_at BIGINT NOT NULL)']:
+     'CREATE TABLE IF NOT EXISTS telefy_max_price_changes(id TEXT PRIMARY KEY,admin_id BIGINT NOT NULL,amount INTEGER NOT NULL,version INTEGER NOT NULL,expires_at BIGINT NOT NULL,state TEXT NOT NULL,applied_at BIGINT NOT NULL)',
+     'CREATE TABLE IF NOT EXISTS telefy_max_revoked_credits(telegram_id BIGINT NOT NULL,kind TEXT NOT NULL,credit_id TEXT NOT NULL,admin_id BIGINT NOT NULL,revoked_at BIGINT NOT NULL,PRIMARY KEY(telegram_id,kind,credit_id))']:
      self.db.execute(c,sql)
     self.db.execute(c,'INSERT INTO telefy_max_price VALUES(1,100,1) ON CONFLICT(id) DO NOTHING')
    self.ready=True
  def events(self,uid):
   self.ensure()
-  with self.db.connect()as c:rows=self.db.execute(c,'SELECT created_at,days FROM telefy_max_grants WHERE telegram_id=%s ORDER BY created_at,id',(uid,)).fetchall()
-  return [(r['created_at'],r['days']*86400)for r in rows]
+  with self.db.connect()as c:rows=self.db.execute(c,'SELECT id,created_at,days FROM telefy_max_grants WHERE telegram_id=%s ORDER BY created_at,id',(uid,)).fetchall()
+  removed=self.revoked(uid,'grant')
+  return [(r['created_at'],r['days']*86400)for r in rows if r['id']not in removed]
+ def revoked(self,uid,kind):
+  self.ensure()
+  with self.db.connect()as c:rows=self.db.execute(c,'SELECT credit_id FROM telefy_max_revoked_credits WHERE telegram_id=%s AND kind=%s',(uid,kind)).fetchall()
+  return {r['credit_id']for r in rows}
  def price(self):
   self.ensure()
   with self.db.connect()as c:return dict(self.db.execute(c,'SELECT amount,version FROM telefy_max_price WHERE id=1').fetchone())
@@ -51,7 +57,8 @@ class GrantStore:
   with self.db.connect()as c:rows=self.db.execute(c,'SELECT telegram_id,username,first_name,last_name FROM telefy_users WHERE LOWER(username)=%s',(username.lstrip('@').lower(),)).fetchall()
   return dict(rows[0])if len(rows)==1 else None
  def user(self,uid):
-  with self.db.connect()as c:r=self.db.execute(c,'SELECT telegram_id,username,first_name,last_name FROM telefy_users WHERE telegram_id=%s',(uid,)).fetchone()
+  self.ensure()
+  with self.db.connect()as c:r=self.db.execute(c,'SELECT telegram_id,username,first_name,last_name,created_at,last_login_at FROM telefy_users WHERE telegram_id=%s',(uid,)).fetchone()
   return dict(r)if r else None
  def input(self,admin,phase=None,target=0):
   self.ensure()

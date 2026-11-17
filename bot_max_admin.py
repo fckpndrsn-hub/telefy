@@ -4,6 +4,8 @@ from datetime import datetime,timezone,timedelta
 import max_grants
 def date(value):return datetime.fromtimestamp(value,timezone(timedelta(hours=3))).strftime('%d.%m.%Y %H:%M МСК')
 def handle(update):
+ import bot_users
+ if bot_users.handle(update):return True
  import telefy_bot as bot,bot_reminders as rem,bot_posts as posts,max_billing
  cb=update.get('callback_query')or{};msg=update.get('message')or{};user=cb.get('from')or msg.get('from')or{};chat=(cb.get('message')or msg).get('chat')or{}
  data=cb.get('data','');text=msg.get('text','').strip();command=text.split(' ',1)[0].split('@')[0];relevant=data.startswith('maxgrant_')or command=='/max_admin'

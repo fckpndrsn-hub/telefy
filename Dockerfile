@@ -21,7 +21,7 @@ COPY app-control.js ./web/assets/app-control.js
 COPY bot-entry.js ./web/assets/bot-entry.js
 COPY reminders-client.js ./web/assets/reminders-client.js
 COPY max-logo.js three.module.js three.core.js SVGLoader.js ./web/assets/
-COPY max_grants.py bot_max_admin.py max_notifications.py ./
+COPY max_grants.py bot_max_admin.py max_notifications.py bot_users.py ./
 COPY star.svg ./web/assets/star.svg
 COPY stars-3d.js ./web/assets/stars-3d.js
 COPY three.module.js three.core.js SVGLoader.js ./web/assets/

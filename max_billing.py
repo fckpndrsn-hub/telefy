@@ -28,6 +28,9 @@ class MaxStore:
     self.db.execute(c,'CREATE TABLE IF NOT EXISTS telefy_star_orders(id TEXT PRIMARY KEY,telegram_id BIGINT NOT NULL,request_key TEXT NOT NULL,created_at BIGINT NOT NULL,state TEXT NOT NULL,invoice_url TEXT,checkout_id TEXT,charge_id TEXT UNIQUE,paid_at BIGINT,UNIQUE(telegram_id,request_key))')
     if self.db.url:self.db.execute(c,'ALTER TABLE telefy_star_orders ADD COLUMN IF NOT EXISTS amount INTEGER NOT NULL DEFAULT 100')
     elif 'amount'not in [r['name']for r in self.db.execute(c,'PRAGMA table_info(telefy_star_orders)').fetchall()]:self.db.execute(c,'ALTER TABLE telefy_star_orders ADD COLUMN amount INTEGER NOT NULL DEFAULT 100')
+    if self.db.url:self.db.execute(c,'ALTER TABLE telefy_star_orders ADD COLUMN IF NOT EXISTS payer_username TEXT')
+    elif 'payer_username'not in [r['name']for r in self.db.execute(c,'PRAGMA table_info(telefy_star_orders)').fetchall()]:self.db.execute(c,'ALTER TABLE telefy_star_orders ADD COLUMN payer_username TEXT')
+    self.db.execute(c,'UPDATE telefy_star_orders SET payer_username=(SELECT username FROM telefy_users WHERE telegram_id=telefy_star_orders.telegram_id) WHERE payer_username IS NULL')
    self.grants.ensure()
    self.ready=True
  def order(self,oid):
@@ -48,7 +51,7 @@ class MaxStore:
     n=self.db.execute(c,'SELECT COUNT(*) AS n FROM telefy_star_orders WHERE telegram_id=%s AND created_at>%s',(uid,int(time.time())-3600)).fetchone()['n']
     if n>=10:raise BillingError(429,'too_many_invoices')
     oid=secrets.token_hex(24)
-    self.db.execute(c,'INSERT INTO telefy_star_orders(id,telegram_id,request_key,created_at,state,amount) VALUES(%s,%s,%s,%s,%s,%s)',(oid,uid,key,int(time.time()),'created',amount))
+    self.db.execute(c,'INSERT INTO telefy_star_orders(id,telegram_id,request_key,created_at,state,amount,payer_username) VALUES(%s,%s,%s,%s,%s,%s,(SELECT username FROM telefy_users WHERE telegram_id=%s))',(oid,uid,key,int(time.time()),'created',amount,uid))
    else:
     oid=row['id'];amount=row['amount']
     if row['state']!='created':raise BillingError(409,'invoice_already_used')
@@ -89,7 +92,8 @@ class MaxStore:
   return True
  def status(self,uid,now=None):
   self.ensure();now=int(time.time())if now is None else int(now)
-  with self.db.connect()as c:rows=self.db.execute(c,'SELECT paid_at FROM telefy_star_orders WHERE telegram_id=%s AND state=%s ORDER BY paid_at,id',(uid,'paid')).fetchall()
+  with self.db.connect()as c:rows=self.db.execute(c,'SELECT id,paid_at FROM telefy_star_orders WHERE telegram_id=%s AND state=%s ORDER BY paid_at,id',(uid,'paid')).fetchall()
+  removed=self.grants.revoked(uid,'payment');rows=[r for r in rows if r['id']not in removed]
   end=0
   for at,duration in sorted([(row['paid_at'],PERIOD)for row in rows]+self.grants.events(uid)):end=max(end,at)+duration
   return {'active':end>now,'telegram_id':uid,'paid_periods':len(rows),'beta':False,'expires_at':end or None,'server_time':now,'amount':self.grants.price()['amount'],'currency':'XTR','recurring':False,'period':'30_days','payments_configured':configured()}
@@ -111,7 +115,8 @@ def handle_update(update):
    payment=message['successful_payment'];order=STORE.order(payment['invoice_payload'][4:])
    if order and order['state']=='paid':
     import max_notifications
-    max_notifications.store().queue(order['telegram_id'],payment['telegram_payment_charge_id'],STORE.status(order['telegram_id'])['expires_at'])
+    end=STORE.status(order['telegram_id'])['expires_at']
+    if end:max_notifications.store().queue(order['telegram_id'],payment['telegram_payment_charge_id'],end)
   return True
  if message.get('refunded_payment'):STORE.apply(message,True);return True
  command=message.get('text','').split(' ',1)[0].split('@')[0]
