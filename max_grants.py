@@ -1,5 +1,6 @@
 """Auditable admin grants; never represented as successful payments."""
 import threading,time,secrets
+DEFAULT_BETA=False
 def stars(amount):
  last,teen=amount%10,amount%100
  word='звёзд'if 11<=teen<=14 else'звезда'if last==1 else'звезды'if 2<=last<=4 else'звёзд'
@@ -19,9 +20,12 @@ class GrantStore:
      'CREATE TABLE IF NOT EXISTS telefy_max_grant_inputs(admin_id BIGINT PRIMARY KEY,phase TEXT NOT NULL,target_id BIGINT NOT NULL,expires_at BIGINT NOT NULL)',
      'CREATE TABLE IF NOT EXISTS telefy_max_price(id INTEGER PRIMARY KEY,amount INTEGER NOT NULL,version INTEGER NOT NULL)',
      'CREATE TABLE IF NOT EXISTS telefy_max_price_changes(id TEXT PRIMARY KEY,admin_id BIGINT NOT NULL,amount INTEGER NOT NULL,version INTEGER NOT NULL,expires_at BIGINT NOT NULL,state TEXT NOT NULL,applied_at BIGINT NOT NULL)',
-     'CREATE TABLE IF NOT EXISTS telefy_max_revoked_credits(telegram_id BIGINT NOT NULL,kind TEXT NOT NULL,credit_id TEXT NOT NULL,admin_id BIGINT NOT NULL,revoked_at BIGINT NOT NULL,PRIMARY KEY(telegram_id,kind,credit_id))']:
+     'CREATE TABLE IF NOT EXISTS telefy_max_revoked_credits(telegram_id BIGINT NOT NULL,kind TEXT NOT NULL,credit_id TEXT NOT NULL,admin_id BIGINT NOT NULL,revoked_at BIGINT NOT NULL,PRIMARY KEY(telegram_id,kind,credit_id))',
+     'CREATE TABLE IF NOT EXISTS telefy_max_mode(id INTEGER PRIMARY KEY,beta INTEGER NOT NULL,version INTEGER NOT NULL)',
+     'CREATE TABLE IF NOT EXISTS telefy_max_mode_changes(id TEXT PRIMARY KEY,admin_id BIGINT NOT NULL,beta INTEGER NOT NULL,version INTEGER NOT NULL,expires_at BIGINT NOT NULL,state TEXT NOT NULL)']:
      self.db.execute(c,sql)
     self.db.execute(c,'INSERT INTO telefy_max_price VALUES(1,100,1) ON CONFLICT(id) DO NOTHING')
+    self.db.execute(c,'INSERT INTO telefy_max_mode VALUES(1,%s,1) ON CONFLICT(id) DO NOTHING',(int(DEFAULT_BETA),))
    self.ready=True
  def events(self,uid):
   self.ensure()
@@ -35,6 +39,25 @@ class GrantStore:
  def price(self):
   self.ensure()
   with self.db.connect()as c:return dict(self.db.execute(c,'SELECT amount,version FROM telefy_max_price WHERE id=1').fetchone())
+ def mode(self):
+  self.ensure()
+  with self.db.connect()as c:return dict(self.db.execute(c,'SELECT beta,version FROM telefy_max_mode WHERE id=1').fetchone())
+ def mode_draft(self,admin,enabled):
+  token=secrets.token_hex(12);current=self.mode()
+  with self.db.connect()as c:self.db.execute(c,"INSERT INTO telefy_max_mode_changes VALUES(%s,%s,%s,%s,%s,'draft')",(token,admin,int(enabled),current['version'],int(time.time())+900))
+  return token
+ def apply_mode(self,admin,token,cancel=False):
+  self.ensure()
+  with LOCK,self.db.connect()as c:
+   r=self.db.execute(c,'SELECT * FROM telefy_max_mode_changes WHERE id=%s AND admin_id=%s'+(' FOR UPDATE'if self.db.url else''),(token,admin)).fetchone()
+   if not r or r['state']!='draft'or r['expires_at']<int(time.time()):return False
+   if cancel:self.db.execute(c,"UPDATE telefy_max_mode_changes SET state='cancelled' WHERE id=%s",(token,));return True
+   current=self.db.execute(c,'SELECT version FROM telefy_max_mode WHERE id=1'+(' FOR UPDATE'if self.db.url else'')).fetchone()
+   if current['version']!=r['version']:return False
+   self.db.execute(c,'UPDATE telefy_max_mode SET beta=%s,version=version+1 WHERE id=1',(r['beta'],))
+   self.db.execute(c,"UPDATE telefy_max_mode_changes SET state='applied' WHERE id=%s",(token,))
+   self.db.execute(c,'UPDATE telefy_app_control SET generation=generation+1,updated_at=%s,updated_by=%s WHERE id=1',(int(time.time()),admin))
+   return True
  def price_draft(self,admin,amount):
   if type(amount)is not int or not 1<=amount<=100000:raise ValueError('price')
   token=secrets.token_hex(12);version=self.price()['version']

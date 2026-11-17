@@ -39,7 +39,10 @@
     for(const event of ['safeAreaChanged','contentSafeAreaChanged','viewportChanged','fullscreenChanged'])tg.onEvent?.(event,sync);
     new MutationObserver(sync).observe(document.body,{attributes:true,attributeFilter:['class']});
     tg.ready?.();sync();
-    if(tg.platform==='android'){try{tg.expand?.();}catch(_){}}
+    // Keyboard launches may start compact; expand every supported client.
+    try{tg.expand?.();}catch(_){}
+    if(tg.platform==='ios'&&tg.requestFullscreen&&(!tg.isVersionAtLeast||tg.isVersionAtLeast('8.0'))){try{tg.requestFullscreen();}catch(_){}}
+
   }
   if(window.Telegram?.WebApp){initialize();return;}
   const existing=document.querySelector('script[src^="https://telegram.org/js/telegram-web-app.js"]');

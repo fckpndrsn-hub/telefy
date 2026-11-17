@@ -22,6 +22,14 @@ def handle(update):
   return False
  if not relevant and(not pending or cb):return False
  if cb:bot.api('answerCallbackQuery',callback_query_id=cb['id'])
+ if data=='maxgrant_beta':
+  s.clear(uid);posts.store().cancel_input(uid);rem.store().cancel_upload(uid)
+  enabled=not bool(s.mode()['beta']);token=s.mode_draft(uid,enabled)
+  posts.say(uid,('Включить бета-режим? Max станет бесплатным для всех. Новые платежи будут отключены. Оплаченные подписки и история сохранятся.'if enabled else'Выключить бета-режим? Бесплатный общий Max закончится. Останутся действующие оплаченные и ручные периоды; для остальных вернутся бесплатные лимиты.')+'\nПриложения автоматически обновятся (обычно до 15 секунд).',[[posts.button('Включить бету'if enabled else'Выключить бету','maxgrant_mode_apply:'+token)],[posts.button('Отмена','maxgrant_mode_cancel:'+token)]]);return True
+ if data.startswith(('maxgrant_mode_apply:','maxgrant_mode_cancel:')):
+  import bot_operations
+  bot_operations.store().ensure();cancel=data.startswith('maxgrant_mode_cancel:');ok=s.apply_mode(uid,data.split(':',1)[1],cancel)
+  posts.say(uid,'Изменение отменено.'if ok and cancel else('✅ Бета-режим включён.'if s.mode()['beta']else'✅ Бета-режим выключен.')if ok else'Подтверждение истекло, использовано или режим уже изменился.');return True
  if data=='maxgrant_media':
   posts.store().cancel_input(uid);rem.store().cancel_upload(uid);s.input(uid,'payment_media');posts.say(uid,'Пришли картинку для сообщения после оплаты как фото.',[[posts.button('Отмена','maxgrant_cancel')]]);return True
  if data=='maxgrant_price':
@@ -58,7 +66,7 @@ def handle(update):
   if not text.isascii()or not text.isdigit()or not 1<=int(text)<=365:posts.say(uid,'Введи целое количество дней от 1 до 365.');return True
   profile=s.user(pending['target_id'])
   if not profile:s.clear(uid);posts.say(uid,'Профиль больше не найден.');return True
-  days=int(text);status=max_billing.STORE.status(profile['telegram_id']);now=int(time.time());end=status.get('expires_at')or 0;new=max(now,end)+days*86400
+  days=int(text);status=max_billing.STORE.status(profile['telegram_id']);now=int(time.time());end=status.get('expires_at')or status.get('account_expires_at')or 0;new=max(now,end)+days*86400
   current='Бесплатная бета: Max доступен всем.'if status.get('beta')else('До окончания: '+str(max(0,math.ceil((end-now)/86400)))+' дн.\nТекущий срок: '+date(end)if end>now else'Подписка не активна.')
   token=s.draft(uid,profile['telegram_id'],days)
   posts.say(uid,'🎟 Подтверждение выдачи\n\n'+profile['first_name']+' (@'+str(profile['username'])+')\nTelegram ID: '+str(profile['telegram_id'])+'\n'+current+'\n\nДобавить: '+str(days)+' дн.\nНовый срок: '+date(new)+'\nОставшиеся оплаченные дни сохранятся.',[[posts.button('✅ Выдать подписку','maxgrant_apply:'+token)],[posts.button('Отменить выдачу','maxgrant_drop:'+token)]]);return True

@@ -1098,6 +1098,8 @@ html[data-max-mode="paid"] .max-beta-price{display:none;}
 }
 :is(#mini-like-btn, #full-like-btn, [data-like]) .tg-ico { color:inherit; }
 
+html[data-max-mode="beta"] :is(#btn-renew-max,#btn-subscribe-max,#btn-modal-subscribe-max,.max-beta-price){display:none!important}
+
 .max-stars-panel{position:relative;width:100%;max-width:448px;border-radius:24px 24px 0 0;corner-shape:round;padding:8px 20px calc(22px + var(--telefy-safe-bottom,0px));max-height:88dvh;overflow:auto;text-align:center;color:var(--text-primary);background:var(--bg-main,var(--bg-card,#f2f2f7));font-family:inherit}
 .max-stars-panel .telefy-sheet-grip{display:block;width:100%;height:22px;border:0;background:transparent}
 .max-stars-logo{margin:8px auto 16px;width:72px;height:72px;display:grid;place-items:center;border-radius:22px;background:rgb(255 190 45 / 12%)}

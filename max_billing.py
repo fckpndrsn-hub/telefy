@@ -11,10 +11,11 @@ def month_after(timestamp):
  from datetime import datetime,timezone,timedelta
  dt=datetime.fromtimestamp(timestamp,timezone(timedelta(hours=3)));year,month=dt.year+(dt.month==12),dt.month%12+1
  return int(dt.replace(year=year,month=month,day=min(dt.day,calendar.monthrange(year,month)[1])).timestamp())
-def beta_enabled():return False
+def beta_enabled():
+ STORE.ensure();return bool(STORE.grants.mode()['beta'])
 def configured():
  import telefy_bot
- return bool(telefy_bot.TOKEN)
+ return bool(telefy_bot.TOKEN)and not beta_enabled()
 class BillingError(Exception):
  def __init__(self,status,code):self.status,self.code=status,code
 
@@ -42,6 +43,7 @@ class MaxStore:
   if not re.fullmatch(r'[A-Za-z0-9_-]{16,80}',str(key)):raise BillingError(400,'invalid_request_key')
   import telefy_bot as bot
   self.ensure()
+  if self.grants.mode()['beta']:raise BillingError(409,'payments_disabled_beta')
   amount=self.grants.price()['amount']
   if (100 if expected is None else expected)!=amount:raise BillingError(409,'price_changed')
   with self.lock,self.db.connect()as c:
@@ -69,6 +71,7 @@ class MaxStore:
    row=self.db.execute(c,'SELECT * FROM telefy_star_orders WHERE id=%s'+(' FOR UPDATE'if self.db.url else''),(payload[4:],)).fetchone()
    if not row or row['telegram_id']!=uid or row['amount']!=q['total_amount']or row['created_at']<int(time.time())-900:return False
    if row['state']=='approved':return row['checkout_id']==q.get('id')
+   if self.grants.mode()['beta']:return False
    if row['state']!='created':return False
    self.db.execute(c,'UPDATE telefy_star_orders SET state=%s,checkout_id=%s WHERE id=%s',('approved',q['id'],row['id']))
   return True
@@ -90,12 +93,13 @@ class MaxStore:
    if used:return False
    self.db.execute(c,'UPDATE telefy_star_orders SET state=%s,charge_id=%s,paid_at=%s WHERE id=%s',('paid',charge,int(time.time()),row['id']))
   return True
- def status(self,uid,now=None):
+ def status(self,uid,now=None,ignore_beta=False):
   self.ensure();now=int(time.time())if now is None else int(now)
   with self.db.connect()as c:rows=self.db.execute(c,'SELECT id,paid_at FROM telefy_star_orders WHERE telegram_id=%s AND state=%s ORDER BY paid_at,id',(uid,'paid')).fetchall()
   removed=self.grants.revoked(uid,'payment');rows=[r for r in rows if r['id']not in removed]
   end=0
   for at,duration in sorted([(row['paid_at'],PERIOD)for row in rows]+self.grants.events(uid)):end=max(end,at)+duration
+  if not ignore_beta and self.grants.mode()['beta']:return {'active':True,'telegram_id':uid,'beta':True,'expires_at':None,'account_expires_at':end or None,'server_time':now,'amount':0,'regular_amount':self.grants.price()['amount'],'currency':'XTR','recurring':False,'period':'beta','payments_configured':False}
   return {'active':end>now,'telegram_id':uid,'paid_periods':len(rows),'beta':False,'expires_at':end or None,'server_time':now,'amount':self.grants.price()['amount'],'currency':'XTR','recurring':False,'period':'30_days','payments_configured':configured()}
 
 STORE=MaxStore()
@@ -115,7 +119,7 @@ def handle_update(update):
    payment=message['successful_payment'];order=STORE.order(payment['invoice_payload'][4:])
    if order and order['state']=='paid':
     import max_notifications
-    end=STORE.status(order['telegram_id'])['expires_at']
+    end=STORE.status(order['telegram_id'],ignore_beta=True)['expires_at']
     if end:max_notifications.store().queue(order['telegram_id'],payment['telegram_payment_charge_id'],end)
   return True
  if message.get('refunded_payment'):STORE.apply(message,True);return True
@@ -147,6 +151,7 @@ class MaxBillingMixin:
     if not user:raise BillingError(401,'login_required')
     self.reply(200,STORE.status(user['telegram_id']))
    except BillingError as e:self.reply(e.status,{'error':e.code})
+   except Exception:self.reply(503,{'error':'max_status_unavailable'})
    return
   if path=='/max':self.send_response(303);self.send_header('Location','/telefy.html?screen=max');self.send_header('Content-Length','0');self.end_headers();return
   return super().do_GET()
