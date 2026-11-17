@@ -1,7 +1,7 @@
 """Only editorially approved sources. No AI, generated searches or automatic refresh."""
 import json,hashlib,threading,re
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote,urlsplit
 
 LOCK=threading.Lock();IMPORT_LOCKS={};IMPORT_SLOTS=threading.Semaphore(2)
 def section_lock(version):
@@ -15,6 +15,59 @@ def collection(value,key='collection'):
   if isinstance(result,list):return result
  raise ValueError('invalid_source_collection')
 
+def read_snapshot(d,version,key,cfg):
+ with d.connect()as c:row=d.execute(c,'SELECT payload FROM telefy_curated_trends WHERE version=%s AND source_key=%s',(version,key)).fetchone()
+ if row:return json.loads(row['payload'])
+ prior=cfg.get('reuseSnapshots',{}).get(key)
+ if not prior:return None
+ with d.connect()as c:
+  row=d.execute(c,'SELECT payload FROM telefy_curated_trends WHERE version=%s AND source_key=%s',(prior['version'],prior['source_key'])).fetchone()
+  if row:d.execute(c,'INSERT INTO telefy_curated_trends VALUES(%s,%s,%s) ON CONFLICT(version,source_key) DO NOTHING',(version,key,row['payload']))
+ return json.loads(row['payload'])if row else None
+
+
+def resolve_seed(sc,seed):
+ url=seed.get('soundcloudUrl')
+ if url:
+  parsed=urlsplit(url)
+  if parsed.scheme!='https' or parsed.netloc!='soundcloud.com' or len(parsed.path.strip('/').split('/'))!=2:raise ValueError('invalid_editorial_url')
+  raw=sc.api('/resolve',{'url':url})
+  if not isinstance(raw,dict)or raw.get('kind','track')!='track'or raw.get('access')!='playable'or not raw.get('streamable'):return []
+  item=sc.normalize_track(raw);item['editorialPinned']=True;return [item]
+ artist=seed['artist'].split(',')[0].strip();title=seed['title']
+ data=sc.api('/tracks',{'q':artist+' '+title,'access':'playable','limit':25,'linked_partitioning':'true'})
+ items=[];compact=lambda v:''.join(sorted(sc.tokens(v)))
+ for raw in collection(data):
+  if raw.get('access')!='playable'or not raw.get('streamable'):continue
+  try:t=sc.normalize_track(raw)
+  except sc.APIError:continue
+  if compact(title)!=compact(t['title']):continue
+  if not sc.tokens(artist).issubset(sc.tokens(t['artist'])):continue
+  items.append(t)
+ return sorted(items,key=lambda t:t.get('playbackCount',0),reverse=True)[:1]
+
+
+def first_track_cover(sc,config_file):
+ # Resolve only the leading seeds, reusing the exact same snapshot as import.
+ import profile_server
+ cfg=json.loads(Path(config_file).read_text(encoding='utf-8'));version=hashlib.sha256(json.dumps(cfg,sort_keys=True,ensure_ascii=False).encode()).hexdigest()[:16];d=profile_server.DB;d.ensure()
+ with d.connect()as c:d.execute(c,'CREATE TABLE IF NOT EXISTS telefy_curated_trends(version TEXT NOT NULL,source_key TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(version,source_key))')
+ seeds=list(enumerate(cfg.get('tracks',[])))
+ if cfg.get('name')=='hits':seeds.sort(key=lambda pair:(-int(pair[1].get('year',0)),pair[0]))
+ work=0
+ for index,seed in seeds:
+  key='spotify:'+str(index)
+  items=read_snapshot(d,version,key,cfg)
+  if items is None:
+   if work>=4:return {'coverImg':'','tracks':[],'hasMore':False,'nextOffset':0,'pending':True}
+   work+=1;items=resolve_seed(sc,seed)
+   with d.connect()as c:d.execute(c,'INSERT INTO telefy_curated_trends VALUES(%s,%s,%s) ON CONFLICT(version,source_key) DO NOTHING',(version,key,json.dumps(items,ensure_ascii=False)))
+  if items:
+   first=items[0]
+   return {'coverImg':first.get('coverImg')or'','firstTrackUrn':first['soundcloudUrn'],'tracks':[],'hasMore':False,'nextOffset':0,'version':version}
+ return {'coverImg':'','tracks':[],'hasMore':False,'nextOffset':0,'pending':False}
+
+
 def _import(sc,offset=0,config_file=None):
  import profile_server
  cfg=json.loads((Path(config_file)if config_file else CONFIG).read_text(encoding='utf-8'));version=hashlib.sha256(json.dumps(cfg,sort_keys=True,ensure_ascii=False).encode()).hexdigest()[:16]
@@ -23,8 +76,7 @@ def _import(sc,offset=0,config_file=None):
   d.ensure()
   with d.connect()as c:d.execute(c,'CREATE TABLE IF NOT EXISTS telefy_curated_trends(version TEXT NOT NULL,source_key TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(version,source_key))')
   def load(key):
-   with d.connect()as c:row=d.execute(c,'SELECT payload FROM telefy_curated_trends WHERE version=%s AND source_key=%s',(version,key)).fetchone()
-   return json.loads(row['payload'])if row else None
+   return read_snapshot(d,version,key,cfg)
   def save(key,value):
    with d.connect()as c:d.execute(c,'INSERT INTO telefy_curated_trends VALUES(%s,%s,%s) ON CONFLICT(version,source_key) DO NOTHING',(version,key,json.dumps(value,ensure_ascii=False)))
   results=[];errors=[];source_stats={};work=0;pending=0;missing=0
@@ -80,18 +132,7 @@ def _import(sc,offset=0,config_file=None):
     if work>=4:pending+=1;continue
     work+=1
     try:
-     artist=seed['artist'].split(',')[0].strip();title=seed['title']
-     data=sc.api('/tracks',{'q':artist+' '+title,'access':'playable','limit':25,'linked_partitioning':'true'})
-     items=[]
-     compact=lambda v:''.join(sorted(sc.tokens(v)))
-     for raw in collection(data):
-      if raw.get('access')!='playable'or not raw.get('streamable'):continue
-      try:t=sc.normalize_track(raw)
-      except sc.APIError:continue
-      if compact(title)!=compact(t['title']):continue
-      if not sc.tokens(artist).issubset(sc.tokens(t['artist'])):continue
-      items.append(t)
-     items=sorted(items,key=lambda t:t.get('playbackCount',0),reverse=True)[:1];save(key,items)
+     items=resolve_seed(sc,seed);save(key,items)
     except sc.APIError as e:errors.append({'source':key,'error':e.code});pending+=1;continue
    if not items:missing+=1
    for t in items:

@@ -99,7 +99,7 @@
     const track = getTrack(state.currentTrackId);
     if (!track?.id) { fail('Дождись загрузки каталога'); return; }
     if(reset || (pausePoint && pausePoint.id!==track.id)){pausePoint=null;resumePoint=null;}
-    const restoreAt=pausePoint?.id===track.id ? pausePoint.time : null;
+    const restoreAt=pausePoint?.id===track.id ? pausePoint.time : (window.TelefyLastPlayback?.consumePosition(track) ?? null);
     try {
       const hasSource=Boolean(hls || audio.srcObject || audio.currentSrc || audio.getAttribute('src'));
       if (reset || activeId !== track.id || !hasSource || !sourceReady) {

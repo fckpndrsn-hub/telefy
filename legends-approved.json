@@ -1,6 +1,6 @@
 {
   "name": "legends",
-  "revision": 2,
+  "revision": 3,
   "tracks": [
     {
       "artist": "PHARAOH",
@@ -100,11 +100,13 @@
     },
     {
       "artist": "SODA LUV",
-      "title": "Голодный пёс"
+      "title": "Голодный пёс",
+      "soundcloudUrl": "https://soundcloud.com/soda-luv/golodnyy-pyos-ft-seemee"
     },
     {
       "artist": "SODA LUV",
-      "title": "Коми"
+      "title": "Коми",
+      "soundcloudUrl": "https://soundcloud.com/soda-luv/komi"
     },
     {
       "artist": "OG BUDA",
@@ -146,5 +148,143 @@
       "artist": "Oxxxymiron",
       "title": "Konstrukt"
     }
-  ]
+  ],
+  "reuseSnapshots": {
+    "spotify:0": {
+      "version": "9a50fd8367fa28b2",
+      "source_key": "spotify:0"
+    },
+    "spotify:1": {
+      "version": "9a50fd8367fa28b2",
+      "source_key": "spotify:1"
+    },
+    "spotify:2": {
+      "version": "9a50fd8367fa28b2",
+      "source_key": "spotify:2"
+    },
+    "spotify:3": {
+      "version": "9a50fd8367fa28b2",
+      "source_key": "spotify:3"
+    },
+    "spotify:4": {
+      "version": "9a50fd8367fa28b2",
+      "source_key": "spotify:4"
+    },
+    "spotify:5": {
+      "version": "9a50fd8367fa28b2",
+      "source_key": "spotify:5"
+    },
+    "spotify:6": {
+      "version": "9a50fd8367fa28b2",
+      "source_key": "spotify:6"
+    },
+    "spotify:7": {
+      "version": "9a50fd8367fa28b2",
+      "source_key": "spotify:7"
+    },
+    "spotify:8": {
+      "version": "9a50fd8367fa28b2",
+      "source_key": "spotify:8"
+    },
+    "spotify:9": {
+      "version": "9a50fd8367fa28b2",
+      "source_key": "spotify:9"
+    },
+    "spotify:10": {
+      "version": "9a50fd8367fa28b2",
+      "source_key": "spotify:10"
+    },
+    "spotify:11": {
+      "version": "9a50fd8367fa28b2",
+      "source_key": "spotify:11"
+    },
+    "spotify:12": {
+      "version": "9a50fd8367fa28b2",
+      "source_key": "spotify:12"
+    },
+    "spotify:13": {
+      "version": "9a50fd8367fa28b2",
+      "source_key": "spotify:13"
+    },
+    "spotify:14": {
+      "version": "9a50fd8367fa28b2",
+      "source_key": "spotify:14"
+    },
+    "spotify:15": {
+      "version": "9a50fd8367fa28b2",
+      "source_key": "spotify:15"
+    },
+    "spotify:16": {
+      "version": "9a50fd8367fa28b2",
+      "source_key": "spotify:16"
+    },
+    "spotify:17": {
+      "version": "9a50fd8367fa28b2",
+      "source_key": "spotify:17"
+    },
+    "spotify:18": {
+      "version": "9a50fd8367fa28b2",
+      "source_key": "spotify:18"
+    },
+    "spotify:19": {
+      "version": "9a50fd8367fa28b2",
+      "source_key": "spotify:19"
+    },
+    "spotify:20": {
+      "version": "9a50fd8367fa28b2",
+      "source_key": "spotify:20"
+    },
+    "spotify:21": {
+      "version": "9a50fd8367fa28b2",
+      "source_key": "spotify:21"
+    },
+    "spotify:22": {
+      "version": "9a50fd8367fa28b2",
+      "source_key": "spotify:22"
+    },
+    "spotify:23": {
+      "version": "9a50fd8367fa28b2",
+      "source_key": "spotify:23"
+    },
+    "spotify:26": {
+      "version": "9a50fd8367fa28b2",
+      "source_key": "spotify:26"
+    },
+    "spotify:27": {
+      "version": "9a50fd8367fa28b2",
+      "source_key": "spotify:27"
+    },
+    "spotify:28": {
+      "version": "9a50fd8367fa28b2",
+      "source_key": "spotify:28"
+    },
+    "spotify:29": {
+      "version": "9a50fd8367fa28b2",
+      "source_key": "spotify:29"
+    },
+    "spotify:30": {
+      "version": "9a50fd8367fa28b2",
+      "source_key": "spotify:30"
+    },
+    "spotify:31": {
+      "version": "9a50fd8367fa28b2",
+      "source_key": "spotify:31"
+    },
+    "spotify:32": {
+      "version": "9a50fd8367fa28b2",
+      "source_key": "spotify:32"
+    },
+    "spotify:33": {
+      "version": "9a50fd8367fa28b2",
+      "source_key": "spotify:33"
+    },
+    "spotify:34": {
+      "version": "9a50fd8367fa28b2",
+      "source_key": "spotify:34"
+    },
+    "spotify:35": {
+      "version": "9a50fd8367fa28b2",
+      "source_key": "spotify:35"
+    }
+  }
 }

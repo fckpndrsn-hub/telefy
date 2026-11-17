@@ -200,7 +200,7 @@ try {
       return [];
     })();
 
-    const COLLECTIONS = [{"id": "hits", "title": "Хиты русского рэпа", "tag": "2017–2026", "shortDesc": "Путешествие с 2017 по 2026 год", "artists": "", "targetArtists": [], "cover": "#2450A4", "icon": "<span class=\"tg-ico text-[22px]\" aria-hidden=\"true\">&#xF06C;</span>", "trackIds": [], "curated": true}, {"id": "legends", "title": "Легенды русского рэпа", "tag": "Классика жанра", "shortDesc": "Артисты, которые сформировали звук", "artists": "", "targetArtists": [], "cover": "#6B4BA2", "icon": "<span class=\"tg-ico text-[22px]\" aria-hidden=\"true\">&#xF0D9;</span>", "trackIds": [], "curated": true}, {"id": "premiere", "title": "Премьера", "tag": "Свежие релизы", "shortDesc": "Новые релизы популярных артистов", "artists": "", "targetArtists": [], "cover": "#B84363", "icon": "<span class=\"tg-ico text-[22px]\" aria-hidden=\"true\">&#xF01B;</span>", "trackIds": [], "curated": true}, {"id": "telescope", "title": "Teleскоп", "tag": "Выбор Telefy", "shortDesc": "Редакционная подборка", "artists": "", "targetArtists": [], "cover": "#197D86", "icon": "<span class=\"tg-ico text-[22px]\" aria-hidden=\"true\">&#xF073;</span>", "trackIds": [], "curated": true}];
+    const COLLECTIONS = [{"id": "hits", "title": "Хиты русского рэпа", "tag": "2017–2026", "shortDesc": "Путешествие с 2017 по 2026 год", "artists": "", "targetArtists": [], "cover": "#2450A4", "icon": "<span class=\"tg-ico text-[22px]\" aria-hidden=\"true\">&#xF0DA;</span>", "trackIds": [], "curated": true}, {"id": "legends", "title": "Легенды русского рэпа", "tag": "Классика жанра", "shortDesc": "Артисты, которые сформировали звук", "artists": "", "targetArtists": [], "cover": "#6B4BA2", "icon": "<span class=\"tg-ico text-[22px]\" aria-hidden=\"true\">&#xF087;</span>", "trackIds": [], "curated": true}, {"id": "premiere", "title": "Премьера", "tag": "Свежие релизы", "shortDesc": "Новые релизы популярных артистов", "artists": "", "targetArtists": [], "cover": "#B84363", "icon": "<span class=\"tg-ico text-[22px]\" aria-hidden=\"true\">&#xF01B;</span>", "trackIds": [], "curated": true}, {"id": "telescope", "title": "Teleскоп", "tag": "Выбор Telefy", "shortDesc": "Редакционная подборка", "artists": "", "targetArtists": [], "cover": "#197D86", "icon": "<span class=\"tg-ico text-[22px]\" aria-hidden=\"true\">&#xF066;</span>", "trackIds": [], "curated": true}];
 
     const I18N = {
       ru: {
@@ -1272,10 +1272,10 @@ try {
             <div data-track-cover="${t.id}" class="w-11 h-11 squircle-cover-sm shrink-0 flex items-center justify-center text-white text-xs font-bold bg-cover bg-center bg-no-repeat relative overflow-hidden ${isLoading ? 'cover-loading' : ''}" style="background-color: ${t.cover || '#1E3A8A'}; ${t.coverImg ? `background-image: url('${t.coverImg}')` : ''}">
               ${renderCoverImgTag(t.coverImg)}
               <span class="cover-fallback-glyph relative z-10 text-[13px] opacity-80 ${t.coverImg ? 'hidden' : ''}">♫</span>
-              ${isCurrent ? '<div class="absolute inset-0 z-20 bg-black/45 flex items-center justify-center text-white">' + (state.isPlaying ? '❚❚' : '▶') + '</div>' : ''}
+              <span data-track-playback="${t.id}" class="track-playback-overlay" style="display:${isCurrent ? 'flex' : 'none'}" aria-hidden="true"><span class="tg-ico">${state.isPlaying ? '&#xF14F;' : '&#xF148;'}</span></span>
             </div>
             <div class="min-w-0 flex-1">
-              <p class="text-[14px] font-medium ${isCurrent ? 'text-[#2AABEE]' : ''} truncate">${t.title}</p>
+              <p data-track-row-title="${t.id}" class="text-[14px] font-medium ${isCurrent ? 'text-[#2AABEE]' : ''} truncate">${t.title}</p>
               <div class="flex items-center gap-1.5 mt-0.5 min-w-0">
                 <span class="telefy-explicit" title="Может содержать ненормативную лексику" aria-label="Возможна ненормативная лексика">E</span>
                 <p class="text-xs text-muted truncate">${subMeta}</p>
@@ -1295,10 +1295,14 @@ try {
       container.querySelectorAll('.track-play-trigger').forEach(el => {
         el.addEventListener('click', () => {
           const id=Number(el.dataset.play);
-          if(container.closest('#library-modal')){const ids=[...container.querySelectorAll('.track-play-trigger')].map(n=>Number(n.dataset.play));window.TelefyOrderedQueue.start(ids,id,state.lang==='en'?'Favorites':'Любимое','favorites');return;}
-          if(container.closest('#collection-modal')&&state.activeCollectionId!=='recommendations'){
+          if(el.closest('#library-modal')){const ids=[...container.querySelectorAll('.track-play-trigger')].map(n=>Number(n.dataset.play));window.TelefyOrderedQueue.start(ids,id,state.lang==='en'?'Favorites':'Любимое','favorites');return;}
+          if(el.closest('#collection-modal')&&state.activeCollectionId!=='recommendations'){
             const source=USER_PLAYLISTS.find(p=>p.id===state.activeCollectionId)||COLLECTIONS.find(p=>p.id===state.activeCollectionId);
             if(source){window.TelefyOrderedQueue.start(source.trackIds,id,sourceLabelOverride||source.title,'playlist');return;}
+          }
+          if(el.closest('#search-results-list')){
+            const ids=[...document.querySelectorAll('#search-results-list .track-play-trigger')].map(n=>Number(n.dataset.play));
+            window.TelefyOrderedQueue.start(ids,id,state.lang==='en'?'Search':'Поиск','search');return;
           }
           playTrack(id,sourceLabelOverride||t('catalogSource'));
         });
@@ -1649,7 +1653,27 @@ try {
       }
     }
 
+    function syncTrackRowPlayback() {
+      document.querySelectorAll('[data-track-playback]').forEach(overlay => {
+        const active = String(state.currentTrackId) === overlay.dataset.trackPlayback;
+        overlay.style.display = active ? 'flex' : 'none';
+        const icon = overlay.firstElementChild;
+        const glyph = state.isPlaying ? '\uF14F' : '\uF148';
+        if (icon.textContent !== glyph) icon.textContent = glyph;
+        const trigger = overlay.closest('.track-play-trigger');
+        if (trigger) {
+          trigger.dataset.playbackState = active ? (state.isPlaying ? 'playing' : 'paused') : 'idle';
+          if (active) trigger.setAttribute('aria-current', 'true');
+          else trigger.removeAttribute('aria-current');
+        }
+      });
+      document.querySelectorAll('[data-track-row-title]').forEach(title => {
+        title.classList.toggle('text-[#2AABEE]', String(state.currentTrackId) === title.dataset.trackRowTitle);
+      });
+    }
     function renderPlayerUI() {
+      syncPlaybackSource();
+      syncTrackRowPlayback();
       const current = getTrack(state.currentTrackId);
       const artistWithAlbum = current.album ? `${current.artist} · ${current.album}` : current.artist;
       document.getElementById('mini-title').textContent = current.title;
@@ -2559,6 +2583,8 @@ try {
         const k = `${normalizeArtistToken(getPrimaryArtistName(item.artist))}::${normalizeTrackTitleKey(item.title)}`;
         const existing = existingByKey.get(k);
         if (existing) {
+          if(existing.editorialPinned&&!item.editorialPinned&&item.soundcloudUrn&&existing.soundcloudUrn!==item.soundcloudUrn)return;
+          if(item.editorialPinned)existing.editorialPinned=true;
           existing.coverImg = item.coverImg || existing.coverImg;
           if(item.duration)existing.duration=item.duration;
           existing.album = item.album || existing.album;
@@ -2576,7 +2602,7 @@ try {
         const trObj = {
           id: nextId++,
           genre:item.genre||'', classificationVersion:item.classificationVersion||0, modes:item.modes||[], releaseDate:item.releaseDate||null, playbackCount:item.playbackCount||0,
-          curatedTrend:item.curatedTrend===true,editorialYear:item.editorialYear,trendsEligible:item.trendsEligible===true,soundcloudUrn:item.soundcloudUrn || null,
+          editorialPinned:item.editorialPinned===true,curatedTrend:item.curatedTrend===true,editorialYear:item.editorialYear,trendsEligible:item.trendsEligible===true,soundcloudUrn:item.soundcloudUrn || null,
           soundcloudUrl:item.soundcloudUrl || null,
           uploader:item.uploader || null,
           uploaderUrl:item.uploaderUrl || null,
@@ -3224,7 +3250,7 @@ try {
                 <span class="cover-fallback-glyph relative z-10 text-[11px] opacity-80 ${tr.coverImg ? 'hidden' : ''}">♫</span>
               </div>
               <div class="min-w-0 flex-1">
-                <p class="text-[14px] font-medium ${isCurrent ? 'text-[#2AABEE]' : ''} truncate">${tr.title}</p>
+                <p data-track-row-title="${t.id}" class="text-[14px] font-medium ${isCurrent ? 'text-[#2AABEE]' : ''} truncate">${tr.title}</p>
                 <div class="flex items-center gap-1.5 mt-0.5">
                   <span class="telefy-explicit" title="Может содержать ненормативную лексику" aria-label="Возможна ненормативная лексика">E</span>
                   <p class="text-xs text-muted truncate">${tr.artist}</p>
@@ -4510,7 +4536,7 @@ window.TelefyOrderedQueue=(()=>{
   state.queueIds=[];state.isPlaying=false;syncRealAudio();renderPlayerUI();
  };
  const prev=playPrev;playPrev=function(){if(!list)return prev();if(list.index>0)select(list.index-1);else select(0);};
- return {start,clear(){list=null;},get active(){return Boolean(list);},get upcoming(){return list?list.ids.slice(list.index+1):[];}};
+ return {start,snapshot(){return list?{ids:list.ids.slice(),index:list.index,label:list.label,kind:list.kind}:null;},restore(ids,id,label,kind){const index=ids.indexOf(id);if(index<0)return;list={ids:ids.slice(),index,label,kind};sync();},clear(){list=null;},get active(){return Boolean(list);},get upcoming(){return list?list.ids.slice(list.index+1):[];}};
 })();
 
 // Previous restarts after three seconds, across list, flow and headset controls.
@@ -4547,3 +4573,66 @@ window.TelefyTrendContinuation=(()=>{
 })();
 
 window.TelefyTrendContinuation={prepare:async()=>[],activate:()=>false};
+
+/* Browser playback memory contains metadata, never temporary stream URLs. */
+window.TelefyLastPlayback=(()=>{
+ const prefix='telefy_last_playback_v1:',audio=document.getElementById('telefy-audio');
+ let restored=false,ready=false,position=null,lastSave=0;
+ const owner=()=>String(window.TelefyProfile?.user?.telegram_id||'');
+ const fields=['soundcloudUrn','soundcloudUrl','title','artist','primaryArtist','album','duration','coverImg','cover','mood','modes','genre','classificationVersion','editorialPinned','curatedTrend','trendsEligible','editorialYear','releaseDate'];
+ const metadata=track=>Object.fromEntries(fields.filter(k=>track[k]!==undefined).map(k=>[k,track[k]]));
+ function save(force=false){
+  if(!ready||!owner()||window.TelefyFirstRun?.pending)return;
+  if(!force&&Date.now()-lastSave<5000)return;
+  const track=tracks.find(t=>t.id===state.currentTrackId);if(!track?.soundcloudUrn)return;
+  const ordered=window.TelefyOrderedQueue?.snapshot?.();
+  const ids=ordered?.ids||[track.id,...(state.queueIds||[])];
+  const items=[track,...ids.map(id=>tracks.find(t=>t.id===id))].filter(Boolean);
+  const unique=[...new Map(items.filter(t=>t.soundcloudUrn).map(t=>[t.soundcloudUrn,t])).values()].slice(0,300);
+  const data={version:1,track:track.soundcloudUrn,tracks:unique.map(metadata),position:Math.max(0,Number(state.progressSec)||0),
+   label:state.sourceLabel,context:state.playbackContext||null,mood:state.activeMood,
+   queue:ids.map(id=>tracks.find(t=>t.id===id)?.soundcloudUrn).filter(Boolean),ordered:ordered?{kind:ordered.kind,label:ordered.label}:null};
+  try{localStorage.setItem(prefix+owner(),JSON.stringify(data));lastSave=Date.now();}catch(_){}
+ }
+ async function restore(){
+  if(restored)return false;restored=true;
+  await window.TelefyProfileReady;
+  ready=true;
+  if(!owner()||!window.TelefyFirstRun?.pending)return false;
+  try{
+   const data=JSON.parse(localStorage.getItem(prefix+owner())||'null');
+   if(data?.version!==1||!Array.isArray(data.tracks)||!data.tracks.some(t=>t.soundcloudUrn===data.track))return false;
+   const items=data.tracks.slice(0,300).filter(t=>/^soundcloud:tracks:\d+$/.test(t.soundcloudUrn||'')&&typeof t.title==='string'&&typeof t.artist==='string');
+   mergeParsedTracksIntoCatalog(items);
+   const track=tracks.find(t=>t.soundcloudUrn===data.track);if(!track)return false;
+   const idByUrn=new Map(tracks.map(t=>[t.soundcloudUrn,t.id]));
+   window.TelefyFirstRun.cancel();
+   state.currentTrackId=track.id;state.isPlaying=false;
+   state.sourceLabel=typeof data.label==='string'?data.label.slice(0,200):'Мой поток';
+   state.playbackContext=['favorites','playlist','search'].includes(data.context)?data.context:null;
+   state.activeMood=MOODS.some(m=>m.id===data.mood)?data.mood:'all';
+   flowModeIndex=Math.max(0,MOODS.findIndex(m=>m.id===state.activeMood));
+   state.progressSec=Math.min(Math.max(0,Number(data.position)||0),Math.max(0,Number(track.duration)||0));
+   position={urn:track.soundcloudUrn,time:state.progressSec};
+   const ids=(Array.isArray(data.queue)?data.queue:[]).map(urn=>idByUrn.get(urn)).filter(Boolean);
+   if(data.ordered&&ids.includes(track.id))window.TelefyOrderedQueue.restore(ids,track.id,state.sourceLabel,data.ordered.kind);
+   else state.queueIds=ids.filter(id=>id!==track.id);
+   renderAll();return true;
+  }catch(_){return false;}
+ }
+ for(const event of ['playing','pause','seeked'])audio.addEventListener(event,()=>save(true));
+ audio.addEventListener('timeupdate',()=>save());
+ window.addEventListener('pagehide',()=>save(true));
+ document.addEventListener('visibilitychange',()=>{if(document.hidden)save(true);});
+ const previous=playTrack;playTrack=function(...args){position=null;const result=previous(...args);save(true);return result;};
+ return {restore,save,consumePosition(track){if(position?.urn!==track.soundcloudUrn)return null;const time=position.time;position=null;return time;}};
+})();
+
+function syncPlaybackSource(){
+ const english=state.lang==='en',context=state.playbackContext;
+ const label=context==='favorites'?(english?'Favorites':'Любимое'):context==='search'?(english?'Search':'Поиск'):state.sourceLabel;
+ if(!label)return;
+ for(const id of ['home-stream-title','flow-stream-name']){const el=document.getElementById(id);if(el)el.textContent=label;}
+ const desc=document.getElementById('home-stream-desc');
+ if(desc&&['favorites','playlist','search'].includes(context))desc.textContent=context==='favorites'?(english?'Your saved tracks':'Твои сохранённые треки'):context==='search'?(english?'Playing search results':'Треки из результатов поиска'):(english?'Playing the selected playlist':'Играет выбранная подборка');
+}

@@ -974,3 +974,15 @@ def discovery(kind,offset=0):
         import curated_trends,sys
         return curated_trends.discover(sys.modules[__name__],offset,str(Path(__file__).with_name(kind+'-approved.json'))if kind in ('hits','legends','night')else None)
     return _discovery_before_manual(kind,offset)
+
+# Collection artwork follows the same first track as its approved source.
+_premiere_collection_cover=collection_cover
+def collection_cover(kind):
+    if kind=='premiere':return _premiere_collection_cover(kind)
+    if kind in ('hits','legends'):
+        import curated_trends
+        return curated_trends.first_track_cover(__import__('sys').modules[__name__],Path(__file__).with_name(kind+'-approved.json'))
+    if kind=='telescope':
+        data=discovery(kind,0);first=next(iter(data.get('tracks',[])),{})
+        return {'coverImg':first.get('coverImg')or'','firstTrackUrn':first.get('soundcloudUrn'),'tracks':[],'hasMore':False,'nextOffset':0}
+    raise APIError(400,'invalid_collection')

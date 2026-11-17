@@ -1,19 +1,23 @@
 /* SoundCloud discovery adapters, separated from playback. */
 (() => {
- const coverKey='telefy_collection_art_v1';let coverCache={};
- try{coverCache=JSON.parse(localStorage.getItem(coverKey)||'{}');}catch(_){}
- for(const col of COLLECTIONS){const c=coverCache[col.id];if(c&&c.url?.startsWith('https://'))col.coverImg=c.url;}
- async function warmCollectionArt(col){
-  if(col.coverImg)return;
-  try{const r=await fetch('/api/soundcloud/search?'+new URLSearchParams({q:'telefy:cover:'+col.id}),{signal:AbortSignal.timeout(30000)});if(!r.ok)return;const data=await r.json();if(!data.coverImg?.startsWith('https://'))return;
-   const image=new Image();image.src=data.coverImg;await Promise.race([image.decode().catch(()=>{}),new Promise(resolve=>setTimeout(resolve,5000))]);
-   if(col.coverImg)return;
-   coverCache[col.id]={url:data.coverImg,at:Date.now()};try{localStorage.setItem(coverKey,JSON.stringify(coverCache));}catch(_){}
-   if(!col.coverImg){col.coverImg=data.coverImg;renderCollections();if(state.activeCollectionId===col.id)updateCollectionPresentation();}
+ const coverKey='telefy_collection_art_v2_first_track';let coverCache={},legacyCoverCache={};
+ try{coverCache=JSON.parse(localStorage.getItem(coverKey)||'{}');legacyCoverCache=JSON.parse(localStorage.getItem('telefy_collection_art_v1')||'{}');}catch(_){}
+ for(const col of COLLECTIONS){const c=col.id==='premiere'?legacyCoverCache[col.id]||coverCache[col.id]:coverCache[col.id];if(c&&c.url?.startsWith('https://')){col.coverImg=c.url;col.coverFirstUrn=c.urn||null;}}
+ function rememberCover(col,url,urn){
+  col.coverImg=url||null;col.coverFirstUrn=urn||null;coverCache[col.id]={url:url||'',urn:urn||null,at:Date.now()};
+  try{localStorage.setItem(coverKey,JSON.stringify(coverCache));}catch(_){}
+ }
+ async function warmCollectionArt(col,attempt=0){
+  if(col.id==='premiere'&&col.coverImg)return;
+  try{const r=await fetch('/api/soundcloud/search?'+new URLSearchParams({q:'telefy:cover:'+col.id}),{signal:AbortSignal.timeout(30000)});if(!r.ok)return;const data=await r.json();
+   if(!data.coverImg?.startsWith('https://')){if(data.pending&&attempt<3)setTimeout(()=>warmCollectionArt(col,attempt+1),5000);return;}
+   // A playlist loaded during prefetch has the authoritative displayed order.
+   if(col.id!=='premiere'&&col.trackIds.length){const first=tracks.find(t=>t.id===col.trackIds[0]);if(first){rememberCover(col,first.coverImg,first.soundcloudUrn);return;}}
+   rememberCover(col,data.coverImg,data.firstTrackUrn);renderCollections();if(state.activeCollectionId===col.id)updateCollectionPresentation();
   }catch(_){}
  }
- // Fetch lightweight artwork at startup; full playlists still load only on demand.
- async function warmAllArt(){if(window.TelefyFirstRun?.pending){setTimeout(warmAllArt,500);return;}for(const col of COLLECTIONS)await warmCollectionArt(col);}
+ // Artwork does not wait for Trends or import all songs in each playlist.
+ async function warmAllArt(){for(let i=0;i<COLLECTIONS.length;i+=2)await Promise.allSettled(COLLECTIONS.slice(i,i+2).map(col=>warmCollectionArt(col)));}
  window.TelefyTrendMembership=new Set();
  const memberships=new Map(),pending=new Map(),modeOffsets=new Map(),editorialOrder=new Map(),importTimers=new Map();
  const english={energy:['Energy','High tempo and drive'],night:['Chill vibe','Soft sound and mellow rhythms'],uncensored:['Super beat','Heavy trap and distorted bass'],underground:['Trends','Fresh popular Russian tracks']};
@@ -45,7 +49,7 @@
     const unique=new Set(),selected=tracks.filter(t=>urns.has(t.soundcloudUrn)).filter(t=>{const key=getTrackUniqueKey(t);if(unique.has(key))return false;unique.add(key);return true;});
     col.trackIds=(['hits','legends'].includes(col.id)?selected.sort((a,b)=>{const x=editorial.get(a.soundcloudUrn)||{},y=editorial.get(b.soundcloudUrn)||{};return (col.id==='hits'?(y.year||0)-(x.year||0):0)||((x.order||0)-(y.order||0));}):interleaveByArtist(selected)).slice(0,500).map(t=>t.id);
     positions.set(col.id,data.nextOffset);loadedAt.set(col.id,Date.now());if(!data.hasMore)finished.add(col.id);
-    if(!col.coverImg){col.coverImg=selected.find(t=>t.coverImg)?.coverImg||null;if(col.coverImg){coverCache[col.id]={url:col.coverImg,at:Date.now()};try{localStorage.setItem(coverKey,JSON.stringify(coverCache));}catch(_){}}}
+    if(col.id!=='premiere'){const first=tracks.find(t=>t.id===col.trackIds[0]);if(first)rememberCover(col,first.coverImg,first.soundcloudUrn);}else if(!col.coverImg){const first=selected.find(t=>t.coverImg);if(first)rememberCover(col,first.coverImg,first.soundcloudUrn);}
     renderCollections();paintCollection(col);
    }catch(error){paintCollection(col,error);}
   })();pending.set(col.id,task);try{await task;}finally{pending.delete(col.id);clearTimeout(importTimers.get(col.id));if(col.importPending&&!col.importError)importTimers.set(col.id,setTimeout(()=>{if(state.activeCollectionId===col.id&&!document.getElementById('collection-modal').classList.contains('hidden'))ensureCollectionTracksLoaded(col,true);},5000));}
