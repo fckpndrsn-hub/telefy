@@ -611,7 +611,7 @@ def current_trend_release(raw):
     years=[]
     publisher=raw.get('publisher_metadata') or {}
     for value in (raw.get('release_year'),raw.get('release_date'),publisher.get('release_date')):
-        if value in (None,''):continue
+        if value in (None,'',0,'0'):continue
         match=re.match(r'^(\d{4})(?:$|[-/T ])',str(value))
         if not match:return False
         years.append(int(match.group(1)))
@@ -621,7 +621,20 @@ def current_trend_release(raw):
                 if date>datetime.now(timezone.utc).date():return False
             except ValueError:return False
     # Upload date is not proof of a release date. Unknown dates stay outside Trends.
-    return bool(years) and all(2025<=year<=2026 for year in years)
+    if years:return all(2025<=year<=2026 for year in years)
+    # Only a verified artist's own upload may supply a missing release date.
+    user=raw.get('user')or{}
+    if user.get('verified')is not True:return False
+    credit=raw.get('metadata_artist')or(raw.get('publisher_metadata')or{}).get('artist')or''
+    if not credit:
+        parts=re.split(r'\s+[-–—]\s+',str(raw.get('title')or''),maxsplit=1)
+        if len(parts)==2:credit=parts[0]
+    cfg=scene_artist(credit)
+    if not cfg or not scene_matches(user.get('username',''),cfg):return False
+    try:
+        date=datetime.strptime(str(raw.get('created_at')or'')[:10].replace('/','-'),'%Y-%m-%d').date()
+        return 2025<=date.year<=2026 and date<=datetime.now(timezone.utc).date()
+    except ValueError:return False
 
 _catalog_discovery=discovery
 def discovery(kind,offset=0):

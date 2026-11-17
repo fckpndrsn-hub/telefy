@@ -48,5 +48,5 @@
    window.TelefyTaste.updatePlaylist();renderHomeTracks();
   }catch(_){}finally{busy=false;}
  }
- window.addEventListener('telefy:profile-ready',()=>{reset();rank();});setInterval(rank,60000);
+ window.addEventListener('telefy:profile-ready',reset); /* Ranking is owned by SmartSelection; no duplicate timer. */
 })();

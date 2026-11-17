@@ -686,7 +686,7 @@ try {
       const searchInput = document.getElementById('search-input');
       if (searchInput) searchInput.placeholder = t('searchPlaceholder');
 
-      const modeText = getMoodText(state.activeMood);
+      const modeText = state.playbackContext==='favorites'?{streamTitle:state.lang==='en'?'Favorites':'Любимое',shortDesc:state.lang==='en'?'Your saved tracks':'Твои сохранённые треки'}:getMoodText(state.activeMood);
       const homeTitle = document.getElementById('home-stream-title');
       if (homeTitle) homeTitle.textContent = modeText.streamTitle;
       const homeDesc = document.getElementById('home-stream-desc');
@@ -888,6 +888,14 @@ try {
       state.progressSec = 0;
       state.isPlaying = true;
       state.sourceLabel = sourceLabel;
+      if(['Библиотека','Любимые треки','Любимое','Library','Favorite tracks','Favorites'].includes(sourceLabel)){
+        window.TelefyFirstRun?.cancel();state.playbackContext='favorites';state.activeMood='all';
+        state.sourceLabel=state.lang==='en'?'Favorites':'Любимое';flowModeIndex=0;
+        document.getElementById('home-stream-title').textContent=state.sourceLabel;
+        document.getElementById('home-stream-desc').textContent=state.lang==='en'?'Your saved tracks':'Твои сохранённые треки';
+        renderMoodChips();
+      }else state.playbackContext=null;
+
       const tr = getTrack(id);
       if (tr && tr.id) {
         markFlowTrackPlayed(tr);
@@ -938,6 +946,15 @@ try {
     }
 
     function playNext(fromTrackEnd = false) {
+      if(state.playbackContext==='favorites'){
+        if(fromTrackEnd&&isRepeat){playTrack(state.currentTrackId,state.sourceLabel,{fromHistory:true});return;}
+        const eligible=tracks.filter(t=>t.liked&&!t.disliked),ids=new Set(eligible.map(t=>t.id));
+        state.queueIds=(state.queueIds||[]).filter(id=>ids.has(id)&&id!==state.currentTrackId);
+        const next=state.queueIds.shift();
+        if(next){playTrack(next,state.sourceLabel);return;}
+        state.isPlaying=false;syncRealAudio();renderPlayerUI();return;
+      }
+
       if(window.TelefyRecommendations?.active())return window.TelefyRecommendations.next(fromTrackEnd);
       if (fromTrackEnd && isRepeat) {
         playTrack(state.currentTrackId, state.sourceLabel, { fromHistory:true });
@@ -1129,6 +1146,7 @@ try {
       const safeIdx = idx >= 0 ? idx : 0;
       const mode = MOODS[safeIdx];
       const modeText = getMoodText(mode.id);
+      state.playbackContext=null;
       state.activeMood = mode.id;
       flowModeIndex = safeIdx;
       state.sourceLabel = modeText.streamTitle;
@@ -4152,7 +4170,7 @@ try {
         document.getElementById('library-discover').onclick = () => { closeLibraryModal(); switchTab('search'); document.getElementById('search-input').focus(); };
       } else {
         listEl.innerHTML = likedTracks.map(createTrackRowHTML).join('');
-        bindTrackRowEvents(listEl);
+        bindTrackRowEvents(listEl,state.lang==='en'?'Favorites':'Любимое');
       }
     }
     function openLibraryModal() {

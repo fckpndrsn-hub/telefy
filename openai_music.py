@@ -61,7 +61,7 @@ def _generate(kind,payload):
  field='description'if kind=='description'else'order'
  value={'type':'string'}if kind=='description'else {'type':'array','items':{'type':'integer','minimum':0,'maximum':len(payload['candidates'])-1}}
  schema={'type':'object','properties':{field:value},'required':[field],'additionalProperties':False}
- body={'model':name,'instructions':instruction,'input':json.dumps(payload,ensure_ascii=False),'store':False,'max_output_tokens':1024,
+ body={'model':name,'instructions':instruction,'input':json.dumps(payload,ensure_ascii=False),'store':False,'max_output_tokens':256 if kind=='description' else 384,
   'text':{'format':{'type':'json_schema','name':'music_'+kind,'strict':True,'schema':schema}}}
  if name.startswith(('gpt-5.','gpt-6')):body['reasoning']={'effort':'none'}
  try:
@@ -105,11 +105,25 @@ def rank(uid,candidates,context='vibe'):
  if context=='recommendations':history=profile_server.DB.taste_recent(uid)
  if context=='vibe' and len(history)<20:return {'order':[],'personalized':False}
  recent=[{k:h.get(k)for k in('artist','genre','modes')}for h in history[-500:]] if context=='recommendations' else [{k:h.get(k)for k in('artist','genre','modes')}for h in history[-20:]]
- clean=[metadata(t)for t in candidates[:60]]
+ clean=[metadata(t)for t in candidates[:24]]
+ for row in clean:
+  row.pop('soundcloudUrn',None);row.pop('album',None)
+  for field,limit in [('title',90),('artist',60),('genre',40),('tag_list',80)]:row[field]=row[field][:limit]
  if len(clean)<2:return {'order':[],'personalized':False}
  for source,target in zip(candidates,clean):
   for k in ('playbackCount','likesCount'):
    try:target[k]=max(0,min(10**12,int(source.get(k,0))))
    except (TypeError,ValueError):target[k]=0
+ # Compress the complete time-window history into artist/genre counts.
+ from collections import Counter
+ counts=Counter((str(h.get('artist')or'')[:60],str(h.get('genre')or'')[:40])for h in recent)
+ recent=[{'artist':a,'genre':g,'listens':n}for (a,g),n in counts.most_common(12)]
+ if not configured():return {'order':[],'personalized':False}
+ d=db();now=int(time.time());window_key='rank-cooldown:'+hashlib.sha256(str(uid).encode()).hexdigest()+':'+context
+ with d.connect()as c:
+  claimed=d.execute(c,'INSERT INTO telefy_ai_cache(key,payload,expires_at) VALUES(%s,%s,%s) ON CONFLICT(key) DO UPDATE SET expires_at=excluded.expires_at WHERE telefy_ai_cache.expires_at<=%s',(window_key,'{}',now+21600,now))
+  if claimed.rowcount!=1:return {'order':[],'personalized':False,'cachedWindow':True}
  result=generate('rank',{'context':context,'role':'Supplement mechanical selection with similar discoveries; energy means energetic rap, night means mellow calm rap, do not mix aggressive songs into night. Do not rank only one artist.', 'recent':recent if context=='recommendations' or len(history)>=20 else [],'candidates':clean})
+ if not result:
+  with d.connect()as c:d.execute(c,'UPDATE telefy_ai_cache SET expires_at=%s WHERE key=%s',(now+300,window_key))
  return {**(result or{'order':[]}),'personalized':bool(result),'filtered':bool(result) and context=='recommendations' and bool(history)}

@@ -52,6 +52,7 @@
 
  const catalog=window.TelefySoundCloud;const original=catalog.refill;
  catalog.refill=async function(autoPlay=false){
+  if(state.playbackContext==='favorites')return;
   const mood=state.activeMood;if(!mood||mood==='all')return original(autoPlay);
   const key='mode:'+mood;if(pending.has(key)){await pending.get(key);if(autoPlay&&state.activeMood===mood&&!doesTrackMatchMood(getTrack(state.currentTrackId),mood)&&state.queueIds.length)playTrack(state.queueIds.shift(),getMoodText(mood).streamTitle);return;}
   const task=(async()=>{try{
@@ -59,7 +60,15 @@
    const pageUrns=new Set(data.tracks.map(t=>t.soundcloudUrn));
    const old=new Set(state.queueIds);
    state.queueIds=(state.queueIds||[]).filter(id=>{const t=tracks.find(t=>t.id===id);return t&&doesTrackMatchMood(t,mood)&&isFlowTrackUnplayed(t);});const candidates=interleaveByArtist(tracks.filter(t=>(mood!=='underground'||pageUrns.has(t.soundcloudUrn))&&doesTrackMatchMood(t,mood)&&isFlowTrackUnplayed(t)&&!old.has(t.id)));
-   const ranked=await window.TelefySmartSelection.rank(candidates,mood==='underground'?'trends':mood==='night'?'night':'energy');if(state.activeMood!==mood)return;
+   const ranked=window.TelefySmartSelection.diverse(candidates,60);
+   const capturedSource=state.sourceLabel;
+   // AI refines upcoming choices in the background; playback never waits on it.
+   window.TelefySmartSelection.rank(candidates,mood==='underground'?'trends':mood==='night'?'night':'energy').then(ordered=>{
+    if(state.activeMood!==mood||state.playbackContext==='favorites'||state.sourceLabel!==capturedSource)return;
+    const eligible=new Set((state.queueIds||[]));const order=ordered.filter(t=>eligible.has(t.id)&&t.id!==state.currentTrackId).map(t=>t.id);
+    state.queueIds=[...order,...state.queueIds.filter(id=>!order.includes(id)&&id!==state.currentTrackId)];
+   }).catch(()=>{});
+   if(state.activeMood!==mood||state.playbackContext==='favorites')return;
    state.queueIds.push(...ranked.map(t=>t.id));if(autoPlay&&state.queueIds.length)playTrack(state.queueIds.shift(),getMoodText(mood).streamTitle);else renderAll();
    if(autoPlay&&!doesTrackMatchMood(getTrack(state.currentTrackId),mood)&&!candidates.length&&!state.queueIds.length)showToast(state.lang==='en'?'No matching tracks yet':'Подходящих треков пока нет');
   }catch(e){if(autoPlay&&state.activeMood===mood)showToast(e.status===429?(state.lang==='en'?'Music service is busy. Loaded tracks remain available.':'Музыкальный сервис ограничил запросы. Загруженные треки сохранены.'):(state.lang==='en'?'Could not load this mode':'Не удалось загрузить режим'));}})();
