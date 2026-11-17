@@ -310,7 +310,12 @@
   on('ratechange',syncMediaPosition);
   bindMediaActions();
 
-  window.TelefyAudio = { disable() {
+  window.TelefyAudio = { restart() {
+    if(!enabled||!sourceReady||activeId!==state.currentTrackId)return false;
+    scrubbing=false;scrubTarget=null;resumePoint=null;
+    if(pausePoint?.id===activeId)pausePoint.time=0;
+    audio.currentTime=0;state.progressSec=0;updateProgressUI();syncMediaPosition();return true;
+  }, disable() {
     releaseMediaSession();
     enabled = false; scrubbing = false; scrubTarget = null; scrubPointer = null;
     pausePoint=null;resumePoint=null;

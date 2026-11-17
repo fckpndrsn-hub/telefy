@@ -65,7 +65,7 @@
   })().finally(()=>{busy=null;});return busy;
  }
  async function start(){
-  window.TelefyFirstRun?.cancel();
+  window.TelefyOrderedQueue?.clear();window.TelefyFirstRun?.cancel();
   triggerHaptic('medium');state.activeMood='all';if(typeof flowModeIndex!=='undefined')flowModeIndex=0;state.sourceLabel=state.lang==='en'?'My Vibe':'Мой вайб';
   const label=state.sourceLabel,desc=state.lang==='en'?'Music that fits you':'Музыка в твоём вкусе';
   for(const id of ['home-stream-title','flow-stream-name']){const e=document.getElementById(id);if(e)e.textContent=label;}

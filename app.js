@@ -835,6 +835,7 @@ try {
     }
 
     function isFlowStreamActive() {
+      if(window.TelefyOrderedQueue?.active)return false;
       const lbl = (state.sourceLabel || '').trim();
       if (!lbl) return true;
       for (const langKey of Object.keys(MOOD_I18N)) {
@@ -876,6 +877,7 @@ try {
       return false;
     }
     function getUpcomingPlaybackIds() {
+      if(window.TelefyOrderedQueue?.active)return window.TelefyOrderedQueue.upcoming;
       const future = playbackHistory.entries.slice(playbackHistory.index + 1).map(entry => entry.id);
       return [...new Set([...future, ...(state.queueIds || [])])]
         .filter(id => id !== state.currentTrackId && tracks.some(track => track.id === id));
@@ -896,6 +898,7 @@ try {
         renderMoodChips();
       }else state.playbackContext=null;
 
+      if(options.orderedSource)state.playbackContext=options.orderedSource;
       const tr = getTrack(id);
       if (tr && tr.id) {
         markFlowTrackPlayed(tr);
@@ -1146,7 +1149,7 @@ try {
       const safeIdx = idx >= 0 ? idx : 0;
       const mode = MOODS[safeIdx];
       const modeText = getMoodText(mode.id);
-      state.playbackContext=null;
+      window.TelefyOrderedQueue?.clear();state.playbackContext=null;
       state.activeMood = mode.id;
       flowModeIndex = safeIdx;
       state.sourceLabel = modeText.streamTitle;
@@ -1285,7 +1288,15 @@ try {
     function bindTrackRowEvents(container, sourceLabelOverride = null) {
       if (!container) return;
       container.querySelectorAll('.track-play-trigger').forEach(el => {
-        el.addEventListener('click', () => playTrack(Number(el.dataset.play), sourceLabelOverride || t('catalogSource')));
+        el.addEventListener('click', () => {
+          const id=Number(el.dataset.play);
+          if(container.closest('#library-modal')){const ids=[...container.querySelectorAll('.track-play-trigger')].map(n=>Number(n.dataset.play));window.TelefyOrderedQueue.start(ids,id,state.lang==='en'?'Favorites':'Любимое','favorites');return;}
+          if(container.closest('#collection-modal')&&state.activeCollectionId!=='recommendations'){
+            const source=USER_PLAYLISTS.find(p=>p.id===state.activeCollectionId)||COLLECTIONS.find(p=>p.id===state.activeCollectionId);
+            if(source){window.TelefyOrderedQueue.start(source.trackIds,id,sourceLabelOverride||source.title,'playlist');return;}
+          }
+          playTrack(id,sourceLabelOverride||t('catalogSource'));
+        });
       });
       container.querySelectorAll('.track-like-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
@@ -3814,6 +3825,7 @@ try {
       if (source && source.trackIds.length > 0) {
         const title = col ? getColText(col).title : upl.title;
         const shortDesc = col ? getColText(col).shortDesc : upl.subtitle;
+        if(state.activeCollectionId!=='recommendations'){window.TelefyOrderedQueue.start(source.trackIds,source.trackIds[0],title,'playlist');closeCollectionModal();return;}
         state.queueIds = [...source.trackIds.slice(1)];
         const homeTitleEl = document.getElementById('home-stream-title');
         if (homeTitleEl) homeTitleEl.textContent = title;
@@ -4190,6 +4202,7 @@ try {
       const likedTracks = tracks.filter(tr => tr.liked);
       if (likedTracks.length > 0) {
         triggerHaptic('medium');
+        window.TelefyOrderedQueue.start(likedTracks.map(tr=>tr.id),likedTracks[0].id,state.lang==='en'?'Favorites':'Любимое','favorites');closeLibraryModal();return;
         state.queueIds = likedTracks.slice(1).map(tr => tr.id);
         playTrack(likedTracks[0].id, state.lang === 'en' ? 'Library' : 'Библиотека');
         closeLibraryModal();
@@ -4467,3 +4480,33 @@ window.TelefySmartSelection=(()=>{
  }
  return {artist,diverse,rank,score:t=>scores.get(String(window.TelefyProfile?.user?.telegram_id||'')+':'+t.soundcloudUrn)||0};
 })();
+
+/* Explicit list playback owns its order; discovery and global history cannot replace it. */
+window.TelefyOrderedQueue=(()=>{
+ let list=null,selecting=false;
+ function sync(){if(list)state.queueIds=list.ids.slice(list.index+1).filter(id=>tracks.some(t=>t.id===id));}
+ function select(index){
+  if(!list)return;const id=list.ids[index];if(!tracks.some(t=>t.id===id))return;
+  list.index=index;selecting=true;sync();
+  try{playTrack(id,list.label,{orderedSource:list.kind});}finally{selecting=false;sync();}
+ }
+ function start(ids,id,label,kind){
+  const valid=[...new Set(ids)].filter(id=>tracks.some(t=>t.id===id));const index=valid.indexOf(id);if(index<0)return;
+  window.TelefyFirstRun?.cancel();state.activeMood='all';state.playbackContext=kind;
+  list={ids:valid,index,label,kind};select(index);renderMoodChips();
+ }
+ const previousPlay=playTrack;playTrack=function(id,label,...args){if(!selecting)list=null;return previousPlay(id,label,...args);};
+ const next=playNext;playNext=function(ended=false){
+  if(!list)return next(ended);
+  if(ended&&isRepeat){select(list.index);return;}
+  let index=list.index+1;while(index<list.ids.length&&!tracks.some(t=>t.id===list.ids[index]))index++;
+  if(typeof isShuffle!=='undefined'&&isShuffle&&index<list.ids.length){const pick=index+Math.floor(Math.random()*(list.ids.length-index));[list.ids[index],list.ids[pick]]=[list.ids[pick],list.ids[index]];}
+  if(index<list.ids.length){select(index);return;}
+  state.queueIds=[];state.isPlaying=false;syncRealAudio();renderPlayerUI();
+ };
+ const prev=playPrev;playPrev=function(){if(!list)return prev();if(list.index>0)select(list.index-1);else select(0);};
+ return {start,clear(){list=null;},get active(){return Boolean(list);},get upcoming(){return list?list.ids.slice(list.index+1):[];}};
+})();
+
+// Previous restarts after three seconds, across list, flow and headset controls.
+(()=>{const previous=playPrev;playPrev=function(){if(state.progressSec>3&&window.TelefyAudio?.restart?.())return;return previous();};})();

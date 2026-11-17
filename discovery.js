@@ -52,7 +52,7 @@
 
  const catalog=window.TelefySoundCloud;const original=catalog.refill;
  catalog.refill=async function(autoPlay=false){
-  if(state.playbackContext==='favorites')return;
+  if(state.playbackContext==='favorites'||window.TelefyOrderedQueue?.active)return;
   const mood=state.activeMood;if(!mood||mood==='all')return original(autoPlay);
   const key='mode:'+mood;if(pending.has(key)){await pending.get(key);if(autoPlay&&state.activeMood===mood&&!doesTrackMatchMood(getTrack(state.currentTrackId),mood)&&state.queueIds.length)playTrack(state.queueIds.shift(),getMoodText(mood).streamTitle);return;}
   const task=(async()=>{try{
@@ -64,7 +64,7 @@
    const capturedSource=state.sourceLabel;
    // AI refines upcoming choices in the background; playback never waits on it.
    window.TelefySmartSelection.rank(candidates,mood==='underground'?'trends':mood==='night'?'night':'energy').then(ordered=>{
-    if(state.activeMood!==mood||state.playbackContext==='favorites'||state.sourceLabel!==capturedSource)return;
+    if(state.activeMood!==mood||window.TelefyOrderedQueue?.active||state.playbackContext==='favorites'||state.sourceLabel!==capturedSource)return;
     const eligible=new Set((state.queueIds||[]));const order=ordered.filter(t=>eligible.has(t.id)&&t.id!==state.currentTrackId).map(t=>t.id);
     state.queueIds=[...order,...state.queueIds.filter(id=>!order.includes(id)&&id!==state.currentTrackId)];
    }).catch(()=>{});
