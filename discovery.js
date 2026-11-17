@@ -54,6 +54,7 @@
  catalog.refill=async function(autoPlay=false){
   if(state.playbackContext==='favorites'||window.TelefyOrderedQueue?.active)return;
   const mood=state.activeMood;if(!mood||mood==='all')return original(autoPlay);
+  if(mood==='underground'){const ready=(state.queueIds||[]).filter(id=>{const t=tracks.find(t=>t.id===id);return t&&doesTrackMatchMood(t,mood)&&isFlowTrackUnplayed(t);});if(ready.length>=8){state.queueIds=ready;if(autoPlay)playTrack(state.queueIds.shift(),getMoodText(mood).streamTitle);return;}}
   const key='mode:'+mood;if(pending.has(key)){await pending.get(key);if(autoPlay&&state.activeMood===mood&&!doesTrackMatchMood(getTrack(state.currentTrackId),mood)&&state.queueIds.length)playTrack(state.queueIds.shift(),getMoodText(mood).streamTitle);return;}
   const task=(async()=>{try{
    let offset=modeOffsets.get(mood)||0,data;for(let attempt=0;attempt<2;attempt++){data=await fetchBatch(mood,offset);if(state.activeMood!==mood)return;if(data.tracks.some(t=>t.classificationVersion===4&&t.modes?.includes(mood)&&isFlowTrackUnplayed(t))||!data.hasMore)break;offset=data.nextOffset;}modeOffsets.set(mood,data.hasMore?data.nextOffset:0);if(mood==='underground')data.tracks.filter(t=>t.trendsEligible===true).forEach(t=>window.TelefyTrendMembership.add(t.soundcloudUrn));importBatch(data.tracks);if(state.activeMood!==mood)return;

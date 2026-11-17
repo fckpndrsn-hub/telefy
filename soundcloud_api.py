@@ -431,7 +431,7 @@ def discovery_metadata(raw):
     heavy=bool(scene and scene['style']=='hard' and not chill) or bool(re.search(r'rage|hardcore|hard.?trap|808|distort|supertrap|madk1d|madkid|fortune 812|тёмный принц|темный принц',text))
     energy=not chill and (heavy or bool(re.search(r'drill|phonk|energetic|бодр|энерг',text)) or (isinstance(bpm,(int,float)) and bpm>=115))
     plays=int(raw.get('playback_count') or 0);likes=int(raw.get('likes_count') or raw.get('favoritings_count') or 0)
-    date=raw.get('release_date')
+    date=raw.get('release_date') or (raw.get('release') if re.match(r'^\d{4}(?:$|[-/T ])',str(raw.get('release')or'')) else None)
     if not date and raw.get('release_year'):
         date=f"{raw['release_year']}-{int(raw.get('release_month') or 1):02d}-{int(raw.get('release_day') or 1):02d}"
     created=raw.get('created_at')
@@ -610,7 +610,7 @@ def current_trend_release(raw):
     from datetime import datetime,timezone
     years=[]
     publisher=raw.get('publisher_metadata') or {}
-    for value in (raw.get('release_year'),raw.get('release_date'),publisher.get('release_date')):
+    for value in (raw.get('release_year'),raw.get('release_date'),raw.get('release') if re.match(r'^\d{4}(?:$|[-/T ])',str(raw.get('release')or'')) else None,publisher.get('release_date')):
         if value in (None,'',0,'0'):continue
         match=re.match(r'^(\d{4})(?:$|[-/T ])',str(value))
         if not match:return False
@@ -636,12 +636,25 @@ def current_trend_release(raw):
         return 2025<=date.year<=2026 and date<=datetime.now(timezone.utc).date()
     except ValueError:return False
 
+def smart_trend_score(track):
+    import math
+    from datetime import datetime,timezone
+    now=datetime.now(timezone.utc)
+    value=track.get('releaseDate')or''
+    if not value and track.get('releaseYear'):value=str(track['releaseYear'])+'-01-01'
+    if not value:value=track.get('createdAt')or''
+    try:days=max(1,(now-datetime.strptime(str(value)[:10].replace('/','-'),'%Y-%m-%d').replace(tzinfo=timezone.utc)).days)
+    except ValueError:days=730
+    plays=max(0,track.get('playbackCount')or 0);likes=max(0,track.get('likesCount')or 0)
+    # Balance established popularity with age-normalized traction and engagement.
+    return .35*math.log1p(plays)+.35*math.log1p(plays/(days+14))+.2*math.log1p(likes)+.1*min(5,likes/max(100,plays)*100)
+
 _catalog_discovery=discovery
 def discovery(kind,offset=0):
     if kind not in ('night','underground'):return _catalog_discovery(kind,offset)
     from datetime import datetime,timezone,timedelta
     from concurrent.futures import ThreadPoolExecutor
-    offset=max(0,min(int(offset),30));key=('trends-dates-v5',kind,offset)
+    offset=max(0,min(int(offset),30));key=('smart-trends-v6',kind,offset)
     cached=DISCOVERY_CACHE.get(key)
     if cached and cached[0]>time.time():return cached[1]
     queries=CHILL_ARTISTS[offset*2:offset*2+2]if kind=='night'else (TREND_PAGES[offset]if offset<len(TREND_PAGES)else [])
@@ -656,6 +669,7 @@ def discovery(kind,offset=0):
     def get(q):
         params={'q':q,'access':'playable','limit':50,'linked_partitioning':'true'}
         if kind=='underground' and q in TREND_FIRST and offset>0:params['offset']=((offset-1)//3+1)*50
+        if kind=='underground':params['created_at[from]']='2025-01-01 00:00:00'
         # Explicit soft tags retrieve a different set from a broad relevance search.
         requests=[params] if kind=='underground' else [params,{**params,'tags':'chill'}]
         result=[];raw_count=0;date_rejected=0;errors=[]
@@ -682,7 +696,7 @@ def discovery(kind,offset=0):
             except APIError as e:
                 errors.append(e.code)
                 if e.status==429:break
-        if kind=='underground':result=sorted(result,key=lambda t:t.get('playbackCount',0)+30*t.get('likesCount',0),reverse=True)[:24]
+        if kind=='underground':result=sorted(result,key=smart_trend_score,reverse=True)[:24]
         artist_stats[q]={'raw':raw_count,'accepted':len(result),'errors':errors,'sourceOffset':params.get('offset',0),'dateRejected':date_rejected}
         return result,raw_count,errors
     with ThreadPoolExecutor(max_workers=4)as pool:batches=list(pool.map(get,queries))
@@ -703,8 +717,8 @@ def discovery(kind,offset=0):
     if not result and errors:
         if 'soundcloud_rate_limited'in errors:raise APIError(429,'soundcloud_rate_limited')
         raise APIError(502,'mode_sources_unavailable')
-    data={'tracks':result,'hasMore':(offset+1)*2<len(CHILL_ARTISTS)if kind=='night'else offset+1<len(TREND_PAGES),'nextOffset':offset+1,'selection':'trends-dates-v5'if kind=='underground'else'soundcloud-metadata'}
-    DISCOVERY_CACHE[key]=(time.time()+(600 if result else 30),data)
+    data={'tracks':result,'hasMore':(offset+1)*2<len(CHILL_ARTISTS)if kind=='night'else offset+1<len(TREND_PAGES),'nextOffset':offset+1,'selection':'smart-trends-v6'if kind=='underground'else'soundcloud-metadata'}
+    DISCOVERY_CACHE[key]=(time.time()+((21600 if kind=='underground' else 600) if result else 60),data)
     return data
 
 """Shared metadata request budget. Playback/CDN traffic has a separate path."""
