@@ -200,7 +200,7 @@ try {
       return [];
     })();
 
-    const COLLECTIONS = [{"id": "hits", "title": "250 хитов русского рэпа", "tag": "2017–2026", "shortDesc": "Хиты русского рэпа разных лет", "artists": "", "targetArtists": [], "cover": "#2450A4", "icon": "<span class=\"tg-ico text-[22px]\" aria-hidden=\"true\">&#xF06C;</span>", "trackIds": [], "curated": true}, {"id": "legends", "title": "Легенды русского рэпа", "tag": "Классика жанра", "shortDesc": "Артисты, которые сформировали звук", "artists": "", "targetArtists": [], "cover": "#6B4BA2", "icon": "<span class=\"tg-ico text-[22px]\" aria-hidden=\"true\">&#xF114;</span>", "trackIds": [], "curated": true}, {"id": "premiere", "title": "Премьера", "tag": "Свежие релизы", "shortDesc": "Новые релизы популярных артистов", "artists": "", "targetArtists": [], "cover": "#B84363", "icon": "<span class=\"tg-ico text-[22px]\" aria-hidden=\"true\">&#xF01B;</span>", "trackIds": [], "curated": true}, {"id": "telescope", "title": "Teleскоп", "tag": "Выбор Telefy", "shortDesc": "Редакционная подборка", "artists": "", "targetArtists": [], "cover": "#197D86", "icon": "<span class=\"tg-ico text-[22px]\" aria-hidden=\"true\">&#xF15B;</span>", "trackIds": [], "curated": true}];
+    const COLLECTIONS = [{"id": "hits", "title": "Хиты русского рэпа", "tag": "2017–2026", "shortDesc": "Путешествие с 2017 по 2026 год", "artists": "", "targetArtists": [], "cover": "#2450A4", "icon": "<span class=\"tg-ico text-[22px]\" aria-hidden=\"true\">&#xF06C;</span>", "trackIds": [], "curated": true}, {"id": "legends", "title": "Легенды русского рэпа", "tag": "Классика жанра", "shortDesc": "Артисты, которые сформировали звук", "artists": "", "targetArtists": [], "cover": "#6B4BA2", "icon": "<span class=\"tg-ico text-[22px]\" aria-hidden=\"true\">&#xF114;</span>", "trackIds": [], "curated": true}, {"id": "premiere", "title": "Премьера", "tag": "Свежие релизы", "shortDesc": "Новые релизы популярных артистов", "artists": "", "targetArtists": [], "cover": "#B84363", "icon": "<span class=\"tg-ico text-[22px]\" aria-hidden=\"true\">&#xF01B;</span>", "trackIds": [], "curated": true}, {"id": "telescope", "title": "Teleскоп", "tag": "Выбор Telefy", "shortDesc": "Редакционная подборка", "artists": "", "targetArtists": [], "cover": "#197D86", "icon": "<span class=\"tg-ico text-[22px]\" aria-hidden=\"true\">&#xF15B;</span>", "trackIds": [], "curated": true}];
 
     const I18N = {
       ru: {
@@ -748,9 +748,12 @@ try {
     }
 
     function doesTrackMatchMood(tr, moodId) {
-      if(window.TelefyRapCandidate&&!window.TelefyRapCandidate(tr))return false;
-      if(window.TelefyPromotionExcluded?.(tr))return false;
+      const manual=['underground','night'].includes(state.activeMood)&&tr?.curatedTrend===true;
+      if(!manual&&window.TelefyRapCandidate&&!window.TelefyRapCandidate(tr))return false;
+      if(!manual&&window.TelefyPromotionExcluded?.(tr))return false;
       if(moodId==='underground'&&(tr?.trendsEligible!==true||!window.TelefyTrendMembership?.has(tr?.soundcloudUrn)))return false;
+      if(moodId==='night')return tr?.curatedTrend===true&&Boolean(window.TelefyChillMembership?.has(tr?.soundcloudUrn));
+      if(moodId==='underground'&&tr?.curatedTrend===true)return Boolean(window.TelefyTrendMembership?.has(tr?.soundcloudUrn));
       if(moodId==='energy')return tr?.classificationVersion===4&&Array.isArray(tr.modes)&&(tr.modes.includes('energy')||tr.modes.includes('uncensored'));
       if(moodId && moodId!=='all')return tr?.classificationVersion===4&&Array.isArray(tr.modes)&&tr.modes.includes(moodId);
       if (!tr) return false;
@@ -776,10 +779,12 @@ try {
     function rememberFlowWork(tr){try{const recent=readFlowRecent();recent[flowRecentWorkKey(tr)]=Date.now();const entries=Object.entries(recent).filter(([,time])=>Date.now()-time<86400000).sort((a,b)=>b[1]-a[1]).slice(0,200);localStorage.setItem(flowRecentStorageKey(),JSON.stringify(Object.fromEntries(entries)));}catch(_){}}
 
     function isFlowTrackUnplayed(tr) {
-      if(window.TelefyRapCandidate&&!window.TelefyRapCandidate(tr))return false;
-      if(window.TelefyPromotionExcluded?.(tr))return false;
+      const manual=['underground','night'].includes(state.activeMood)&&tr?.curatedTrend===true;
+      if(!manual&&window.TelefyRapCandidate&&!window.TelefyRapCandidate(tr))return false;
+      if(!manual&&window.TelefyPromotionExcluded?.(tr))return false;
       if (!tr || !tr.id || tr.disliked) return false;
       if (tr.id === state.currentTrackId) return false;
+      if(manual)return tr.id!==state.currentTrackId;
       if (flowWorkCoolingDown(tr)) return false;
       if (playedFlowTrackIds.has(tr.id)) return false;
       const k = getTrackUniqueKey(tr);
@@ -1034,7 +1039,7 @@ try {
         if (leastRecent) playTrack(leastRecent.id, state.sourceLabel);
       } else {
         // Trigger background fetch for more mood tracks and immediately advance to least-recently-played mood track so UI never stalls
-        if(moodId==='underground'){state.isPlaying=false;syncRealAudio();silentlyRefillFlowQueue(true);return;}
+        if(moodId==='underground'){if(window.TelefyTrendContinuation?.activate())return;silentlyRefillFlowQueue(true);return;}
         silentlyRefillFlowQueue(false);
         const immediate = pickLeastRecentMoodFallback(moodId);
         if (immediate) playTrack(immediate.id, state.sourceLabel);
@@ -2560,7 +2565,7 @@ try {
           existing.collectionId = item.collectionId || existing.collectionId;
           existing.previewUrl = item.previewUrl || existing.previewUrl;
           if (item.soundcloudUrn) {
-            existing.trendsEligible=item.trendsEligible===true;existing.genre=item.genre||existing.genre||'';existing.classificationVersion=item.classificationVersion||existing.classificationVersion||0;existing.modes=item.modes||existing.modes||[];existing.releaseDate=item.releaseDate||existing.releaseDate;existing.playbackCount=item.playbackCount||existing.playbackCount||0;
+            existing.curatedTrend=item.curatedTrend===true;existing.editorialYear=item.editorialYear;existing.trendsEligible=item.trendsEligible===true;existing.genre=item.genre||existing.genre||'';existing.classificationVersion=item.classificationVersion||existing.classificationVersion||0;existing.modes=item.modes||existing.modes||[];existing.releaseDate=item.releaseDate||existing.releaseDate;existing.playbackCount=item.playbackCount||existing.playbackCount||0;
             existing.soundcloudUrn=item.soundcloudUrn; existing.soundcloudUrl=item.soundcloudUrl;
             existing.uploader=item.uploader; existing.uploaderUrl=item.uploaderUrl;
           }
@@ -2571,7 +2576,7 @@ try {
         const trObj = {
           id: nextId++,
           genre:item.genre||'', classificationVersion:item.classificationVersion||0, modes:item.modes||[], releaseDate:item.releaseDate||null, playbackCount:item.playbackCount||0,
-          trendsEligible:item.trendsEligible===true,soundcloudUrn:item.soundcloudUrn || null,
+          curatedTrend:item.curatedTrend===true,editorialYear:item.editorialYear,trendsEligible:item.trendsEligible===true,soundcloudUrn:item.soundcloudUrn || null,
           soundcloudUrl:item.soundcloudUrl || null,
           uploader:item.uploader || null,
           uploaderUrl:item.uploaderUrl || null,
@@ -4510,3 +4515,35 @@ window.TelefyOrderedQueue=(()=>{
 
 // Previous restarts after three seconds, across list, flow and headset controls.
 (()=>{const previous=playPrev;playPrev=function(){if(state.progressSec>3&&window.TelefyAudio?.restart?.())return;return previous();};})();
+
+/* Related continuation is prepared separately and cannot pollute an explicit list. */
+window.TelefyTrendContinuation=(()=>{
+ let pending=null,lastFetch=0;
+ const owns=()=>state.activeMood==='underground'&&!window.TelefyOrderedQueue?.active&&state.playbackContext!=='favorites';
+ function choices(){
+  const current=getTrack(state.currentTrackId),artist=current?.artist;
+  return window.TelefySmartSelection.diverse(tracks.filter(t=>{
+   const year=Number(t.releaseYear||String(t.releaseDate||'').slice(0,4));
+   return t.soundcloudUrn&&year>=2025&&year<=2026&&isFlowTrackUnplayed(t)&&(!window.TelefyRapCandidate||window.TelefyRapCandidate(t));
+  }).sort((a,b)=>Number(b.artist===artist)-Number(a.artist===artist)),24);
+ }
+ async function prepare(){
+  if(!owns())return [];const existing=choices();if(existing.length>=8)return existing;
+  if(pending)return pending;if(Date.now()-lastFetch<300000)return existing;lastFetch=Date.now();
+  pending=(async()=>{try{
+   const r=await fetch('/api/soundcloud/search?'+new URLSearchParams({q:'telefy:discovery:scene',offset:0,limit:50}),{signal:AbortSignal.timeout(15000)});
+   if(r.ok){const d=await r.json();mergeParsedTracksIntoCatalog(d.tracks||[]);}
+  }catch(_){}finally{pending=null;}return choices();})();return pending;
+ }
+ function activate(){
+  if(!owns())return false;const pool=choices();if(!pool.length)return false;
+  state.activeMood='all';state.sourceLabel=state.lang==='en'?'My Flow':'Мой поток';
+  state.queueIds=pool.slice(1).map(t=>t.id);renderMoodChips();
+  document.getElementById('home-stream-title').textContent=state.sourceLabel;
+  document.getElementById('home-stream-desc').textContent=state.lang==='en'?'More music with a similar vibe':'Продолжаем похожей музыкой';
+  playTrack(pool[0].id,state.sourceLabel);return true;
+ }
+ return {prepare,activate};
+})();
+
+window.TelefyTrendContinuation={prepare:async()=>[],activate:()=>false};

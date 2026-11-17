@@ -966,3 +966,11 @@ def _durable_access_token(invalidate=None,credentials=None):
 
 def access_token(invalidate=None,credentials=None):
     with LOCK:return _durable_access_token(invalidate,credentials)
+
+# Approved editorial lists supersede generated discovery for these two sections.
+_discovery_before_manual=discovery
+def discovery(kind,offset=0):
+    if kind in ('underground','hits','legends','night'):
+        import curated_trends,sys
+        return curated_trends.discover(sys.modules[__name__],offset,str(Path(__file__).with_name(kind+'-approved.json'))if kind in ('hits','legends','night')else None)
+    return _discovery_before_manual(kind,offset)

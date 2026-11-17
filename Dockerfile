@@ -1,5 +1,6 @@
 FROM python:3.13-slim
 WORKDIR /app
+COPY curated_trends.py trends-approved.json hits-approved.json legends-approved.json night-approved.json ./
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
 COPY music_export.py openai_music.py music_features.py ./
 COPY bot_operations.py ./

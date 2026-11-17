@@ -1,0 +1,313 @@
+{
+  "name": "trends",
+  "revision": 1,
+  "spotify_source": "https://open.spotify.com/playlist/23YYnbrxAyUW3NpqNpQ3LU",
+  "soundcloud": [
+    "trending-by-genre:trap",
+    "trending-by-genre:all-genres",
+    "trending-by-genre:hip-hop",
+    "trending-by-genre:electronic"
+  ],
+  "spotify_tracks": [
+    {
+      "artist": "Xcho",
+      "title": "Уйду"
+    },
+    {
+      "artist": "VILLIAN, madk1d",
+      "title": "ДИНАСТИЯ"
+    },
+    {
+      "artist": "MACAN, SCIRENA",
+      "title": "IVL"
+    },
+    {
+      "artist": "UNIK",
+      "title": "Гонк-Конг"
+    },
+    {
+      "artist": "Xcho",
+      "title": "Зачарованная"
+    },
+    {
+      "artist": "Гио Пика",
+      "title": "Буйно голова 5"
+    },
+    {
+      "artist": "Jakone, Kiliana",
+      "title": "Была, не была"
+    },
+    {
+      "artist": "Xcho, timmate, Пабло",
+      "title": "Нарекай"
+    },
+    {
+      "artist": "Скриптонит",
+      "title": "не расслабляйся"
+    },
+    {
+      "artist": "Xcho",
+      "title": "Ты и Я"
+    },
+    {
+      "artist": "RAIKAHO",
+      "title": "Летит патруль (by Atlanta)"
+    },
+    {
+      "artist": "MACAN",
+      "title": "Май"
+    },
+    {
+      "artist": "Jakone, MACAN",
+      "title": "Purosangue"
+    },
+    {
+      "artist": "MACAN, NAVAI",
+      "title": "Неужели это все любовь"
+    },
+    {
+      "artist": "Гио Пика",
+      "title": "Листопадом"
+    },
+    {
+      "artist": "MiyaGi, Hloy, Даена",
+      "title": "DAO"
+    },
+    {
+      "artist": "Егор Крид, OG Buda, Toxi$, Мэйби Бэйби, Baby Cute, Дора, madk1d, тёмный принц",
+      "title": "Malo 2.0"
+    },
+    {
+      "artist": "DZHIVAN",
+      "title": "Автор"
+    },
+    {
+      "artist": "SQWOZ BAB",
+      "title": "КУПЕР"
+    },
+    {
+      "artist": "KRBK",
+      "title": "Крепче"
+    },
+    {
+      "artist": "Каспийский груз, Гио Пика",
+      "title": "На белом"
+    },
+    {
+      "artist": "GUF, A.V.G",
+      "title": "Спонсор твоих проблем"
+    },
+    {
+      "artist": "kostromin",
+      "title": "Моя голова винтом (My head is spinning like a screw)"
+    },
+    {
+      "artist": "MOSOVICH & BATRAI",
+      "title": "Полярная звезда"
+    },
+    {
+      "artist": "МОТ",
+      "title": "По душам"
+    },
+    {
+      "artist": "Вектор А",
+      "title": "Не вернусь"
+    },
+    {
+      "artist": "MACAN, Kiliana",
+      "title": "Как же"
+    },
+    {
+      "artist": "Jaman T",
+      "title": "Алая"
+    },
+    {
+      "artist": "Pepel Nahudi",
+      "title": "Заново завоевать"
+    },
+    {
+      "artist": "MACAN",
+      "title": "L"
+    },
+    {
+      "artist": "Гио Пика",
+      "title": "Все не те"
+    },
+    {
+      "artist": "FRIENDLY THUG 52 NGG",
+      "title": "Lost Angeles"
+    },
+    {
+      "artist": "kizaru, Icegergert",
+      "title": "Fake ID"
+    },
+    {
+      "artist": "Xcho",
+      "title": "Вороны"
+    },
+    {
+      "artist": "MACAN, Баста",
+      "title": "Пусть Бог будет рядом с твоими планами"
+    },
+    {
+      "artist": "A.V.G, MACAN",
+      "title": "Спой"
+    },
+    {
+      "artist": "GURBANOV, TIMPLUSH",
+      "title": "Она как Франция - Phonk Remake"
+    },
+    {
+      "artist": "Yanix, Thomas Mraz",
+      "title": "Хочу К Тебе"
+    },
+    {
+      "artist": "Артур, RICK",
+      "title": "Дай"
+    },
+    {
+      "artist": "Big Baby Tape, kizaru",
+      "title": "99 Problems"
+    },
+    {
+      "artist": "Мэйби Бэйби",
+      "title": "BABYBARS 4"
+    },
+    {
+      "artist": "9mice, Егор Крид, тёмный принц, madk1d",
+      "title": "Jealous"
+    },
+    {
+      "artist": "Гио Пика",
+      "title": "Все пруды"
+    },
+    {
+      "artist": "Xassa, BODIEV",
+      "title": "Белым мелом"
+    },
+    {
+      "artist": "Big Baby Tape, Aarne",
+      "title": "Supersonic"
+    },
+    {
+      "artist": "BRANYA, MACAN",
+      "title": "Пополам"
+    },
+    {
+      "artist": "Aarne, Toxi$, Big Baby Tape",
+      "title": "NOBODY"
+    },
+    {
+      "artist": "Мэйби Бэйби",
+      "title": "Силиконовый Гном"
+    },
+    {
+      "artist": "GUF, BALLER, V $ X V PRiNCE",
+      "title": "ШАРАУТ"
+    },
+    {
+      "artist": "Bakr, FreeMan996",
+      "title": "Алыска"
+    },
+    {
+      "artist": "shadowraze",
+      "title": "astral step"
+    },
+    {
+      "artist": "Exile, STOPBAN, DILBLIN",
+      "title": "MiMiMaMaMu"
+    },
+    {
+      "artist": "MACAN",
+      "title": "TSM"
+    },
+    {
+      "artist": "Вектор А",
+      "title": "Напоследок"
+    },
+    {
+      "artist": "Oxxxymiron",
+      "title": "EXIT"
+    },
+    {
+      "artist": "FRIENDLY THUG 52 NGG",
+      "title": "Sladki Snov Rapper 2"
+    },
+    {
+      "artist": "Big Baby Tape, Aarne, Toxi$",
+      "title": "Ameli"
+    },
+    {
+      "artist": "FRIENDLY THUG 52 NGG",
+      "title": "AIST"
+    },
+    {
+      "artist": "KRBK",
+      "title": "Цветочек"
+    },
+    {
+      "artist": "Гио Пика",
+      "title": "Дом"
+    },
+    {
+      "artist": "FRIENDLY THUG 52 NGG",
+      "title": "AMMO"
+    },
+    {
+      "artist": "Asik",
+      "title": "DG"
+    },
+    {
+      "artist": "FRIENDLY THUG 52 NGG",
+      "title": "No Gletcher Gang 2"
+    },
+    {
+      "artist": "NEWLIGHTCHILD",
+      "title": "СЕЙЧАС"
+    },
+    {
+      "artist": "f0lk",
+      "title": "ШОССЕ"
+    },
+    {
+      "artist": "Big Baby Tape, kizaru",
+      "title": "Million"
+    },
+    {
+      "artist": "MACAN",
+      "title": "Плачь, но не звони"
+    },
+    {
+      "artist": "Каспийский груз",
+      "title": "Табор вернулся в город"
+    },
+    {
+      "artist": "Aarne, Big Baby Tape, kizaru",
+      "title": "Haunted House"
+    },
+    {
+      "artist": "MOSOVICH & BATRAI",
+      "title": "Там за туманами"
+    },
+    {
+      "artist": "MiyaGi",
+      "title": "Дизлайк"
+    },
+    {
+      "artist": "Lover",
+      "title": "Танцуй"
+    },
+    {
+      "artist": "Miyagi & Andy Panda, Mav-d",
+      "title": "Marmalade"
+    },
+    {
+      "artist": "Asik",
+      "title": "Paco Rabanne"
+    },
+    {
+      "artist": "Big Baby Tape, kizaru",
+      "title": "Bandana"
+    }
+  ]
+}
