@@ -15,7 +15,7 @@
  // Fetch lightweight artwork at startup; full playlists still load only on demand.
  async function warmAllArt(){if(window.TelefyFirstRun?.pending){setTimeout(warmAllArt,500);return;}for(const col of COLLECTIONS)await warmCollectionArt(col);}
  window.TelefyTrendMembership=new Set();
- const memberships=new Map(),pending=new Map(),modeOffsets=new Map();
+ const memberships=new Map(),pending=new Map(),modeOffsets=new Map(),editorialOrder=new Map(),importTimers=new Map();
  const english={energy:['Energy','High tempo and drive'],night:['Chill vibe','Soft sound and mellow rhythms'],uncensored:['Super beat','Heavy trap and distorted bass'],underground:['Trends','Fresh popular Russian tracks']};
  for(const [id,[label,desc]]of Object.entries(english))MOOD_I18N.en[id]={label,streamTitle:label,shortDesc:desc};
  async function fetchBatch(kind,offset=0){const r=await fetch('/api/soundcloud/search?'+new URLSearchParams({q:'telefy:discovery:'+kind,offset,limit:50}),{signal:AbortSignal.timeout(90000)});const data=await r.json();if(!r.ok){const e=Error(data.error||'discovery');e.code=data.error;e.status=r.status;throw e;}return data;}
@@ -27,7 +27,7 @@
   box.innerHTML=col.trackIds.length?col.trackIds.map(id=>createTrackRowHTML(getTrack(id))).join(''):'';
   if(col.trackIds.length)bindTrackRowEvents(box,col.title);
   if(error){const p=document.createElement('p');p.className='px-4 py-5 text-center text-muted text-sm';p.textContent=error.status===429?'Музыкальный сервис временно ограничил запросы. Загруженные треки сохранены.':'Не удалось обновить подборку. Загруженные треки сохранены.';box.append(p);}
-  else if(!col.trackIds.length){const p=document.createElement('p');p.className='px-4 py-5 text-center text-muted text-sm';p.textContent='В этой порции подходящих треков нет';box.append(p);}
+  else if(!col.trackIds.length){const p=document.createElement('p');p.className='px-4 py-5 text-center text-muted text-sm';p.textContent=col.importError?'Не удалось подключить источник. Повтори загрузку.':col.importPending?'Подготавливаем треки подборки…':'Треки пока не найдены';box.append(p);}
   if(!finished.has(col.id)||error){const b=document.createElement('button');b.type='button';b.className='w-full py-4 text-sm text-[#2AABEE]';b.textContent=error?'Повторить загрузку':'Загрузить ещё';b.onclick=()=>ensureCollectionTracksLoaded(col,true);box.append(b);}
  }
  // Reopening a sheet does not restart all artist searches from page zero.
@@ -40,14 +40,15 @@
   const task=(async()=>{
    try{
     const offset=positions.get(col.id)||0,data=await fetchBatch(col.id,offset);
+    col.importPending=data.importPending||0;col.importError=data.importError||null;const editorial=editorialOrder.get(col.id)||new Map();for(const row of data.tracks||[])editorial.set(row.soundcloudUrn,{year:Number(row.editorialYear)||0,order:Number(row.editorialOrder)||0});editorialOrder.set(col.id,editorial);
     const urns=memberships.get(col.id)||new Set();(data.tracks||[]).forEach(t=>urns.add(t.soundcloudUrn));importBatch(data.tracks||[]);memberships.set(col.id,urns);
     const unique=new Set(),selected=tracks.filter(t=>urns.has(t.soundcloudUrn)).filter(t=>{const key=getTrackUniqueKey(t);if(unique.has(key))return false;unique.add(key);return true;});
-    col.trackIds=(col.id==='hits'?selected.sort((a,b)=>(b.editorialYear||0)-(a.editorialYear||0)):col.id==='legends'?selected:interleaveByArtist(selected)).slice(0,500).map(t=>t.id);
-    positions.set(col.id,data.nextOffset);loadedAt.set(col.id,Date.now());if(!data.hasMore||col.trackIds.length>=250)finished.add(col.id);
+    col.trackIds=(['hits','legends'].includes(col.id)?selected.sort((a,b)=>{const x=editorial.get(a.soundcloudUrn)||{},y=editorial.get(b.soundcloudUrn)||{};return (col.id==='hits'?(y.year||0)-(x.year||0):0)||((x.order||0)-(y.order||0));}):interleaveByArtist(selected)).slice(0,500).map(t=>t.id);
+    positions.set(col.id,data.nextOffset);loadedAt.set(col.id,Date.now());if(!data.hasMore)finished.add(col.id);
     if(!col.coverImg){col.coverImg=selected.find(t=>t.coverImg)?.coverImg||null;if(col.coverImg){coverCache[col.id]={url:col.coverImg,at:Date.now()};try{localStorage.setItem(coverKey,JSON.stringify(coverCache));}catch(_){}}}
     renderCollections();paintCollection(col);
    }catch(error){paintCollection(col,error);}
-  })();pending.set(col.id,task);try{await task;}finally{pending.delete(col.id);}
+  })();pending.set(col.id,task);try{await task;}finally{pending.delete(col.id);clearTimeout(importTimers.get(col.id));if(col.importPending&&!col.importError)importTimers.set(col.id,setTimeout(()=>{if(state.activeCollectionId===col.id&&!document.getElementById('collection-modal').classList.contains('hidden'))ensureCollectionTracksLoaded(col,true);},5000));}
  };
 
  const catalog=window.TelefySoundCloud;const original=catalog.refill;
