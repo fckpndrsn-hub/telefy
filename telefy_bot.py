@@ -126,6 +126,8 @@ def valid_user(user):return isinstance(user,dict)and type(user.get('id'))is int 
 def handle(update):
     import max_billing
     if max_billing.handle_update(update):return
+    import bot_max_admin
+    if bot_max_admin.handle(update):return
     import bot_operations
     bot_operations.record(update)
     callback=update.get('callback_query')or{}
@@ -184,6 +186,8 @@ def start():
     if STARTED:return
     STARTED=True
     reminders.start()
+    import max_notifications
+    max_notifications.start()
     import music_export
     music_export.start()
     def worker():

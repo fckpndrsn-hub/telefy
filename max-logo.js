@@ -2,7 +2,7 @@
 (async()=>{
  const mainCard=document.getElementById('max-hero-card'),modalCard=document.getElementById('modal-max-hero-card');
  if(mainCard&&modalCard){modalCard.querySelectorAll(':scope > .max-star').forEach(star=>star.remove());const stars=document.createDocumentFragment();mainCard.querySelectorAll(':scope > .max-star').forEach(star=>stars.append(star.cloneNode(true)));modalCard.prepend(stars);}
- const T=await import('./vendor/three.module.js');const {SVGLoader}=await import('./vendor/SVGLoader.js');
+ const T=await import('./three.module.js');const {SVGLoader}=await import('./SVGLoader.js');
  const reduced=matchMedia('(prefers-reduced-motion: reduce)'),entries=[];
  const studio=document.createElement('canvas');studio.width=1024;studio.height=512;const ctx=studio.getContext('2d');
  const gradient=ctx.createLinearGradient(0,0,0,512);[[0,'#e5e5e5'],[.2,'#f5f5f5'],[.34,'#fff'],[.45,'#aaa'],[.55,'#ddd'],[.7,'#909090'],[.86,'#f5f5f5'],[1,'#ddd']].forEach(([p,c])=>gradient.addColorStop(p,c));ctx.fillStyle=gradient;ctx.fillRect(0,0,1024,512);
@@ -34,6 +34,18 @@
    metal.customProgramCacheKey=()=> 'telefy-polished-silver-v2';
    const edge=new T.MeshPhysicalMaterial({color:0xc5cbd5,metalness:1,roughness:.15,clearcoat:.55,clearcoatRoughness:.1,envMapIntensity:1.3});
    const body=new T.ExtrudeGeometry(shapes,{depth:70,steps:1,bevelEnabled:true,bevelSegments:5,bevelSize:3,bevelThickness:4,curveSegments:40});body.scale(1/300,1/300,1/300);body.rotateX(Math.PI);body.computeBoundingBox();const center=body.boundingBox.getCenter(new T.Vector3());body.translate(-center.x,-center.y,-center.z);body.computeVertexNormals();group.add(new T.Mesh(body,[metal,edge]));
+   // A continuous metallic rim follows the original silhouette on both faces.
+   const rim=new T.MeshStandardMaterial({color:0xd4d9e2,metalness:.65,roughness:.24});
+   let rimCount=0;
+   for(const shape of shapes){
+    const contour=shape.getPoints(160);
+    for(const z of [-.126,.126]){
+     const points=contour.map(p=>new T.Vector3(p.x/300-center.x,-p.y/300-center.y,z));
+     const curve=new T.CatmullRomCurve3(points,true,'centripetal');
+     const tube=new T.TubeGeometry(curve,Math.max(160,points.length),.018,8,true);group.add(new T.Mesh(tube,rim));rimCount++;
+    }
+   }
+   renderer.domElement.dataset.silverRim=String(rimCount);
    renderer.domElement.dataset.holes=String(shapes.reduce((sum,shape)=>sum+shape.holes.length,0));
    group.rotation.set(-.16,-.45,-.04);const entry={element,renderer,scene,camera,group,visible:false,drag:false,vx:0,vy:0,release:0};entries.push(entry);element.classList.remove('is-idle');element.classList.add('max-metal-ready');
    new IntersectionObserver(([record])=>entry.visible=record.isIntersecting,{threshold:.05}).observe(element);

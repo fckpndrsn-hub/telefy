@@ -20,9 +20,11 @@ COPY music-features.js flow-discovery.js ./web/assets/
 COPY app-control.js ./web/assets/app-control.js
 COPY bot-entry.js ./web/assets/bot-entry.js
 COPY reminders-client.js ./web/assets/reminders-client.js
+COPY max-logo.js three.module.js three.core.js SVGLoader.js ./web/assets/
+COPY max_grants.py bot_max_admin.py max_notifications.py ./
 COPY star.svg ./web/assets/star.svg
 COPY stars-3d.js ./web/assets/stars-3d.js
-COPY vendor/ ./web/assets/vendor/
+COPY three.module.js three.core.js SVGLoader.js ./web/assets/
 COPY daily_usage.py ./daily_usage.py
 COPY daily-usage.js ./web/assets/daily-usage.js
 ENV PYTHONUNBUFFERED=1 TELEFY_PRIVATE_DIR=/tmp/telefy-private

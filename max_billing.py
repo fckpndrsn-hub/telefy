@@ -3,6 +3,7 @@ import json,time,secrets,threading,re
 from urllib.parse import urlsplit
 from http.cookies import SimpleCookie
 from user_database import UserDatabase
+from max_grants import GrantStore
 
 PRICE=100;PERIOD=30*86400
 def month_after(timestamp):
@@ -18,22 +19,28 @@ class BillingError(Exception):
  def __init__(self,status,code):self.status,self.code=status,code
 
 class MaxStore:
- def __init__(self,db=None):self.db=db or UserDatabase();self.lock=threading.RLock();self.ready=False
+ def __init__(self,db=None):self.db=db or UserDatabase();self.lock=threading.RLock();self.ready=False;self.grants=GrantStore(self.db)
  def ensure(self):
-  if self.ready:return
-  self.db.ensure()
-  with self.db.connect()as c:
-   self.db.execute(c,'CREATE TABLE IF NOT EXISTS telefy_star_orders(id TEXT PRIMARY KEY,telegram_id BIGINT NOT NULL,request_key TEXT NOT NULL,created_at BIGINT NOT NULL,state TEXT NOT NULL,invoice_url TEXT,checkout_id TEXT,charge_id TEXT UNIQUE,paid_at BIGINT,UNIQUE(telegram_id,request_key))')
-  self.ready=True
+  with self.lock:
+   if self.ready:return
+   self.db.ensure()
+   with self.db.connect()as c:
+    self.db.execute(c,'CREATE TABLE IF NOT EXISTS telefy_star_orders(id TEXT PRIMARY KEY,telegram_id BIGINT NOT NULL,request_key TEXT NOT NULL,created_at BIGINT NOT NULL,state TEXT NOT NULL,invoice_url TEXT,checkout_id TEXT,charge_id TEXT UNIQUE,paid_at BIGINT,UNIQUE(telegram_id,request_key))')
+    if self.db.url:self.db.execute(c,'ALTER TABLE telefy_star_orders ADD COLUMN IF NOT EXISTS amount INTEGER NOT NULL DEFAULT 100')
+    elif 'amount'not in [r['name']for r in self.db.execute(c,'PRAGMA table_info(telefy_star_orders)').fetchall()]:self.db.execute(c,'ALTER TABLE telefy_star_orders ADD COLUMN amount INTEGER NOT NULL DEFAULT 100')
+   self.grants.ensure()
+   self.ready=True
  def order(self,oid):
   self.ensure()
   with self.db.connect()as c:r=self.db.execute(c,'SELECT * FROM telefy_star_orders WHERE id=%s',(oid,)).fetchone()
   return dict(r)if r else None
- def invoice(self,uid,key,accepted):
+ def invoice(self,uid,key,accepted,expected=None):
   if accepted is not True:raise BillingError(400,'terms_required')
   if not re.fullmatch(r'[A-Za-z0-9_-]{16,80}',str(key)):raise BillingError(400,'invalid_request_key')
   import telefy_bot as bot
   self.ensure()
+  amount=self.grants.price()['amount']
+  if (100 if expected is None else expected)!=amount:raise BillingError(409,'price_changed')
   with self.lock,self.db.connect()as c:
    if self.db.url:self.db.execute(c,'SELECT telegram_id FROM telefy_users WHERE telegram_id=%s FOR UPDATE',(uid,))
    row=self.db.execute(c,'SELECT * FROM telefy_star_orders WHERE telegram_id=%s AND request_key=%s',(uid,key)).fetchone()
@@ -41,23 +48,23 @@ class MaxStore:
     n=self.db.execute(c,'SELECT COUNT(*) AS n FROM telefy_star_orders WHERE telegram_id=%s AND created_at>%s',(uid,int(time.time())-3600)).fetchone()['n']
     if n>=10:raise BillingError(429,'too_many_invoices')
     oid=secrets.token_hex(24)
-    self.db.execute(c,'INSERT INTO telefy_star_orders(id,telegram_id,request_key,created_at,state) VALUES(%s,%s,%s,%s,%s)',(oid,uid,key,int(time.time()),'created'))
+    self.db.execute(c,'INSERT INTO telefy_star_orders(id,telegram_id,request_key,created_at,state,amount) VALUES(%s,%s,%s,%s,%s,%s)',(oid,uid,key,int(time.time()),'created',amount))
    else:
-    oid=row['id']
+    oid=row['id'];amount=row['amount']
     if row['state']!='created':raise BillingError(409,'invoice_already_used')
     if row['invoice_url']:return {'url':row['invoice_url'],'order_id':oid}
   # Creating a duplicate link after an ambiguous timeout cannot grant a duplicate payment:
   # pre-checkout reserves this order for one query only.
-  url=bot.api('createInvoiceLink',title='Telefy Max',description='30 дней доступа. Без автоматического продления.',payload='max:'+oid,provider_token='',currency='XTR',prices=[{'label':'Telefy Max · 30 дней','amount':PRICE}])
+  url=bot.api('createInvoiceLink',title='Telefy Max',description='30 дней доступа. Без автоматического продления.',payload='max:'+oid,provider_token='',currency='XTR',prices=[{'label':'Telefy Max · 30 дней','amount':amount}])
   if not isinstance(url,str)or not url.startswith('https://t.me/$'):raise BillingError(502,'invalid_invoice_url')
   with self.db.connect()as c:self.db.execute(c,'UPDATE telefy_star_orders SET invoice_url=%s WHERE id=%s AND invoice_url IS NULL',(url,oid))
   return {'url':url,'order_id':oid}
  def precheckout(self,q):
   self.ensure();uid=(q.get('from')or{}).get('id');payload=q.get('invoice_payload','')
-  if type(uid)is not int or not isinstance(payload,str)or q.get('currency')!='XTR'or type(q.get('total_amount'))is not int or q['total_amount']!=PRICE or not re.fullmatch(r'max:[0-9a-f]{48}',payload):return False
+  if type(uid)is not int or not isinstance(payload,str)or q.get('currency')!='XTR'or type(q.get('total_amount'))is not int or not 1<=q['total_amount']<=100000 or not re.fullmatch(r'max:[0-9a-f]{48}',payload):return False
   with self.lock,self.db.connect()as c:
    row=self.db.execute(c,'SELECT * FROM telefy_star_orders WHERE id=%s'+(' FOR UPDATE'if self.db.url else''),(payload[4:],)).fetchone()
-   if not row or row['telegram_id']!=uid or row['created_at']<int(time.time())-900:return False
+   if not row or row['telegram_id']!=uid or row['amount']!=q['total_amount']or row['created_at']<int(time.time())-900:return False
    if row['state']=='approved':return row['checkout_id']==q.get('id')
    if row['state']!='created':return False
    self.db.execute(c,'UPDATE telefy_star_orders SET state=%s,checkout_id=%s WHERE id=%s',('approved',q['id'],row['id']))
@@ -66,11 +73,11 @@ class MaxStore:
   payment=message.get('refunded_payment'if refund else'successful_payment')or{}
   payload=payment.get('invoice_payload','');charge=payment.get('telegram_payment_charge_id')
   uid=(message.get('from')or{}).get('id')
-  if type(uid)is not int or not isinstance(payload,str)or not re.fullmatch(r'max:[0-9a-f]{48}',payload)or payment.get('currency')!='XTR'or type(payment.get('total_amount'))is not int or payment['total_amount']!=PRICE or not isinstance(charge,str)or not 1<=len(charge)<=512:return False
+  if type(uid)is not int or not isinstance(payload,str)or not re.fullmatch(r'max:[0-9a-f]{48}',payload)or payment.get('currency')!='XTR'or type(payment.get('total_amount'))is not int or not 1<=payment['total_amount']<=100000 or not isinstance(charge,str)or not 1<=len(charge)<=512:return False
   self.ensure()
   with self.lock,self.db.connect()as c:
    row=self.db.execute(c,'SELECT * FROM telefy_star_orders WHERE id=%s'+(' FOR UPDATE'if self.db.url else''),(payload[4:],)).fetchone()
-   if not row or row['telegram_id']!=uid:return False
+   if not row or row['telegram_id']!=uid or row['amount']!=payment['total_amount']:return False
    if row['charge_id']:
     if row['charge_id']!=charge:return False
     if refund:self.db.execute(c,'UPDATE telefy_star_orders SET state=%s WHERE id=%s',('refunded',row['id']))
@@ -84,8 +91,8 @@ class MaxStore:
   self.ensure();now=int(time.time())if now is None else int(now)
   with self.db.connect()as c:rows=self.db.execute(c,'SELECT paid_at FROM telefy_star_orders WHERE telegram_id=%s AND state=%s ORDER BY paid_at,id',(uid,'paid')).fetchall()
   end=0
-  for row in rows:end=max(end,row['paid_at'])+PERIOD
-  return {'active':end>now,'beta':False,'expires_at':end or None,'server_time':now,'amount':PRICE,'currency':'XTR','recurring':False,'period':'30_days','payments_configured':configured()}
+  for at,duration in sorted([(row['paid_at'],PERIOD)for row in rows]+self.grants.events(uid)):end=max(end,at)+duration
+  return {'active':end>now,'telegram_id':uid,'paid_periods':len(rows),'beta':False,'expires_at':end or None,'server_time':now,'amount':self.grants.price()['amount'],'currency':'XTR','recurring':False,'period':'30_days','payments_configured':configured()}
 
 STORE=MaxStore()
 def handle_precheckout(update):
@@ -99,7 +106,13 @@ def handle_precheckout(update):
 def handle_update(update):
  if handle_precheckout(update):return True
  message=update.get('message')or{}
- if message.get('successful_payment'):STORE.apply(message);return True
+ if message.get('successful_payment'):
+  if STORE.apply(message):
+   payment=message['successful_payment'];order=STORE.order(payment['invoice_payload'][4:])
+   if order and order['state']=='paid':
+    import max_notifications
+    max_notifications.store().queue(order['telegram_id'],payment['telegram_payment_charge_id'],STORE.status(order['telegram_id'])['expires_at'])
+  return True
  if message.get('refunded_payment'):STORE.apply(message,True);return True
  command=message.get('text','').split(' ',1)[0].split('@')[0]
  if command=='/paysupport'and(message.get('chat')or{}).get('type')=='private':
@@ -143,7 +156,7 @@ class MaxBillingMixin:
    size=int(self.headers.get('Content-Length','0'))
    if not 0<size<=2048 or not self.headers.get('Content-Type','').startswith('application/json'):raise BillingError(400,'invalid_request')
    body=json.loads(self.rfile.read(size))
-   self.reply(200,STORE.invoice(user['telegram_id'],body.get('request_key'),body.get('terms_accepted')))
+   self.reply(200,STORE.invoice(user['telegram_id'],body.get('request_key'),body.get('terms_accepted'),body.get('expected_amount')))
   except BillingError as e:self.reply(e.status,{'error':e.code})
   except (ValueError,TypeError,AttributeError):self.reply(400,{'error':'invalid_request'})
   except Exception:self.reply(503,{'error':'stars_unavailable'})

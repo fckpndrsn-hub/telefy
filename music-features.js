@@ -1,8 +1,9 @@
 /* Audio export in Telegram; optional AI reranking never blocks playback. */
 (() => {
- let exporting=false;
+ const exporting=new Set();
  const openBot=()=>{const url='https://t.me/TelefyApp_Bot';if(window.Telegram?.WebApp?.openTelegramLink)Telegram.WebApp.openTelegramLink(url);else window.open(url,'_blank','noopener');};
  function ready(){
+  if(exporting.size>1){showToast(state.lang==='en'?'Track sent to the bot':'Трек отправлен в бота');return;}
   const title=state.lang==='en'?'Track sent':'Трек отправлен';
   const message=state.lang==='en'?'Open the audio in Telegram to listen offline or choose Add to Profile.':'Открой аудио в боте для офлайн-прослушивания. Под треком есть зелёная кнопка с подсказкой, как добавить его в профиль.';
   if(window.Telegram?.WebApp?.showPopup){Telegram.WebApp.showPopup({title,message,buttons:[{id:'open',type:'default',text:state.lang==='en'?'Open bot':'Открыть бота'},{type:'cancel'}]},id=>{if(id==='open')openBot();});}
@@ -14,9 +15,9 @@
   }
  }
  notifyTrackOfflineExport=async function(){
-  if(exporting){showToast('Трек уже готовится. Дождись отправки.');return;}
   const track=getTrack(state.currentTrackId);if(!track?.soundcloudUrn){showToast('Сначала выбери трек.');return;}
-  exporting=true;triggerHaptic('medium');showToast('Готовим трек для отправки в Telegram…');
+  if(exporting.has(track.soundcloudUrn)){showToast('Этот трек уже в очереди на отправку.');return;}
+  const exportUrn=track.soundcloudUrn;exporting.add(exportUrn);triggerHaptic('medium');showToast('Готовим трек для отправки в Telegram…');
   try{
    const r=await fetch('/api/music/export',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({soundcloudUrn:track.soundcloudUrn})});const data=await r.json();
    if(!r.ok){if(data.error==='export_limit'){window.TelefyUsage?.showLimit('export');return;}if(data.error==='bot_start_required'){showToast('Открой бота и нажми Start, затем повтори выгрузку.');openBot();return;}if(['export_in_progress','export_cooldown','queue_busy'].includes(data.error)){showToast('Выгрузка уже выполняется или очередь занята. Попробуй немного позже.');return;}throw Error();}
@@ -29,7 +30,7 @@
    }
    showToast('Задание принято. Проверь чат бота немного позже.');
   }catch(_){showToast('Не удалось проверить выгрузку. Проверь чат бота перед повторной попыткой.');}
-  finally{exporting=false;}
+  finally{exporting.delete(exportUrn);}
  };
  window.TelefyExport={start:notifyTrackOfflineExport};
  let scores=new Map(),account='',lastAttempt=0,busy=false,token=0;

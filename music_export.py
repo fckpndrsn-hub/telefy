@@ -36,10 +36,8 @@ class ExportStore:
   _,start,end=day_window(now)
   with self.db.connect()as c:
    if self.db.url:self.db.execute(c,'SELECT telegram_id FROM telefy_users WHERE telegram_id=%s FOR UPDATE',(uid,))
-   row=self.db.execute(c,'SELECT * FROM telefy_audio_exports WHERE telegram_id=%s ORDER BY created_at DESC LIMIT 1',(uid,)).fetchone()
-   if row and(row['status']in('queued','preparing','sending')or row['created_at']>now-30):
-    if row['urn']==urn:return dict(row)
-    raise ValueError('export_in_progress'if row['status']in('queued','preparing','sending')else'export_cooldown')
+   row=self.db.execute(c,"SELECT * FROM telefy_audio_exports WHERE telegram_id=%s AND urn=%s AND status IN ('queued','preparing','sending') ORDER BY created_at DESC LIMIT 1",(uid,urn)).fetchone()
+   if row:return dict(row)
    if not unlimited:
     used=self.db.execute(c,"SELECT COUNT(*) AS n FROM telefy_audio_exports WHERE telegram_id=%s AND created_at>=%s AND created_at<%s AND status!='failed'",(uid,start,end)).fetchone()['n']
     if used>=EXPORTS:raise ValueError('export_limit')
