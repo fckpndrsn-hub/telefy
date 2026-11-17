@@ -1,5 +1,10 @@
 """Auditable admin grants; never represented as successful payments."""
 import threading,time,secrets
+def stars(amount):
+ last,teen=amount%10,amount%100
+ word='звёзд'if 11<=teen<=14 else'звезда'if last==1 else'звезды'if 2<=last<=4 else'звёзд'
+ return str(amount)+' '+word
+
 LOCK=threading.RLock()
 class GrantStore:
  def __init__(self,db):self.db=db;self.ready=False

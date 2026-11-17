@@ -2,7 +2,7 @@
 window.TelefyStars3D={rotation:null,async mount(element){
  if(!element)return;let disposed=false,renderer=null,frame=0,scene=null,environment=null,group=null;
  const materials=[],geometries=[],textures=[];let observer=null;
- const remember=()=>{if(!group)return;const value={x:group.rotation.x,y:Math.atan2(Math.sin(group.rotation.y),Math.cos(group.rotation.y)),z:group.rotation.z};window.TelefyStars3D.rotation=value;try{localStorage.setItem('telefy-stars-rotation-v1',JSON.stringify(value));}catch(_){}};
+ const remember=()=>{if(!group)return;const value={x:0,y:Math.atan2(Math.sin(group.rotation.y),Math.cos(group.rotation.y)),z:0};window.TelefyStars3D.rotation=value;try{localStorage.setItem('telefy-stars-rotation-v1',JSON.stringify(value));}catch(_){}};
  const dispose=()=>{if(disposed)return;disposed=true;remember();cancelAnimationFrame(frame);observer?.disconnect();geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());environment?.dispose();renderer?.dispose();renderer?.domElement.remove();element.classList.remove('stars-three-ready');};
  element._starsDispose=dispose;
  try{
@@ -32,13 +32,13 @@ window.TelefyStars3D={rotation:null,async mount(element){
    cap.scale(.04,.04,.04);cap.rotateX(Math.PI);cap.translate(-1.04,1,z);geometries.push(cap);group.add(new T.Mesh(cap,face));
   }
   let saved=window.TelefyStars3D.rotation;try{saved=saved||JSON.parse(localStorage.getItem('telefy-stars-rotation-v1'));}catch(_){}
-  if(saved&&['x','y','z'].every(k=>Number.isFinite(saved[k])))group.rotation.set(saved.x,saved.y,saved.z);else group.rotation.set(-.14,-.3,.025);element.classList.add('stars-three-ready');element.dataset.ready='true';
+  if(saved&&['x','y','z'].every(k=>Number.isFinite(saved[k])))group.rotation.set(0,saved.y,0);else group.rotation.set(0,-.3,0);element.classList.add('stars-three-ready');element.dataset.ready='true';
   const resize=()=>{const size=element.clientWidth||144;renderer.setSize(size,size,false);};observer=new ResizeObserver(resize);observer.observe(element);resize();
   let drag=null,velocity=0,last=performance.now(),released=last-1500;const reduced=matchMedia('(prefers-reduced-motion: reduce)');
   element.addEventListener('pointerdown',e=>{if(!e.isPrimary)return;e.preventDefault();e.stopPropagation();drag={x:e.clientX,y:e.clientY};velocity=0;element.setPointerCapture(e.pointerId);});
-  element.addEventListener('pointermove',e=>{if(!drag)return;e.preventDefault();e.stopPropagation();velocity=Math.max(-.08,Math.min(.08,(e.clientX-drag.x)*.012));group.rotation.y+=(e.clientX-drag.x)*.012;group.rotation.x+=(e.clientY-drag.y)*.01;drag={x:e.clientX,y:e.clientY};});
-  const release=e=>{drag=null;released=performance.now();remember();if(element.hasPointerCapture?.(e.pointerId))element.releasePointerCapture(e.pointerId);};element.addEventListener('pointerup',release);element.addEventListener('pointercancel',release);
+  element.addEventListener('pointermove',e=>{if(!drag)return;e.preventDefault();e.stopPropagation();velocity=Math.max(-.08,Math.min(.08,(e.clientX-drag.x)*.012));group.rotation.y+=(e.clientX-drag.x)*.012;group.rotation.x=Math.max(-.65,Math.min(.65,group.rotation.x+(e.clientY-drag.y)*.01));drag={x:e.clientX,y:e.clientY};});
+  const release=e=>{drag=null;released=performance.now();if(reduced.matches)group.rotation.x=group.rotation.z=0;remember();if(element.hasPointerCapture?.(e.pointerId))element.releasePointerCapture(e.pointerId);};element.addEventListener('pointerup',release);element.addEventListener('pointercancel',release);
   element.addEventListener('keydown',e=>{if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key))return;e.preventDefault();group.rotation.y+=e.key==='ArrowLeft'?-.2:e.key==='ArrowRight'?.2:0;group.rotation.x+=e.key==='ArrowUp'?-.2:e.key==='ArrowDown'?.2:0;released=performance.now();remember();});
-  const tick=now=>{if(disposed)return;if(!element.isConnected){dispose();return;}const dt=Math.min(.04,(now-last)/1000);last=now;if(!document.hidden){if(!drag&&!reduced.matches){group.rotation.y+=velocity*dt*60+.35*dt*Math.min(1,(now-released)/1500);velocity*=Math.exp(-dt*5);}element.dataset.rotation=group.rotation.y.toFixed(3);renderer.render(scene,camera);}frame=requestAnimationFrame(tick);};frame=requestAnimationFrame(tick);
+  const tick=now=>{if(disposed)return;if(!element.isConnected){dispose();return;}const dt=Math.min(.04,(now-last)/1000);last=now;if(!document.hidden){if(!drag&&!reduced.matches){group.rotation.y+=velocity*dt*60+.35*dt*Math.min(1,(now-released)/1500);velocity*=Math.exp(-dt*5);const settle=1-Math.exp(-dt*7);group.rotation.x+=(0-group.rotation.x)*settle;group.rotation.z+=(0-group.rotation.z)*settle;}element.dataset.rotation=group.rotation.y.toFixed(3);element.dataset.tilt=group.rotation.x.toFixed(3);element.dataset.roll=group.rotation.z.toFixed(3);renderer.render(scene,camera);}frame=requestAnimationFrame(tick);};frame=requestAnimationFrame(tick);
  }catch(_){dispose();element.dataset.fallback='true';}
 }};

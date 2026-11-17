@@ -23,7 +23,7 @@ def handle(update):
  if data=='maxgrant_media':
   posts.store().cancel_input(uid);rem.store().cancel_upload(uid);s.input(uid,'payment_media');posts.say(uid,'Пришли картинку для сообщения после оплаты как фото.',[[posts.button('Отмена','maxgrant_cancel')]]);return True
  if data=='maxgrant_price':
-  posts.store().cancel_input(uid);rem.store().cancel_upload(uid);s.input(uid,'price');posts.say(uid,'Текущая цена: '+str(s.price()['amount'])+' звёзд за 30 дней.\nВведи новую цену (целое число от 1 до 100000).',[[posts.button('Отмена','maxgrant_cancel')]]);return True
+  posts.store().cancel_input(uid);rem.store().cancel_upload(uid);s.input(uid,'price');posts.say(uid,'Текущая цена: '+max_grants.stars(s.price()['amount'])+' за 30 дней.\nВведи новую цену (целое число от 1 до 100000).',[[posts.button('Отмена','maxgrant_cancel')]]);return True
  if data.startswith(('maxgrant_price_apply:','maxgrant_price_drop:')):
   import bot_operations
   bot_operations.store().ensure();cancel=data.startswith('maxgrant_price_drop:');ok=s.apply_price(uid,data.split(':',1)[1],cancel)
@@ -46,7 +46,7 @@ def handle(update):
   max_notifications.store().media(photos[-1]['file_id']);s.clear(uid);posts.say(uid,'✅ Картинка для сообщения после оплаты сохранена.');return True
  if pending['phase']=='price':
   if not text.isascii()or not text.isdigit()or not 1<=int(text)<=100000:posts.say(uid,'Введи целое число от 1 до 100000.');return True
-  token=s.price_draft(uid,int(text));posts.say(uid,'Новая стоимость Max: '+text+' звёзд за 30 дней.\nУже созданные счета сохранят свою цену. Открытые приложения будут перезагружены.',[[posts.button('✅ Изменить цену','maxgrant_price_apply:'+token)],[posts.button('Отмена','maxgrant_price_drop:'+token)]]);return True
+  token=s.price_draft(uid,int(text));posts.say(uid,'Новая стоимость Max: '+max_grants.stars(int(text))+' за 30 дней.\nУже созданные счета сохранят свою цену. Открытые приложения будут перезагружены.',[[posts.button('✅ Изменить цену','maxgrant_price_apply:'+token)],[posts.button('Отмена','maxgrant_price_drop:'+token)]]);return True
  if pending['phase']=='username':
   if not re.fullmatch(r'@?[A-Za-z0-9_]{1,32}',text):posts.say(uid,'Отправь username в формате @username.');return True
   profile=s.profile(text)
