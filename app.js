@@ -750,7 +750,7 @@ try {
     function doesTrackMatchMood(tr, moodId) {
       if(window.TelefyRapCandidate&&!window.TelefyRapCandidate(tr))return false;
       if(window.TelefyPromotionExcluded?.(tr))return false;
-      if(moodId==='underground'&&!window.TelefyTrendMembership?.has(tr?.soundcloudUrn))return false;
+      if(moodId==='underground'&&(tr?.trendsEligible!==true||!window.TelefyTrendMembership?.has(tr?.soundcloudUrn)))return false;
       if(moodId==='energy')return tr?.classificationVersion===4&&Array.isArray(tr.modes)&&(tr.modes.includes('energy')||tr.modes.includes('uncensored'));
       if(moodId && moodId!=='all')return tr?.classificationVersion===4&&Array.isArray(tr.modes)&&tr.modes.includes(moodId);
       if (!tr) return false;
@@ -2531,7 +2531,7 @@ try {
           existing.collectionId = item.collectionId || existing.collectionId;
           existing.previewUrl = item.previewUrl || existing.previewUrl;
           if (item.soundcloudUrn) {
-            existing.genre=item.genre||existing.genre||'';existing.classificationVersion=item.classificationVersion||existing.classificationVersion||0;existing.modes=item.modes||existing.modes||[];existing.releaseDate=item.releaseDate||existing.releaseDate;existing.playbackCount=item.playbackCount||existing.playbackCount||0;
+            existing.trendsEligible=item.trendsEligible===true;existing.genre=item.genre||existing.genre||'';existing.classificationVersion=item.classificationVersion||existing.classificationVersion||0;existing.modes=item.modes||existing.modes||[];existing.releaseDate=item.releaseDate||existing.releaseDate;existing.playbackCount=item.playbackCount||existing.playbackCount||0;
             existing.soundcloudUrn=item.soundcloudUrn; existing.soundcloudUrl=item.soundcloudUrl;
             existing.uploader=item.uploader; existing.uploaderUrl=item.uploaderUrl;
           }
@@ -2542,7 +2542,7 @@ try {
         const trObj = {
           id: nextId++,
           genre:item.genre||'', classificationVersion:item.classificationVersion||0, modes:item.modes||[], releaseDate:item.releaseDate||null, playbackCount:item.playbackCount||0,
-          soundcloudUrn:item.soundcloudUrn || null,
+          trendsEligible:item.trendsEligible===true,soundcloudUrn:item.soundcloudUrn || null,
           soundcloudUrl:item.soundcloudUrl || null,
           uploader:item.uploader || null,
           uploaderUrl:item.uploaderUrl || null,

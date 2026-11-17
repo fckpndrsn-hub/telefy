@@ -606,12 +606,29 @@ _previous_trend_order=list(dict.fromkeys(['madk1d','Villian','OG Buda','темн
 _prioritized={a.casefold()for a in TREND_FIRST+TREND_SECOND}
 _trend_rest=[a for a in _previous_trend_order if a.casefold()not in _prioritized]
 TREND_PAGES=[TREND_FIRST,TREND_SECOND]+[_trend_rest[i:i+4]for i in range(0,len(_trend_rest),4)]
+def current_trend_release(raw):
+    from datetime import datetime,timezone
+    years=[]
+    publisher=raw.get('publisher_metadata') or {}
+    for value in (raw.get('release_year'),raw.get('release_date'),publisher.get('release_date')):
+        if value in (None,''):continue
+        match=re.match(r'^(\d{4})(?:$|[-/T ])',str(value))
+        if not match:return False
+        years.append(int(match.group(1)))
+        if isinstance(value,str) and len(value)>=10:
+            try:
+                date=datetime.strptime(value[:10].replace('/','-'),'%Y-%m-%d').date()
+                if date>datetime.now(timezone.utc).date():return False
+            except ValueError:return False
+    # Upload date is not proof of a release date. Unknown dates stay outside Trends.
+    return bool(years) and all(2025<=year<=2026 for year in years)
+
 _catalog_discovery=discovery
 def discovery(kind,offset=0):
     if kind not in ('night','underground'):return _catalog_discovery(kind,offset)
     from datetime import datetime,timezone,timedelta
     from concurrent.futures import ThreadPoolExecutor
-    offset=max(0,min(int(offset),30));key=('trends-rotation-v4',kind,offset)
+    offset=max(0,min(int(offset),30));key=('trends-dates-v5',kind,offset)
     cached=DISCOVERY_CACHE.get(key)
     if cached and cached[0]>time.time():return cached[1]
     queries=CHILL_ARTISTS[offset*2:offset*2+2]if kind=='night'else (TREND_PAGES[offset]if offset<len(TREND_PAGES)else [])
@@ -628,7 +645,7 @@ def discovery(kind,offset=0):
         if kind=='underground' and q in TREND_FIRST and offset>0:params['offset']=((offset-1)//3+1)*50
         # Explicit soft tags retrieve a different set from a broad relevance search.
         requests=[params] if kind=='underground' else [params,{**params,'tags':'chill'}]
-        result=[];raw_count=0;errors=[]
+        result=[];raw_count=0;date_rejected=0;errors=[]
         for request in requests:
             if result:break
             try:
@@ -636,6 +653,7 @@ def discovery(kind,offset=0):
                 raw_count+=len(items)
                 for item in items:
                     if item.get('access')!='playable' or not item.get('streamable'):continue
+                    if kind=='underground' and not current_trend_release(item):date_rejected+=1;continue
                     try:t=normalize_track(item)
                     except APIError:continue
                     cfg=scene_artist(q)
@@ -643,6 +661,7 @@ def discovery(kind,offset=0):
                     if not rap_candidate(t):continue
                     if kind=='underground':
                         if t.get('playbackCount',0)<1000 and t.get('likesCount',0)<50:continue
+                        t['trendsEligible']=True
                         if 'underground'not in t['modes']:t['modes'].append('underground')
                     elif kind not in t.get('modes',[]):continue
                     if re.search(r'remix|sped|slowed|karaoke|instrumental',t['title'],re.I):continue
@@ -651,7 +670,7 @@ def discovery(kind,offset=0):
                 errors.append(e.code)
                 if e.status==429:break
         if kind=='underground':result=sorted(result,key=lambda t:t.get('playbackCount',0)+30*t.get('likesCount',0),reverse=True)[:24]
-        artist_stats[q]={'raw':raw_count,'accepted':len(result),'errors':errors,'sourceOffset':params.get('offset',0)}
+        artist_stats[q]={'raw':raw_count,'accepted':len(result),'errors':errors,'sourceOffset':params.get('offset',0),'dateRejected':date_rejected}
         return result,raw_count,errors
     with ThreadPoolExecutor(max_workers=4)as pool:batches=list(pool.map(get,queries))
     tracks={t['soundcloudUrn']:t for batch,_,_ in batches for t in batch}
@@ -671,7 +690,7 @@ def discovery(kind,offset=0):
     if not result and errors:
         if 'soundcloud_rate_limited'in errors:raise APIError(429,'soundcloud_rate_limited')
         raise APIError(502,'mode_sources_unavailable')
-    data={'tracks':result,'hasMore':(offset+1)*2<len(CHILL_ARTISTS)if kind=='night'else offset+1<len(TREND_PAGES),'nextOffset':offset+1,'selection':'trends-rotation-v4'if kind=='underground'else'soundcloud-metadata'}
+    data={'tracks':result,'hasMore':(offset+1)*2<len(CHILL_ARTISTS)if kind=='night'else offset+1<len(TREND_PAGES),'nextOffset':offset+1,'selection':'trends-dates-v5'if kind=='underground'else'soundcloud-metadata'}
     DISCOVERY_CACHE[key]=(time.time()+(600 if result else 30),data)
     return data
 
