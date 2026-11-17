@@ -148,7 +148,11 @@ class BotMixin(MusicMixin):
             try:
                 n=int(self.headers.get('Content-Length','0'))
                 if not 0<n<=65536 or not self.headers.get('Content-Type','').startswith('application/json'):raise ValueError()
-                update=json.loads(self.rfile.read(n));bot.submit(update)
+                update=json.loads(self.rfile.read(n))
+                if not isinstance(update,dict):raise ValueError()
+                import max_billing
+                if 'pre_checkout_query'in update:max_billing.handle_precheckout(update)
+                else:bot.submit(update)
             except (ValueError,TypeError,UnicodeError):self.reply(400,{'error':'invalid_update'});return
             except Exception:self.reply(503,{'error':'bot_database_unavailable'});return
             self.reply(200,{'ok':True});return

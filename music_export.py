@@ -30,12 +30,19 @@ class ExportStore:
   import re
   if not isinstance(urn,str)or not re.fullmatch(r'soundcloud:tracks:[0-9]{1,22}',urn):raise ValueError('invalid_track')
   now=int(time.time())
+  import max_billing
+  from daily_usage import day_window,EXPORTS
+  unlimited=max_billing.STORE.status(uid)['active']
+  _,start,end=day_window(now)
   with self.db.connect()as c:
    if self.db.url:self.db.execute(c,'SELECT telegram_id FROM telefy_users WHERE telegram_id=%s FOR UPDATE',(uid,))
    row=self.db.execute(c,'SELECT * FROM telefy_audio_exports WHERE telegram_id=%s ORDER BY created_at DESC LIMIT 1',(uid,)).fetchone()
    if row and(row['status']in('queued','preparing','sending')or row['created_at']>now-30):
     if row['urn']==urn:return dict(row)
     raise ValueError('export_in_progress'if row['status']in('queued','preparing','sending')else'export_cooldown')
+   if not unlimited:
+    used=self.db.execute(c,"SELECT COUNT(*) AS n FROM telefy_audio_exports WHERE telegram_id=%s AND created_at>=%s AND created_at<%s AND status!='failed'",(uid,start,end)).fetchone()['n']
+    if used>=EXPORTS:raise ValueError('export_limit')
    count=self.db.execute(c,"SELECT COUNT(*) AS n FROM telefy_audio_exports WHERE status IN ('queued','preparing','sending')").fetchone()['n']
    if count>=30:raise ValueError('queue_busy')
    pid=secrets.token_hex(12);self.db.execute(c,'INSERT INTO telefy_audio_exports VALUES(%s,%s,%s,%s,%s,0,0,%s)',(pid,uid,urn,'queued',now,''))

@@ -19,7 +19,7 @@
   exporting=true;triggerHaptic('medium');showToast('Готовим трек для отправки в Telegram…');
   try{
    const r=await fetch('/api/music/export',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({soundcloudUrn:track.soundcloudUrn})});const data=await r.json();
-   if(!r.ok){if(data.error==='bot_start_required'){showToast('Открой бота и нажми Start, затем повтори выгрузку.');openBot();return;}if(['export_in_progress','export_cooldown','queue_busy'].includes(data.error)){showToast('Выгрузка уже выполняется или очередь занята. Попробуй немного позже.');return;}throw Error();}
+   if(!r.ok){if(data.error==='export_limit'){window.TelefyUsage?.showLimit('export');return;}if(data.error==='bot_start_required'){showToast('Открой бота и нажми Start, затем повтори выгрузку.');openBot();return;}if(['export_in_progress','export_cooldown','queue_busy'].includes(data.error)){showToast('Выгрузка уже выполняется или очередь занята. Попробуй немного позже.');return;}throw Error();}
    let job=data;
    for(let i=0;i<180;i++){
     if(job.status==='sent'){ready();return;}

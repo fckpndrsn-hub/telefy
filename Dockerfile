@@ -20,6 +20,11 @@ COPY music-features.js flow-discovery.js ./web/assets/
 COPY app-control.js ./web/assets/app-control.js
 COPY bot-entry.js ./web/assets/bot-entry.js
 COPY reminders-client.js ./web/assets/reminders-client.js
+COPY star.svg ./web/assets/star.svg
+COPY stars-3d.js ./web/assets/stars-3d.js
+COPY vendor/ ./web/assets/vendor/
+COPY daily_usage.py ./daily_usage.py
+COPY daily-usage.js ./web/assets/daily-usage.js
 ENV PYTHONUNBUFFERED=1 TELEFY_PRIVATE_DIR=/tmp/telefy-private
 USER 10001
 EXPOSE 10000

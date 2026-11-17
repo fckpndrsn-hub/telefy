@@ -118,6 +118,7 @@
         const data = await response.json();
         if (currentRequest !== request || !state.isPlaying) return;
         if (!response.ok) {
+          if(data.error==='listening_limit'){state.isPlaying=false;audio.pause();renderPlayerUI();window.TelefyUsage?.showLimit();return;}
           if(response.status===401 && data.error==='bridge_unauthorized') {
             location.replace('/');return;
           }

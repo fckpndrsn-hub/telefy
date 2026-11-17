@@ -93,7 +93,7 @@ def keyboard(user):
 def welcome_text(user):
     custom=reminders.custom_text('welcome')
     if custom:return html.escape(custom.replace('{name}',user.get('first_name')or'друг'))
-    return 'Привет, '+html.escape(user.get('first_name')or'друг')+'! 👋\n\n<b>Telefy</b> — твоя музыка без цензуры в Telegram.\n\nВо время бета-теста Telefy Max бесплатный. Открывай приложение и выбирай, что слушать.'
+    return 'Привет, '+html.escape(user.get('first_name')or'друг')+'! 👋\n\n<b>Telefy</b> — твоя музыка без цензуры в Telegram.\n\nОткрывай приложение и выбирай, что слушать. Telefy Max — 100 звёзд за 30 дней, без автопродления.'
 
 def send_welcome(user,preview=False):
     import bot_buttons
@@ -124,6 +124,8 @@ def show_gate(user):
 def same_channel(chat):return ('@'+str(chat.get('username',''))).casefold()==CHANNEL.casefold()or str(chat.get('id'))==CHANNEL
 def valid_user(user):return isinstance(user,dict)and type(user.get('id'))is int and 0<user['id']<2**53 and user.get('is_bot')is not True
 def handle(update):
+    import max_billing
+    if max_billing.handle_update(update):return
     import bot_operations
     bot_operations.record(update)
     callback=update.get('callback_query')or{}
@@ -174,7 +176,7 @@ def setup():
         api('setMyCommands',commands=[{'command':'start','description':'Открыть Telefy'},{'command':'help','description':'Меню Telefy'}])
         for uid in reminders.admins():api('setMyCommands',scope={'type':'chat','chat_id':uid},commands=[{'command':'start','description':'Открыть Telefy'},{'command':'id','description':'Мой Telegram ID'},{'command':'admin','description':'Управление Telefy'},{'command':'reminders_admin','description':'Приветствие и напоминания'}])
         api('setChatMenuButton',menu_button={'type':'web_app','text':'Открыть Telefy','web_app':{'url':BASE+'/telefy.html'}})
-        api('setWebhook',url=BASE+'/bot/webhook',secret_token=webhook_secret(),allowed_updates=['message','callback_query','chat_member','my_chat_member'],drop_pending_updates=False)
+        api('setWebhook',url=BASE+'/bot/webhook',secret_token=webhook_secret(),allowed_updates=['message','callback_query','chat_member','my_chat_member','pre_checkout_query'],drop_pending_updates=False)
         DIAGNOSTIC.update(state='ready');print('Telefy bot: webhook configured.',flush=True);return True
     except Exception:DIAGNOSTIC.update(state='setup_retry');return False
 def start():

@@ -45,6 +45,7 @@ class MusicMixin:
    self.reply(200,result)
   except ValueError as error:
    code=str(error)
+   if code=='export_limit':self.reply(403,{'error':'export_limit'});return
    if code in('queue_busy','export_cooldown','export_in_progress'):self.reply(429,{'error':code})
    else:self.reply(400,{'error':'invalid_request'})
   except TypeError:self.reply(400,{'error':'invalid_request'})
