@@ -82,8 +82,8 @@ def decode(ticket,allow_expired=False):
         if not allow_expired and p['exp']<=time.time():raise ValueError()
         return p
     except Exception:raise AccessDenied('invalid_launch')from None
-def launch_url(user,screen):
-    p={'uid':user['id'],'screen':screen,'exp':int(time.time())+3600,'nonce':secrets.token_urlsafe(18)}
+def launch_url(user,screen,ttl=3600):
+    p={'uid':user['id'],'screen':screen,'exp':int(time.time())+ttl,'nonce':secrets.token_urlsafe(18)}
     ticket=signed(p);store().register_launch(ticket,user['id'],p['exp'])
     return BASE+'/bot/launch?'+urlencode({'ticket':ticket})
 def keyboard(user):
@@ -150,6 +150,10 @@ def handle(update):
         return
     message=update.get('message')or{};user=message.get('from')or{}
     if message.get('chat',{}).get('type')!='private'or not valid_user(user):return
+    command=message.get('text','').split(' ',1)[0].split('@')[0]
+    if command=='/web':
+        if not subscribed(user['id']):show_gate(user);return
+        api('sendMessage',chat_id=user['id'],text='🌐 Telefy в браузере. Открой личную ссылку в Chrome через меню ссылки. Не пересылай её: она даёт вход в твой профиль и действует несколько минут.',reply_markup={'inline_keyboard':[[{'text':'Открыть веб-версию','url':launch_url(user,'home',300)}]]});return
     if message.get('text','').split(' ',1)[0].split('@')[0]not in('/start','/help','/menu'):return
     if subscribed(user['id']):show_menu(user)
     else:show_gate(user)

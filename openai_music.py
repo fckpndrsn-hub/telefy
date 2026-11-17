@@ -101,7 +101,7 @@ def description(track,lang):return generate('description',{'track':metadata(trac
 def rank(uid,candidates,context='vibe'):
  import profile_server
  history=profile_server.DB.taste(uid)
- if context not in ('vibe','trends','recommendations'):raise ValueError('invalid_context')
+ if context not in ('vibe','energy','night','trends','recommendations'):raise ValueError('invalid_context')
  if context=='recommendations':history=profile_server.DB.taste_recent(uid)
  if context=='vibe' and len(history)<20:return {'order':[],'personalized':False}
  recent=[{k:h.get(k)for k in('artist','genre','modes')}for h in history[-500:]] if context=='recommendations' else [{k:h.get(k)for k in('artist','genre','modes')}for h in history[-20:]]
@@ -111,5 +111,5 @@ def rank(uid,candidates,context='vibe'):
   for k in ('playbackCount','likesCount'):
    try:target[k]=max(0,min(10**12,int(source.get(k,0))))
    except (TypeError,ValueError):target[k]=0
- result=generate('rank',{'context':context,'recent':recent if context=='recommendations' or len(history)>=20 else [],'candidates':clean})
+ result=generate('rank',{'context':context,'role':'Supplement mechanical selection with similar discoveries; energy means energetic rap, night means mellow calm rap, do not mix aggressive songs into night. Do not rank only one artist.', 'recent':recent if context=='recommendations' or len(history)>=20 else [],'candidates':clean})
  return {**(result or{'order':[]}),'personalized':bool(result),'filtered':bool(result) and context=='recommendations' and bool(history)}

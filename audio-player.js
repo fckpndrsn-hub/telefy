@@ -137,6 +137,9 @@
         if (typeof data.url !== 'string' || !data.url.startsWith('https://')) throw new Error('Некорректный адрес потока');
         track.soundcloudUrn=data.track.soundcloudUrn;
         track.soundcloudUrl=data.track.soundcloudUrl;
+        if(data.track.duration)track.duration=data.track.duration;
+        if(data.track.coverImg)track.coverImg=data.track.coverImg;
+        window.dispatchEvent(new CustomEvent('telefy:track-resolved')); 
         track.uploader=data.track.uploader; track.uploaderUrl=data.track.uploaderUrl;
         activeId=track.id;
         await prepareSource(data.url,streamController.signal,currentRequest);

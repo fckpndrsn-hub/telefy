@@ -194,7 +194,9 @@ def resolve_track(data):
     ranked=[]
     for candidate in candidates:
         ct=tokens(candidate['title']); ca=tokens(candidate['artist'])|ct|tokens(candidate['uploader'])
-        title_score=len(title & ct)/len(title); artist_score=len(artist & ca)/len(artist)
+        compact=lambda value:''.join(re.findall(r'[a-zа-яё0-9]+',unicodedata.normalize('NFKC',str(value)).casefold()))
+        title_score=1.0 if compact(data.get('title',''))==compact(candidate['title']) else len(title & ct)/len(title)
+        artist_score=1.0 if compact(data.get('artist',''))==compact(candidate['artist']) else len(artist & ca)/len(artist)
         variants={'remix','slowed','sped','speed','instrumental','cover','live','karaoke'}
         wrong_variant=bool((ct-title)&variants)
         score=.75*title_score+.25*artist_score

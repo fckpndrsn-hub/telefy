@@ -9,7 +9,7 @@
  function paint(){renderMaxBetaView();renderPlayerUI();if(state.activeTab==='search')renderSearchView();if(!document.getElementById('library-modal')?.classList.contains('hidden'))renderLibraryModalTracks();}
  function apply(data){
   const byKey=new Map(tracks.map(t=>[getTrackUniqueKey(t),t]));let next=Math.max(0,...tracks.map(t=>Number(t.id)||0))+1;
-  function materialize(row){let tr=byKey.get(row.key);if(!tr){tr={...row,id:next++,liked:false,disliked:false,cover:'#2AABEE',mood:'all',modes:[],uncensored:true,coverStatus:'loaded'};tracks.push(tr);byKey.set(row.key,tr);}return tr.id;}
+  function materialize(row){let tr=byKey.get(row.key);if(!tr){tr={...row,id:next++,liked:false,disliked:false,cover:'#2AABEE',mood:'all',modes:[],uncensored:true,coverStatus:'loaded'};tracks.push(tr);byKey.set(row.key,tr);}if(!tr.soundcloudUrn&&row.soundcloudUrn)tr.soundcloudUrn=row.soundcloudUrn;if(!tr.duration&&row.duration)tr.duration=row.duration;if(!tr.coverImg&&row.coverImg)tr.coverImg=row.coverImg;return tr.id;}
   userLikedTrackKeys.clear();data.likes.forEach(t=>{materialize(t);userLikedTrackKeys.add(t.key);});
   tracks.forEach(t=>{t.liked=userLikedTrackKeys.has(getTrackUniqueKey(t));});
   USER_PLAYLISTS.splice(0,USER_PLAYLISTS.length,...data.playlists.map(p=>({...p,trackKeys:p.tracks.map(t=>t.key),trackIds:p.tracks.map(materialize)})));
@@ -108,6 +108,7 @@
   if(uid!==account()){uid=account();epoch++;ready=false;committed=null;apply(empty());clearTimeout(migrationTimer);migrationAttempts=0;migrationWarning=false;}
   restore();
  });
+ window.addEventListener('telefy:track-resolved',()=>{if(ready)saveUserLikedKeys();});
  window.addEventListener('focus',()=>restore(true));
  window.addEventListener('online',()=>restore(true));
  document.addEventListener('visibilitychange',()=>{if(!document.hidden)restore(true);});

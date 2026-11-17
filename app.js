@@ -2517,6 +2517,7 @@ try {
         const existing = existingByKey.get(k);
         if (existing) {
           existing.coverImg = item.coverImg || existing.coverImg;
+          if(item.duration)existing.duration=item.duration;
           existing.album = item.album || existing.album;
           existing.collectionId = item.collectionId || existing.collectionId;
           existing.previewUrl = item.previewUrl || existing.previewUrl;
@@ -4432,7 +4433,7 @@ window.TelefySmartSelection=(()=>{
    const r=await fetch('/api/ai/rank',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({context,candidates:candidates.map(t=>({soundcloudUrn:t.soundcloudUrn,title:t.title,artist:t.artist,genre:t.genre,tag_list:t.tag_list,playbackCount:t.playbackCount,likesCount:t.likesCount}))}),signal:AbortSignal.timeout(8000)});
    if(!r.ok)throw Error('rank');const data=await r.json();if(String(window.TelefyProfile?.user?.telegram_id||'')!==account)return [];
    const used=new Set(),ordered=[];for(const i of data.order||[])if(Number.isInteger(i)&&candidates[i]&&!used.has(i)){used.add(i);ordered.push(candidates[i]);}
-   const result=diverse(data.filtered?ordered:[...ordered,...candidates.filter((_,i)=>!used.has(i))],60);
+   const blend=[];const mechanical=candidates.slice(),ai=ordered.slice();while(mechanical.length||ai.length){blend.push(...mechanical.splice(0,3));if(ai.length)blend.push(ai.shift());}const result=diverse(data.filtered?ordered:blend,60);
    if(context==='vibe'&&data.personalized){scores.clear();result.forEach((t,i)=>scores.set(account+':'+t.soundcloudUrn,4*(1-i/result.length)));}
    if(cache.size>30)cache.clear();cache.set(key,result);return result;
   }catch(_){cache.set(key,candidates);setTimeout(()=>cache.delete(key),300000);return candidates;}finally{pending.delete(key);}})();pending.set(key,task);return task;
