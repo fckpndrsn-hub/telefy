@@ -52,6 +52,8 @@ class UserAdminStore:
    uid=r['telegram_id'];now=int(time.time())
    if table(db,c,'telefy_star_orders'):
     db.execute(c,"INSERT INTO telefy_max_revoked_credits SELECT telegram_id,'payment',id,%s,%s FROM telefy_star_orders WHERE telegram_id=%s AND state='paid' ON CONFLICT(telegram_id,kind,credit_id) DO NOTHING",(admin,now,uid))
+   if table(db,c,'telefy_max_gifts'):
+    db.execute(c,"INSERT INTO telefy_max_revoked_credits SELECT recipient,'payment',order_id,%s,%s FROM telefy_max_gifts WHERE recipient=%s ON CONFLICT(telegram_id,kind,credit_id) DO NOTHING",(admin,now,uid))
    db.execute(c,"INSERT INTO telefy_max_revoked_credits SELECT telegram_id,'grant',id,%s,%s FROM telefy_max_grants WHERE telegram_id=%s ON CONFLICT(telegram_id,kind,credit_id) DO NOTHING",(admin,now,uid))
    if r['operation']=='delete':
     # Cascades remove sessions, taste and the personal library. Keep the
@@ -115,7 +117,7 @@ def handle(update):
   if op in('usr_payments','usr_history'):
    uid=int(parts[1])if op=='usr_history'else 0;page=max(0,min(100000,int(parts[2]if uid else parts[1])));rows,more=s.payments(uid,page)
    blocks=['⭐ История платежей · страница '+str(page+1)]
-   for r in rows:blocks.append(('@'+r['username']if r['username']else'Telegram ID '+str(r['telegram_id']))+'\n'+max_grants.stars(r['amount'])+' · '+date(r['paid_at'])+'\nTelefy Max · 30 дней\nСтатус: '+('Возвращён'if r['state']=='refunded'else'Оплачен')+'\nЗаказ: '+r['id'])
+   for r in rows:blocks.append(('@'+r['username']if r['username']else'Telegram ID '+str(r['telegram_id']))+'\n'+max_grants.stars(r['amount'])+' · '+date(r['paid_at'])+('\nПодарок Telefy Max · 30 дней\nСтатус: 'if __import__('max_gifts').by_order(__import__('max_billing').STORE,r['id'])else'\nTelefy Max · 30 дней\nСтатус: ')+('Возвращён'if r['state']=='refunded'else'Оплачен')+'\nЗаказ: '+r['id'])
    prefix='usr_history:'+str(uid)+':'if uid else'usr_payments:';nav=[]
    if page:nav.append(button('←',prefix+str(page-1)))
    if more:nav.append(button('→',prefix+str(page+1)))

@@ -44,9 +44,19 @@ def run_one():
  if not job:return False
  end=datetime.fromtimestamp(job['expires_at'],timezone(timedelta(hours=3))).strftime('%d.%m.%Y')
  text='Вы успешно оплатили Telefy Max.\n\nСрок действия подписки 30 дней\nДействие подписки: до '+end+'\n\n<b>Спасибо, что выбираете нас и наш сервис!</b>'
+ import max_billing,max_gifts
+ with s.db.connect()as c:order=s.db.execute(c,'SELECT id FROM telefy_star_orders WHERE charge_id=%s',(job['charge_id'],)).fetchone()
+ gift=max_gifts.by_order(max_billing.STORE,order['id'])if order else None
+ gift_url='https://t.me/'+bot.BOT_USERNAME+'?startapp=gift_'+gift['token']if gift else None
+ gift_kind=None
+ if gift:
+  text='🎁 Подарок Telefy Max готов!\n\nОтправь ссылку другу. 30 дней начнутся после активации.\n\n'+gift_url
+  with s.db.connect()as c:media=s.db.execute(c,'SELECT * FROM telefy_gift_media WHERE id=1').fetchone()
+  job['file_id']=media['file_id']if media else'';gift_kind=media['kind']if media else None
  args={'chat_id':job['telegram_id'],'parse_mode':'HTML','reply_markup':{'inline_keyboard':[[{'text':'Открыть Telefy','style':'primary','web_app':{'url':bot.BASE+'/telefy.html'}}]]}}
  try:
-  if job['file_id']:bot.api('sendPhoto',**args,photo=job['file_id'],caption=text)
+  if gift and job['file_id']:bot.api({'photo':'sendPhoto','video':'sendVideo','animation':'sendAnimation'}[gift_kind],**args,**{gift_kind:job['file_id']},caption=text)
+  elif job['file_id']:bot.api('sendPhoto',**args,photo=job['file_id'],caption=text)
   else:bot.api('sendMessage',**args,text=text)
   s.finish(job['charge_id'],'sent')
  except bot.BotError as e:

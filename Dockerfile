@@ -27,6 +27,8 @@ COPY stars-3d.js ./web/assets/stars-3d.js
 COPY three.module.js three.core.js SVGLoader.js ./web/assets/
 COPY daily_usage.py ./daily_usage.py
 COPY daily-usage.js ./web/assets/daily-usage.js
+COPY max_gifts.py ./
+COPY gift-client.js gift-logo.svg gift-animation.json lottie.min.js ./web/assets/
 ENV PYTHONUNBUFFERED=1 TELEFY_PRIVATE_DIR=/tmp/telefy-private
 USER 10001
 EXPOSE 10000
