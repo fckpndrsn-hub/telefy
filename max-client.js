@@ -7,6 +7,12 @@
  const beta=()=>Boolean(verified&&account===user()&&verified.beta===true);
  const active=()=>Boolean(verified&&account===user()&&verified.active&&(beta()||verified.expires_at>clockAt+(performance.now()-synced)/1000));
  Object.defineProperty(state,'isMaxSubscribed',{enumerable:true,get:active,set(){}});
+ function remainingLabel(){
+  const english=state.lang==='en';if(beta())return english?'Beta test':'Бета-тест';if(!verified||account!==user())return '—';
+  const n=Math.max(0,Math.ceil(((verified.expires_at||0)-clockAt-(performance.now()-synced)/1000)/86400)),last=n%10,teen=n%100;
+  return n+' '+(english?(n===1?'day':'days'):(teen>=11&&teen<=14?'дней':last===1?'день':last>=2&&last<=4?'дня':'дней'));
+ }
+ function paintRemaining(){const row=document.querySelector('[data-i18n="maxRowExpireDate"]');if(row)row.textContent=remainingLabel();}
  function paint(){
   document.documentElement.dataset.maxMode=beta()?'beta':'paid';const yes=active(),english=state.lang==='en',free=beta();
   const known=verified&&account===user();
@@ -25,7 +31,7 @@
   document.querySelectorAll('.max-beta-price strong').forEach(el=>el.textContent=priceLabel(english,false));
   document.querySelectorAll('[data-max-beta-caption]').forEach(el=>el.textContent=free?(english?'Free during beta':'Бесплатно во время беты'):(english?'30 days · no auto-renewal':'30 дней · без автопродления'));
   document.querySelector('[data-i18n="maxRowExpireTitle"]')?.replaceChildren(document.createTextNode(free?(english?'Free access':'Бесплатный доступ'):(english?'Access expires':'Срок действия подписки')));
-  document.querySelector('[data-i18n="maxRowExpireDate"]')?.replaceChildren(document.createTextNode(free?(english?'Beta test':'Бета-тест'):date||'—'));
+  paintRemaining();
  }
  const render=renderMaxBetaView;renderMaxBetaView=function(...args){const r=render(...args);paint();return r;};
  const translate=applyTranslations;applyTranslations=function(...args){const r=translate(...args);paint();return r;};
@@ -86,5 +92,6 @@
  window.TelefyMax={refresh,purchase,get active(){return active();},get beta(){return beta();}};
  window.addEventListener('telefy:profile-ready',refresh);document.addEventListener('visibilitychange',()=>{if(!document.hidden&&user())refresh();});
  setInterval(()=>{if(active()){hadMax=true;return;}if(hadMax){hadMax=false;closeLibraryModal();closeCreatePlaylistModal();if(USER_PLAYLISTS.some(p=>p.id===state.activeCollectionId))closeCollectionModal();if(state.searchFilter==='liked')state.searchFilter='all';renderAll();}},1000);
+ setInterval(paintRemaining,60000);
  if(user())refresh();paint();
 })();
