@@ -611,14 +611,21 @@ def discovery(kind,offset=0):
     if kind not in ('night','underground'):return _catalog_discovery(kind,offset)
     from datetime import datetime,timezone,timedelta
     from concurrent.futures import ThreadPoolExecutor
-    offset=max(0,min(int(offset),30));key=('modes-diverse-v3',kind,offset)
+    offset=max(0,min(int(offset),30));key=('trends-rotation-v4',kind,offset)
     cached=DISCOVERY_CACHE.get(key)
     if cached and cached[0]>time.time():return cached[1]
     queries=CHILL_ARTISTS[offset*2:offset*2+2]if kind=='night'else (TREND_PAGES[offset]if offset<len(TREND_PAGES)else [])
     if kind=='underground' and offset==0:queries=list(queries)+['madk1d супермаркет','madk1d так похуй']
+    if kind=='underground':
+        queries=list(queries)
+        if offset==0:queries+=['Kai Angel Shh']
+        elif offset<len(TREND_PAGES):
+            anchors=TREND_FIRST[((offset-1)%3)*3:((offset-1)%3)*3+3]
+            queries=list(dict.fromkeys(anchors+queries))
     artist_stats={}
     def get(q):
         params={'q':q,'access':'playable','limit':50,'linked_partitioning':'true'}
+        if kind=='underground' and q in TREND_FIRST and offset>0:params['offset']=((offset-1)//3+1)*50
         # Explicit soft tags retrieve a different set from a broad relevance search.
         requests=[params] if kind=='underground' else [params,{**params,'tags':'chill'}]
         result=[];raw_count=0;errors=[]
@@ -643,8 +650,8 @@ def discovery(kind,offset=0):
             except APIError as e:
                 errors.append(e.code)
                 if e.status==429:break
-        if kind=='underground':result=sorted(result,key=lambda t:t.get('playbackCount',0)+30*t.get('likesCount',0),reverse=True)[:10]
-        artist_stats[q]={'raw':raw_count,'accepted':len(result),'errors':errors}
+        if kind=='underground':result=sorted(result,key=lambda t:t.get('playbackCount',0)+30*t.get('likesCount',0),reverse=True)[:24]
+        artist_stats[q]={'raw':raw_count,'accepted':len(result),'errors':errors,'sourceOffset':params.get('offset',0)}
         return result,raw_count,errors
     with ThreadPoolExecutor(max_workers=4)as pool:batches=list(pool.map(get,queries))
     tracks={t['soundcloudUrn']:t for batch,_,_ in batches for t in batch}
@@ -664,7 +671,7 @@ def discovery(kind,offset=0):
     if not result and errors:
         if 'soundcloud_rate_limited'in errors:raise APIError(429,'soundcloud_rate_limited')
         raise APIError(502,'mode_sources_unavailable')
-    data={'tracks':result,'hasMore':(offset+1)*2<len(CHILL_ARTISTS)if kind=='night'else offset+1<len(TREND_PAGES),'nextOffset':offset+1,'selection':'soundcloud-metadata'}
+    data={'tracks':result,'hasMore':(offset+1)*2<len(CHILL_ARTISTS)if kind=='night'else offset+1<len(TREND_PAGES),'nextOffset':offset+1,'selection':'trends-rotation-v4'if kind=='underground'else'soundcloud-metadata'}
     DISCOVERY_CACHE[key]=(time.time()+(600 if result else 30),data)
     return data
 

@@ -56,8 +56,9 @@
   const key='mode:'+mood;if(pending.has(key)){await pending.get(key);if(autoPlay&&state.activeMood===mood&&!doesTrackMatchMood(getTrack(state.currentTrackId),mood)&&state.queueIds.length)playTrack(state.queueIds.shift(),getMoodText(mood).streamTitle);return;}
   const task=(async()=>{try{
    let offset=modeOffsets.get(mood)||0,data;for(let attempt=0;attempt<2;attempt++){data=await fetchBatch(mood,offset);if(state.activeMood!==mood)return;if(data.tracks.some(t=>t.classificationVersion===4&&t.modes?.includes(mood)&&isFlowTrackUnplayed(t))||!data.hasMore)break;offset=data.nextOffset;}modeOffsets.set(mood,data.hasMore?data.nextOffset:0);if(mood==='underground')data.tracks.forEach(t=>window.TelefyTrendMembership.add(t.soundcloudUrn));importBatch(data.tracks);if(state.activeMood!==mood)return;
+   const pageUrns=new Set(data.tracks.map(t=>t.soundcloudUrn));
    const old=new Set(state.queueIds);
-   state.queueIds=(state.queueIds||[]).filter(id=>{const t=tracks.find(t=>t.id===id);return t&&doesTrackMatchMood(t,mood)&&isFlowTrackUnplayed(t);});const candidates=interleaveByArtist(tracks.filter(t=>doesTrackMatchMood(t,mood)&&isFlowTrackUnplayed(t)&&!old.has(t.id)));
+   state.queueIds=(state.queueIds||[]).filter(id=>{const t=tracks.find(t=>t.id===id);return t&&doesTrackMatchMood(t,mood)&&isFlowTrackUnplayed(t);});const candidates=interleaveByArtist(tracks.filter(t=>(mood!=='underground'||pageUrns.has(t.soundcloudUrn))&&doesTrackMatchMood(t,mood)&&isFlowTrackUnplayed(t)&&!old.has(t.id)));
    const ranked=await window.TelefySmartSelection.rank(candidates,mood==='underground'?'trends':mood==='night'?'night':'energy');if(state.activeMood!==mood)return;
    state.queueIds.push(...ranked.map(t=>t.id));if(autoPlay&&state.queueIds.length)playTrack(state.queueIds.shift(),getMoodText(mood).streamTitle);else renderAll();
    if(autoPlay&&!doesTrackMatchMood(getTrack(state.currentTrackId),mood)&&!candidates.length&&!state.queueIds.length)showToast(state.lang==='en'?'No matching tracks yet':'Подходящих треков пока нет');

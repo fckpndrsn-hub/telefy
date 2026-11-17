@@ -28,7 +28,7 @@
    const sheet=document.createElement('section');sheet.className='app-surface w-full max-w-md rounded-t-3xl p-6';
    const title=document.createElement('h2');title.className='font-rounded text-xl mb-4';title.textContent='Поддержка Telefy';
    const link=document.createElement('a');link.href=url;link.textContent='Написать @telefy_support';link.className='block rounded-xl p-3 text-center bg-[#2AABEE] text-white';
-   const close=document.createElement('button');close.type='button';close.textContent='Закрыть';close.className='block mx-auto mt-4 text-muted';close.onclick=()=>backdrop.remove();
+   const close=document.createElement('button');close.type='button';close.textContent='Закрыть';close.className='block mx-auto mt-4 text-muted';close.onclick=()=>window.TelefyDismissTransient(backdrop,sheet);
    sheet.append(title,link,close);backdrop.append(sheet);document.body.append(backdrop);
   }
  }

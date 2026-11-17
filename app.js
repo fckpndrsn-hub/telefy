@@ -604,24 +604,33 @@ try {
       if(m.classList.contains('hidden')||m._dismissMotion)return;
       const start=getComputedStyle(panel).transform;
       const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
-      panel.style.animation='none';panel.style.transition='none';
+      const originalAnimation=m.style.animation,originalBackground=m.style.backgroundColor;
+      const background=getComputedStyle(m).backgroundColor;
+      // A backdrop fade on the parent also fades its children. Keep the sheet opaque.
+      m.style.animation='none';panel.style.animation='none';panel.style.transition='none';
       m.classList.add('is-closing');
-      const motion=panel.animate([{transform:start==='none'?'translateY(0)':start},{transform:`translateY(${panel.getBoundingClientRect().height+24}px)`}],{duration:reduced?1:380,easing:'cubic-bezier(.32,.72,0,1)',fill:'forwards'});
-      m._dismissMotion=motion;
-      motion.onfinish=()=>{
-        if(m._dismissMotion!==motion)return;
+      const finish=()=>{
         m.classList.add('hidden');m.classList.remove('is-open','is-closing');
-        m._dismissMotion=null;motion.cancel();panel.style.animation='';panel.style.transition='';panel.style.transform='';
-        panel.style.setProperty('--sheet-drag-y','0px');
+        const active=m._dismissMotion;m._dismissMotion=null;active?.cancel();m._backdropMotion?.cancel();m._backdropMotion=null;
+        m.style.animation=originalAnimation;m.style.backgroundColor=originalBackground;
+        panel.style.animation='';panel.style.transition='';panel.style.transform='';panel.style.setProperty('--sheet-drag-y','0px');
         if(onClosed)onClosed();
       };
+      if(typeof panel.animate!=='function'){finish();return;}
+      const duration=reduced?1:360;
+      if(m!==panel)m._backdropMotion=m.animate([{backgroundColor:background},{backgroundColor:'transparent'}],{duration,fill:'forwards'});
+      const distance=Math.max(panel.getBoundingClientRect().height+24,innerHeight-panel.getBoundingClientRect().top+24);
+      const motion=panel.animate([{transform:start==='none'?'translateY(0)':start},{transform:`translateY(${distance}px)`}],{duration,easing:'cubic-bezier(.32,.72,0,1)',fill:'forwards'});
+      m._dismissMotion=motion;motion.onfinish=()=>{if(m._dismissMotion===motion)finish();};
     }
+    window.TelefyDismissTransient=(element,panel=element)=>animateDismiss(element,panel,()=>{element.close?.();element.remove();});
 
     // Unified Bottom-Sheet Modal Controller (Telegram iOS Spring)
     function openSheetModal(modalOrId, haptic = 'light') {
       const m = typeof modalOrId === 'string' ? document.getElementById(modalOrId) : modalOrId;
       if (!m) return;
       if(m._dismissMotion){m._dismissMotion.cancel();m._dismissMotion=null;}
+      m._backdropMotion?.cancel();m._backdropMotion=null;m.style.animation='';
       if (m._closeTimer) {
         clearTimeout(m._closeTimer);
         m._closeTimer = null;
@@ -644,7 +653,7 @@ try {
     function closeSheetModal(modalOrId, onClosed = null) {
       const m=typeof modalOrId==='string'?document.getElementById(modalOrId):modalOrId;
       if(!m)return;
-      const panel=m.querySelector('.col-sheet-panel');
+      const panel=m.querySelector('.col-sheet-panel')||m.firstElementChild||m;
       if(panel)animateDismiss(m,panel,onClosed);
     }
 

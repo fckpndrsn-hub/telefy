@@ -9,8 +9,8 @@
   else{
    const dialog=document.createElement('dialog');Object.assign(dialog.style,{border:'none',borderRadius:'20px',padding:'24px',maxWidth:'340px',background:'var(--tg-theme-bg-color,#fff)',color:'var(--tg-theme-text-color,#17212b)'});
    const heading=document.createElement('h3');heading.textContent=title;const text=document.createElement('p');text.textContent=message;
-   const button=document.createElement('button');button.textContent=state.lang==='en'?'Open bot':'Открыть бота';Object.assign(button.style,{background:'#2aabee',color:'white',border:'none',padding:'12px 18px',borderRadius:'12px'});button.onclick=()=>{openBot();dialog.close();dialog.remove();};
-   const close=document.createElement('button');close.textContent=state.lang==='en'?'Close':'Закрыть';close.onclick=()=>{dialog.close();dialog.remove();};dialog.append(heading,text,button,close);document.body.append(dialog);dialog.showModal();
+   const button=document.createElement('button');button.textContent=state.lang==='en'?'Open bot':'Открыть бота';Object.assign(button.style,{background:'#2aabee',color:'white',border:'none',padding:'12px 18px',borderRadius:'12px'});button.onclick=()=>{openBot();window.TelefyDismissTransient(dialog);};
+   const close=document.createElement('button');close.textContent=state.lang==='en'?'Close':'Закрыть';close.onclick=()=>{window.TelefyDismissTransient(dialog);};dialog.append(heading,text,button,close);document.body.append(dialog);dialog.showModal();dialog.addEventListener('cancel',e=>{e.preventDefault();window.TelefyDismissTransient(dialog);});
   }
  }
  notifyTrackOfflineExport=async function(){
