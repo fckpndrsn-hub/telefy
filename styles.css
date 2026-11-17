@@ -1148,3 +1148,19 @@ body.theme-light .max-stars-panel{--stars-bg:#f3f3f7;--stars-card:#fff;--stars-t
 .gift-art{height:190px}.gift-message textarea{min-height:48px;height:56px}.gift-details,.gift-message{margin:16px 0}.gift-details>div{padding:13px 15px}
 
 #gift-topup{display:flex;align-items:center;justify-content:center;gap:5px;margin:16px auto 0;border:0;background:transparent;color:#2aabee;font-size:14px;font-weight:600}#gift-topup[hidden],#gift-topup-hint[hidden]{display:none}.gift-topup-star{width:18px;height:18px;background:currentColor;mask:url(./star.svg) center/contain no-repeat;-webkit-mask:url(./star.svg) center/contain no-repeat}
+
+/* Match the existing Stars checkout, including focus and native input sizing. */
+.gift-panel{--stars-muted:var(--text-muted);font-family:inherit}
+.gift-message textarea{appearance:none;-webkit-appearance:none;resize:none;outline:none;font-family:inherit;font-size:14px;line-height:20px;background:var(--bg-input);border:1px solid transparent;box-shadow:none;transition:border-color .15s}
+.gift-message textarea:focus{outline:none;border-color:rgba(42,171,238,.45);box-shadow:none}
+.gift-message textarea::placeholder{color:var(--text-muted);opacity:1}
+#gift-terms{display:flex;align-items:center;gap:10px;text-align:left;font-size:13px;line-height:18px;margin:18px 0}
+#gift-terms input{appearance:auto;-webkit-appearance:checkbox;width:20px;height:20px;flex:0 0 20px;margin:0;accent-color:#2aabee}
+.gift-primary{min-height:50px;padding:12px 16px;border-radius:13px;font-family:inherit;font-weight:650;line-height:22px}
+#gift-topup{width:100%;min-height:42px;margin:8px 0 0;font-family:inherit;line-height:20px}
+#gift-topup svg{display:block;flex:0 0 18px}
+#gift-topup-hint{font-size:11px;line-height:16px;text-align:center;color:var(--text-muted);margin:0 6px 8px}
+#gift-result{font-size:13px;line-height:18px;color:var(--text-muted);margin:12px 0 0}
+#gift-result:empty{display:none}
+.gift-entry{font-family:inherit;font-size:16px;line-height:22px;font-weight:600;min-height:56px}
+.gift-entry-icon{font-size:21px;line-height:1;flex:0 0 24px;text-align:center}
