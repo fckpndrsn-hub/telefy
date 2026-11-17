@@ -3,7 +3,9 @@ import json,hashlib,threading,re
 from pathlib import Path
 from urllib.parse import quote
 
-LOCK=threading.Lock()
+LOCK=threading.Lock();IMPORT_LOCKS={};IMPORT_SLOTS=threading.Semaphore(2)
+def section_lock(version):
+ with LOCK:return IMPORT_LOCKS.setdefault(version,threading.Lock())
 CONFIG=Path(__file__).with_name('trends-approved.json')
 
 def collection(value,key='collection'):
@@ -17,7 +19,7 @@ def _import(sc,offset=0,config_file=None):
  import profile_server
  cfg=json.loads((Path(config_file)if config_file else CONFIG).read_text(encoding='utf-8'));version=hashlib.sha256(json.dumps(cfg,sort_keys=True,ensure_ascii=False).encode()).hexdigest()[:16]
  d=profile_server.DB
- with LOCK:
+ with section_lock(version):
   d.ensure()
   with d.connect()as c:d.execute(c,'CREATE TABLE IF NOT EXISTS telefy_curated_trends(version TEXT NOT NULL,source_key TEXT NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(version,source_key))')
   def load(key):
@@ -130,13 +132,28 @@ def discover(sc,offset=0,config_file=None):
    t['modes']=list(t.get('modes')or[]);mode='night'if cfg.get('name')=='night'else'underground'
    if mode not in t['modes']:t['modes'].append(mode)
    unique[t['soundcloudUrn']]=t
+ banned=[sc.tokens(a)for a in cfg.get('excludeArtists',[])]
+ unique={urn:t for urn,t in unique.items()if not any(words and words.issubset(sc.tokens(t.get('artist','')))for words in banned)}
+ # Explicit Ambient/Soul membership is owned by Chill, even if a broad chart overlaps.
+ if cfg.get('excludeChillSources'):
+  chill=json.loads(Path(__file__).with_name('night-approved.json').read_text(encoding='utf-8'));chill_version=hashlib.sha256(json.dumps(chill,sort_keys=True,ensure_ascii=False).encode()).hexdigest()[:16]
+  with d.connect()as c:chill_rows=d.execute(c,'SELECT payload FROM telefy_curated_trends WHERE version=%s',(chill_version,)).fetchall()
+  chill_urns={t['soundcloudUrn']for row in chill_rows for t in json.loads(row['payload'])}
+  unique={urn:t for urn,t in unique.items()if urn not in chill_urns and not re.search(r'ambient|lo.?fi|soul|relax|meditation',t.get('genre',''),re.I)}
+  russian=[];foreign=[]
+  for t in unique.values():
+   credit=t.get('artist','');cfg_artist=sc.scene_artist(credit)
+   (russian if re.search('[а-яё]',credit+' '+t.get('title',''),re.I)or cfg_artist or any(sc.tokens(a).issubset(sc.tokens(credit))for a in sc.LEGENDS_ARTISTS+sc.HITS_ADDITIONS+['Villian','MACAN','Xcho','Jakone','SQWOZ BAB','Toxi$'])else foreign).append(t)
+  limit=int(len(russian)*float(cfg.get('maxForeignFraction',.2))/(1-float(cfg.get('maxForeignFraction',.2))))
+  foreign.sort(key=lambda t:t.get('playbackCount',0),reverse=True);unique={t['soundcloudUrn']:t for t in russian+foreign[:limit]}
  name=cfg.get('name','curated');error=RETRY.get(version,{}).get('error')
  sc.MODE_DIAGNOSTICS[name]={'version':version,'available':len(unique),'pending':pending,'notFound':missing,'error':error,'background':True,'ai':False}
  if pending:
   def worker():
    try:
     for _ in range(len(sources)+2):
-     result=_import(sc,0,path)
+     with IMPORT_SLOTS:result=_import(sc,0,path)
+     time.sleep(.05)
      if not result.get('importPending'):break
      failures=sc.MODE_DIAGNOSTICS.get(name,{}).get('errors')
      if failures:

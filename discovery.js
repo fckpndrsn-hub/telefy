@@ -128,6 +128,7 @@ window.TelefySoundCloud.refill=async function(autoPlay=false){
  if(state.activeMood!=='underground')return previous(autoPlay);
  if(window.TelefyOrderedQueue?.active||state.playbackContext==='favorites')return;
  if(pending){await pending;return;}
+ state.queueIds=(state.queueIds||[]).filter(id=>tracks.some(t=>t.id===id&&pool.includes(t.soundcloudUrn)));
  pending=(async()=>{try{
   if(!pool.length||importPending){const r=await fetch('/api/soundcloud/search?q=telefy%3Adiscovery%3Aunderground&offset=0&limit=50',{signal:AbortSignal.timeout(45000)});const d=await r.json();if(!r.ok)throw Error('curated');const before=new Set(pool);mergeParsedTracksIntoCatalog(d.tracks||[]);pool=(d.tracks||[]).map(t=>t.soundcloudUrn);importPending=d.importPending||0;if(order.length)order.push(...shuffle(tracks.filter(t=>pool.includes(t.soundcloudUrn)&&!before.has(t.soundcloudUrn)).map(t=>t.id)));}
   if(state.activeMood!=='underground'||window.TelefyOrderedQueue?.active)return;
@@ -151,6 +152,7 @@ window.TelefySoundCloud.refill=async function(autoPlay=false){
  if(state.activeMood!=='night')return previous(autoPlay);
  if(window.TelefyOrderedQueue?.active||state.playbackContext==='favorites')return;
  if(pending){await pending;return;}
+ state.queueIds=(state.queueIds||[]).filter(id=>tracks.some(t=>t.id===id&&pool.includes(t.soundcloudUrn)));
  pending=(async()=>{try{
   if(!pool.length||importPending){const r=await fetch('/api/soundcloud/search?q=telefy%3Adiscovery%3Anight&offset=0&limit=50',{signal:AbortSignal.timeout(45000)});const d=await r.json();if(!r.ok)throw Error('curated');const before=new Set(pool);mergeParsedTracksIntoCatalog(d.tracks||[]);pool=(d.tracks||[]).map(t=>t.soundcloudUrn);importPending=d.importPending||0;if(order.length)order.push(...shuffle(tracks.filter(t=>pool.includes(t.soundcloudUrn)&&!before.has(t.soundcloudUrn)).map(t=>t.id)));}
   if(state.activeMood!=='night'||window.TelefyOrderedQueue?.active)return;

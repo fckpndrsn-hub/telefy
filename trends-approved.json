@@ -309,5 +309,15 @@
       "artist": "Big Baby Tape, kizaru",
       "title": "Bandana"
     }
-  ]
+  ],
+  "excludeArtists": [
+    "Баста",
+    "Basta",
+    "Ноггано",
+    "Noggano",
+    "GUF",
+    "Гуф"
+  ],
+  "maxForeignFraction": 0.2,
+  "excludeChillSources": true
 }

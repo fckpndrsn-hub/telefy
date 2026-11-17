@@ -9,11 +9,6 @@
     },
     {
       "year": 2026,
-      "artist": "MACAN, Navai",
-      "title": "Неужели это все любовь"
-    },
-    {
-      "year": 2026,
       "artist": "Jakone, Kiliana",
       "title": "Была, не была"
     },
@@ -56,11 +51,6 @@
       "year": 2025,
       "artist": "madk1d",
       "title": "так похуй"
-    },
-    {
-      "year": 2024,
-      "artist": "MACAN, A.V.G",
-      "title": "Спой"
     },
     {
       "year": 2024,
@@ -111,16 +101,6 @@
       "year": 2023,
       "artist": "Гио Пика, Кравц",
       "title": "Где прошла ты"
-    },
-    {
-      "year": 2022,
-      "artist": "MACAN",
-      "title": "За всех"
-    },
-    {
-      "year": 2022,
-      "artist": "MACAN",
-      "title": "Останься образом"
     },
     {
       "year": 2022,
@@ -258,11 +238,10 @@
       "year": 2025,
       "artist": "FRIENDLY THUG 52 NGG",
       "title": "Most Valuable Pirate"
-    },
-    {
-      "year": 2025,
-      "artist": "MACAN",
-      "title": "BRATLAND"
     }
+  ],
+  "excludeArtists": [
+    "MACAN",
+    "Макан"
   ]
 }
