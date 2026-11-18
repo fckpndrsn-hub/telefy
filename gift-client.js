@@ -60,7 +60,7 @@
    const icon=()=>{const img=document.createElement('img');img.src='assets/star.svg';img.alt='';img.className='gift-stars-icon';return img;};
    document.getElementById('gift-price').replaceChildren(icon(),document.createTextNode(status.amount+' '+word(status.amount)));
    button.textContent='Оплатить '+status.amount+' '+word(status.amount,true);button.disabled=status.beta||!status.payments_configured;
-   if(status.beta){result('Сейчас Max бесплатен для всех. Покупка подарков будет доступна после беты.');return;}
+   if(status.beta){result('Сейчас Telefy Max бесплатен для всех. Покупка подарков будет доступна после беты.');return;}
    terms.querySelector('input').checked=false;button.disabled=true;terms.onchange=()=>button.disabled=!terms.querySelector('input').checked;
    button.onclick=async()=>{button.disabled=true;try{invoiceKey||=crypto.randomUUID();const d=await api('invoice',{request_key:invoiceKey,expected_amount:status.amount,terms_accepted:terms.querySelector('input').checked,message:sheet.querySelector('textarea').value});order=d.order_id;const tg=window.Telegram?.WebApp;if(!tg?.openInvoice)throw Error('telegram_required');tg.openInvoice(d.url,()=>check());}catch(e){result(errors[e.message]||'Открой подарок в Telegram и попробуй ещё раз.');button.disabled=false;}};
   }catch(e){result(errors[e.message]||'Не удалось загрузить подарок. Попробуй позже.');}

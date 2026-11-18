@@ -114,7 +114,7 @@
   controls.push({button,target,visible});
  }
  const sheet=id=>document.querySelector('#'+id+' > .col-sheet-panel');
- add('search-scroll-top',document.getElementById('app-shell'),window,()=>state.activeTab==='search'&&!document.documentElement.classList.contains('telefy-sheet-open'),true);
+ add('search-scroll-top',document.getElementById('app-shell'),window,()=>['search','favorites'].includes(state.activeTab)&&!document.documentElement.classList.contains('telefy-sheet-open'),true);
  for(const [modal,target,id]of [['collection-modal',sheet('collection-modal'),'collection-scroll-top'],['library-modal',document.getElementById('library-modal-tracks'),'library-scroll-top'],['create-playlist-modal',document.getElementById('playlist-editor-tracks'),'playlist-scroll-top']]){
   const host=document.getElementById(modal);add(id,host,target,()=>!host.classList.contains('hidden')&&!host.classList.contains('is-closing'));
  }

@@ -986,3 +986,21 @@ def collection_cover(kind):
         data=discovery(kind,0);first=next(iter(data.get('tracks',[])),{})
         return {'coverImg':first.get('coverImg')or'','firstTrackUrn':first.get('soundcloudUrn'),'tracks':[],'hasMore':False,'nextOffset':0}
     raise APIError(400,'invalid_collection')
+
+# Album search uses explicit SoundCloud playlist type metadata; editorial URLs are pinned.
+_search_before_albums=search
+def search(query,offset=0,limit=25):
+    import album_catalog
+    sc=__import__('sys').modules[__name__]
+    if query.startswith('telefy:albums:'):return album_catalog.search(sc,query[len('telefy:albums:'):],offset)
+    if query.startswith('telefy:artists:'):return album_catalog.search(sc,query[len('telefy:artists:'):],offset,'artists')
+    if query.startswith('telefy:album:'):return album_catalog.cached(query,lambda:album_catalog.detail(sc,query[len('telefy:album:'):]))
+    data=_search_before_albums(query,offset,limit)
+    if offset==0 and not query.startswith('telefy:') and len(query.strip())>=2:
+        for pin in album_catalog.PINS:
+            if query.casefold() in pin['keys'].casefold():
+                try:
+                    extra=album_catalog.detail(sc,pin['url'])['tracks'];seen={t['soundcloudUrn']for t in data['tracks']}
+                    data={**data,'tracks':data['tracks']+[t for t in extra if t['soundcloudUrn']not in seen]}
+                except APIError:pass
+    return data

@@ -1118,7 +1118,7 @@ try {
     function switchTab(tab) {
       const prevTab = state.activeTab;
       state.activeTab = tab;
-      const order = ['home', 'flow', 'search', 'mytelefy'];
+      const order = ['home', 'flow', 'search', 'mytelefy','favorites'];
       if (prevTab !== tab) {
         order.forEach(t => {
           const sec = document.getElementById(`view-${t}`);
@@ -1132,12 +1132,12 @@ try {
         });
       }
       if (prevTab !== tab) triggerHaptic('selection');
-      const idx = Math.max(0, order.indexOf(tab));
+      const idx = Math.max(0, order.indexOf(tab==='favorites'?'mytelefy':tab));
       const lens = document.getElementById('tab-active-lens');
       if (lens) lens.style.transform = `translateX(${idx * 100}%)`;
 
       document.querySelectorAll('.nav-tab').forEach(btn => {
-        const active = btn.dataset.tab === tab;
+        const active = btn.dataset.tab === (tab==='favorites'?'mytelefy':tab);
         btn.classList.toggle('active-glass', active);
         if (active) {
           btn.classList.remove('tab-bouncing');
@@ -1442,7 +1442,7 @@ try {
         if (window.TelefySoundCloud?.ready && q.length>=2 && !t.soundcloudUrn) return false;
         const matchesQuery = doesTrackMatchSearchQuery(t, q);
         const matchesFilter =
-          state.searchFilter === 'all' ||
+          ['all','tracks','artists','albums'].includes(state.searchFilter) ||
           (state.searchFilter === 'uncensored' && t.uncensored) ||
           (state.searchFilter === 'liked' && t.liked);
         return matchesQuery && matchesFilter;
@@ -1467,8 +1467,10 @@ try {
       if(state.searchFilter==='uncensored')state.searchFilter='all';
       if (state.searchFilter === 'liked' && !state.isMaxSubscribed) state.searchFilter = 'all';
       const filters = [
-        { id: 'all', label: t('searchAll') },
-        { id: 'liked', label: t('searchLiked') }
+        { id: 'all', label: state.lang==='en'?'All':'Все' },
+        { id: 'tracks', label: state.lang==='en'?'Tracks':'Треки' },
+        { id: 'artists', label: state.lang==='en'?'Artists':'Артисты' },
+        { id: 'albums', label: state.lang==='en'?'Albums':'Альбомы' }
       ];
       const filterContainer = document.getElementById('search-filter-chips');
       if (!filterContainer.querySelector('.search-filter-lens')) {
@@ -4219,8 +4221,7 @@ try {
     }
     function openLibraryModal() {
       if(!state.isMaxSubscribed){openUpsellModal();return;}
-      renderLibraryModalTracks();
-      openSheetModal('library-modal', 'light');
+      window.TelefyAlbums.showFavorites();
     }
     function closeLibraryModal() {
       closeSheetModal('library-modal');
@@ -4688,4 +4689,70 @@ window.TelefyArtistNotices=(()=>{
  const like=toggleLike;toggleLike=function(id,...args){const before=getTrack(id)?.liked;const result=like(id,...args);if(!before&&getTrack(id)?.liked)event('like');return result;};
  document.getElementById('btn-confirm-create-playlist')?.addEventListener('click',()=>event('playlist_create'));
  window.TelefyAnalytics={event};
+})();
+
+window.TelefySavedAlbums=[];
+window.TelefyAlbums=(()=>{
+ let results=[],artists=[],query='',error='',busy=false,revision=0,active=null,favKind='tracks',favQuery='',albumTracks=[],albumRequest=0,nextAlbums=null,nextArtists=null;
+ const cache=new Map();
+ const esc=escapeTrackText;
+ const albumKey=a=>a.id;
+ const liked=a=>window.TelefySavedAlbums.some(x=>albumKey(x)===albumKey(a));
+ async function request(q,offset=0){const r=await fetch('/api/soundcloud/search?'+new URLSearchParams({q,offset}),{signal:AbortSignal.timeout(30000)});const d=await r.json();if(!r.ok)throw Error(d.error||'catalog_unavailable');return d;}
+ function cards(items){return '<div class="album-grid">'+items.map((a,i)=>`<button class="release-card" data-release="${i}"><div class="release-art"><span class="tg-ico release-fallback">&#xF0BF;</span>${a.coverImg?`<img src="${esc(a.coverImg)}" alt="" loading="lazy">`:''}</div><strong>${esc(a.title)}</strong><span>${esc(a.artist)}</span><small>${esc(a.year||'')}</small></button>`).join('')+'</div>';}
+ function bindCards(box,items){box.querySelectorAll('.release-art img').forEach(img=>img.onerror=()=>img.remove());box.querySelectorAll('[data-release]').forEach(b=>b.onclick=()=>open(items[Number(b.dataset.release)]));}
+ function renderExtra(){
+  const box=document.getElementById('search-results-list');if(!box)return;const type=state.searchFilter;box.classList.toggle('release-result-cards',type==='albums');
+  box.querySelector('.release-search-extra')?.remove();
+  document.getElementById('search-scroll-sentinel').hidden=['artists','albums'].includes(type);
+  if(type==='tracks')return;
+  const host=document.createElement('div');host.className='release-search-extra';
+  if(type==='albums'||type==='artists'){box.replaceChildren(host);box._searchRows=[];box.classList.add('search-was-empty');}
+  else box.prepend(host);
+  if(type==='albums'||type==='all'){
+   if(results.length){host.innerHTML=(type==='all'?'<h3 class="release-heading">Альбомы</h3>':'')+cards(type==='all'?results.slice(0,4):results);bindCards(host,results);}
+   else if(type==='albums')host.textContent=busy?'Ищем альбомы…':error?'Не удалось загрузить альбомы. Попробуй ещё раз.':'Альбомы не найдены';
+  }
+  if(type==='artists'||type==='all'){
+   if(artists.length){const list=document.createElement('div');list.className='artist-search-list';list.innerHTML=(type==='all'?'<h3 class="release-heading">Артисты</h3>':'')+artists.map((a,i)=>`<button data-found-artist="${i}">${a.coverImg?`<img src="${esc(a.coverImg)}" alt="">`:''}<span>${esc(a.name)}</span><span>›</span></button>`).join('');list.querySelectorAll('[data-found-artist]').forEach(b=>b.onclick=()=>openArtistCard(artists[Number(b.dataset.foundArtist)].name));host.append(list);}
+   else if(type==='artists')host.textContent=busy?'Ищем артистов…':error?'Не удалось загрузить артистов.':'Артисты не найдены';
+  }
+  if(['artists','albums'].includes(type)){
+   document.getElementById('search-scroll-sentinel').hidden=true;
+   if((type==='albums'?nextAlbums:nextArtists)!==null){const more=document.createElement('button');more.className='release-load-more';more.textContent=busy?'Загружаем…':'Загрузить ещё';more.disabled=busy;more.onclick=()=>loadMore(type);host.append(more);}
+  }
+ }
+ async function loadMore(kind){if(busy)return;busy=true;const rev=revision,offset=kind==='albums'?nextAlbums:nextArtists;renderExtra();try{const data=await request('telefy:'+kind+':'+state.searchQuery.trim(),offset);if(rev!==revision)return;if(kind==='albums'){results=[...new Map([...results,...(data.albums||[])].map(a=>[a.id,a])).values()];nextAlbums=data.hasMore?data.nextOffset:null;}else{artists=[...new Map([...artists,...(data.artists||[])].map(a=>[a.id,a])).values()];nextArtists=data.hasMore?data.nextOffset:null;}}catch(_){showToast('Не удалось загрузить следующую страницу. Попробуй ещё раз.');}finally{if(rev===revision){busy=false;renderExtra();}}}
+ async function search(){
+  const q=state.searchQuery.trim(),type=state.searchFilter;if(type==='tracks')return;
+  const key=q+'::'+type;if(key===query)return;query=key;const rev=++revision;busy=true;error='';results=[];artists=[];nextAlbums=null;nextArtists=null;renderExtra();if(q&&q.length<2){busy=false;renderExtra();return;}
+  try{let data=cache.get(key);if(!data){data=await Promise.all([type!=='artists'?request('telefy:albums:'+q):Promise.resolve({albums:[]}),q.length>=2&&type!=='albums'?request('telefy:artists:'+q):Promise.resolve({artists:[]})]);cache.set(key,data);if(cache.size>40)cache.delete(cache.keys().next().value);}if(rev!==revision)return;results=data[0].albums||[];artists=data[1].artists||[];nextAlbums=data[0].hasMore?data[0].nextOffset:null;nextArtists=data[1].hasMore?data[1].nextOffset:null;}catch(_){if(rev===revision)error='failed';}finally{if(rev===revision){busy=false;renderExtra();}}
+ }
+ function paintHeart(){const b=document.getElementById('album-save-heart');if(!b||!active)return;const yes=liked(active);b.classList.toggle('is-liked',yes);b.setAttribute('aria-pressed',String(yes));b.setAttribute('aria-label',yes?'Удалить альбом из любимого':'Добавить альбом в любимое');b.innerHTML=`<span class="tg-ico">${yes?'&#xF016;':'&#xF1D9;'}</span>`;}
+ async function toggleAlbum(){if(!active||!window.TelefyLibrary?.ready)return;const a=active;const i=window.TelefySavedAlbums.findIndex(x=>x.id===a.id);if(i<0)window.TelefySavedAlbums.push({...a});else window.TelefySavedAlbums.splice(i,1);paintHeart();renderFavorites();await window.TelefyLibrary.save();paintHeart();}
+ function renderAlbum(){const box=document.getElementById('album-modal-tracks');box.innerHTML=albumTracks.map(createTrackRowHTML).join('');box.querySelectorAll('.track-play-trigger').forEach(b=>b.onclick=()=>{window.TelefyOrderedQueue.start(albumTracks.map(t=>t.id),Number(b.dataset.play),active.title,'playlist');syncTrackRowPlayback();});box.querySelectorAll('[data-like]').forEach(b=>b.onclick=()=>{toggleLike(Number(b.dataset.like));renderAlbum();});syncTrackRowPlayback();}
+ async function open(a){
+  active=a;document.getElementById('album-modal').classList.add('soundcloud-album');document.getElementById('album-modal-cover').parentElement.classList.add('album-release-header');albumTracks=[];const rev=++albumRequest;document.getElementById('album-back-artist-label').textContent=a.artist;document.getElementById('album-modal-title').textContent=a.title;document.getElementById('album-modal-artist').textContent=a.artist;document.getElementById('album-modal-meta').textContent=[a.year,a.trackCount?`${a.trackCount} треков`:''].filter(Boolean).join(' · ');applyCoverStyle(document.getElementById('album-modal-cover'),{coverImg:a.coverImg,cover:'#2857a2'});const releaseArt=document.getElementById('album-modal-cover');releaseArt.style.backgroundImage='';releaseArt.innerHTML='<span class="tg-ico release-fallback">&#xF0BF;</span>';if(a.coverImg){const img=document.createElement('img');img.src=a.coverImg;img.alt='';img.className='release-cover-img';img.onerror=()=>img.remove();releaseArt.append(img);}document.getElementById('album-modal-tracks').textContent='Загружаем альбом…';document.getElementById('btn-album-shuffle').hidden=true;
+  let heart=document.getElementById('album-save-heart');if(!heart){heart=document.createElement('button');heart.id='album-save-heart';heart.className='album-save-heart';heart.onclick=toggleAlbum;document.getElementById('btn-album-play-all').after(heart);}heart.hidden=false;paintHeart();
+  const play=document.getElementById('btn-album-play-all');play.disabled=true;openSheetModal('album-modal','light');
+  try{const data=await request('telefy:album:'+a.id);if(rev!==albumRequest)return;mergeParsedTracksIntoCatalog(data.tracks||[]);albumTracks=(data.tracks||[]).map(row=>tracks.find(t=>t.soundcloudUrn===row.soundcloudUrn)).filter(Boolean);document.getElementById('album-modal-meta').textContent=[a.year,`${albumTracks.length} треков`].filter(Boolean).join(' · ');if(!albumTracks.length)document.getElementById('album-modal-tracks').textContent='В альбоме нет доступных для воспроизведения треков.';else renderAlbum();play.disabled=!albumTracks.length;}catch(_){if(rev===albumRequest)document.getElementById('album-modal-tracks').textContent='Не удалось загрузить альбом. Открой его ещё раз.';}
+ }
+ function renderFavorites(){
+  const view=document.getElementById('view-favorites');if(!view)return;view.querySelectorAll('[data-fav-kind]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.favKind===favKind)));
+  const box=document.getElementById('favorites-content'),q=favQuery.trim().toLocaleLowerCase();box.classList.toggle('is-albums',favKind==='albums');
+  if(favKind==='albums'){const items=window.TelefySavedAlbums.filter(a=>(a.title+' '+a.artist).toLocaleLowerCase().includes(q));box.innerHTML=items.length?cards(items):'<p class="release-empty">Здесь появятся любимые альбомы</p>';bindCards(box,items);}
+  else{const items=tracks.filter(t=>t.liked&&(t.title+' '+t.artist).toLocaleLowerCase().includes(q));box.innerHTML=items.length?items.map(createTrackRowHTML).join(''):'<p class="release-empty">Здесь появятся любимые треки</p>';box.querySelectorAll('.track-play-trigger').forEach(b=>b.onclick=()=>window.TelefyOrderedQueue.start(items.map(t=>t.id),Number(b.dataset.play),'Любимое','favorites'));box.querySelectorAll('[data-like]').forEach(b=>b.onclick=()=>{toggleLike(Number(b.dataset.like));renderFavorites();});syncTrackRowPlayback();}
+ }
+ function showFavorites(){if(!state.isMaxSubscribed){openUpsellModal();return;}switchTab('favorites');renderFavorites();window.scrollTo({top:0,behavior:'instant'});}
+ function install(){const view=document.createElement('section');view.id='view-favorites';view.className='hidden favorites-screen';view.innerHTML='<div class="favorites-title"><button id="favorites-back" aria-label="Назад">‹</button><h1 class="font-rounded">Любимое</h1></div><input id="favorites-search" class="release-search" type="search" placeholder="Поиск в любимом"><div class="release-tabs"><button data-fav-kind="tracks" aria-pressed="true">Треки</button><button data-fav-kind="albums" aria-pressed="false">Альбомы</button></div><div id="favorites-content" class="tg-card"></div>';document.getElementById('view-search').after(view);view.querySelector('#favorites-back').onclick=()=>switchTab('mytelefy');view.querySelector('input').oninput=e=>{favQuery=e.target.value;renderFavorites();};view.querySelectorAll('[data-fav-kind]').forEach(b=>b.onclick=()=>{favKind=b.dataset.favKind;renderFavorites();});}
+ const oldRender=renderSearchView;renderSearchView=function(...args){oldRender(...args);renderExtra();if(state.activeTab==='search')search();};
+ const oldPlayer=renderPlayerUI;renderPlayerUI=function(...args){const r=oldPlayer(...args);paintHeart();return r;};
+ const oldLike=toggleLike;toggleLike=function(...args){const r=oldLike(...args);if(state.activeTab==='favorites')renderFavorites();return r;};
+ window.addEventListener('telefy:library-painted',()=>{paintHeart();if(state.activeTab==='favorites')renderFavorites();});
+ const oldSwitch=switchTab;switchTab=function(tab,...args){const r=oldSwitch(tab,...args);if(tab==='search'){renderSearchView();}return r;};
+ fetchDeezerArtistAlbums=async function(name){try{const d=await request('telefy:albums:'+name);return(d.albums||[]).map(a=>({...a,img:a.coverImg,artistName:a.artist}));}catch(_){return [];}};
+ renderArtistAlbumsCarousel=function(albums,name,box){if(!box)return;const items=albums.map(a=>({...a,coverImg:a.coverImg||a.img||'',artist:a.artist||a.artistName||name}));box.innerHTML=cards(items);box.querySelector('.album-grid')?.classList.add('artist-release-grid');box.querySelectorAll('.release-art img').forEach(img=>img.onerror=()=>img.remove());box.querySelectorAll('[data-release]').forEach(b=>b.onclick=()=>openAlbumModal(albums[Number(b.dataset.release)],name));};
+ const oldAlbum=openAlbumModal;openAlbumModal=function(a,artist){if(a?.id?.startsWith?.('soundcloud:playlists:'))return open(a);if(a?.collectionId?.startsWith?.('soundcloud:playlists:'))return open({id:a.collectionId,title:a.title,artist:artist||a.artistName,year:a.year||'',coverImg:a.img||'',url:''});active=null;document.getElementById('btn-album-play-all').disabled=false;document.getElementById('btn-album-shuffle').hidden=false;document.getElementById('album-modal').classList.remove('soundcloud-album');document.getElementById('album-save-heart')?.setAttribute('hidden','');return oldAlbum(a,artist);};
+ document.getElementById('btn-album-play-all').addEventListener('click',e=>{if(!active)return;e.stopImmediatePropagation();if(albumTracks.length)window.TelefyOrderedQueue.start(albumTracks.map(t=>t.id),albumTracks[0].id,active.title,'playlist');},true);
+ install();return {open,showFavorites,renderFavorites};
 })();

@@ -4,16 +4,17 @@
  let migrationTimer=null,migrationAttempts=0,migrationWarning=false;
  const account=()=>String(window.TelefyProfile?.user?.telegram_id||'');
  const snapshot=t=>({key:getTrackUniqueKey(t),title:t.title||'',artist:t.artist||t.primaryArtist||'',primaryArtist:t.primaryArtist||'',album:t.album||'',soundcloudUrn:t.soundcloudUrn||'',coverImg:t.coverImg?.startsWith('https://')?t.coverImg:'',duration:Number(t.duration)||0});
- const empty=()=>({likes:[],playlists:[]});
- function pack(){const byId=new Map(tracks.map(t=>[t.id,t])),byKey=new Map(tracks.map(t=>[getTrackUniqueKey(t),t]));return {likes:[...userLikedTrackKeys].map(key=>byKey.get(key)).filter(Boolean).map(snapshot),playlists:USER_PLAYLISTS.map(p=>({id:p.id,title:p.title,subtitle:p.subtitle||'',cover:p.cover||'#2AABEE',coverImg:p.coverImg||'',personal:p.personal===true,tracks:(p.trackIds||[]).map(id=>byId.get(id)).filter(Boolean).map(snapshot)}))};}
+ const empty=()=>({likes:[],playlists:[],albums:[]});
+ function pack(){const byId=new Map(tracks.map(t=>[t.id,t])),byKey=new Map(tracks.map(t=>[getTrackUniqueKey(t),t]));return {albums:window.TelefySavedAlbums.map(a=>({id:a.id,title:a.title,artist:a.artist,year:a.year||'',coverImg:a.coverImg||'',url:a.url||''})),likes:[...userLikedTrackKeys].map(key=>byKey.get(key)).filter(Boolean).map(snapshot),playlists:USER_PLAYLISTS.map(p=>({id:p.id,title:p.title,subtitle:p.subtitle||'',cover:p.cover||'#2AABEE',coverImg:p.coverImg||'',personal:p.personal===true,tracks:(p.trackIds||[]).map(id=>byId.get(id)).filter(Boolean).map(snapshot)}))};}
  function paint(){renderMaxBetaView();renderPlayerUI();if(state.activeTab==='search')renderSearchView();if(!document.getElementById('library-modal')?.classList.contains('hidden'))renderLibraryModalTracks();}
  function apply(data){
+  window.TelefySavedAlbums=(data.albums||[]).map(a=>({...a}));
   const byKey=new Map(tracks.map(t=>[getTrackUniqueKey(t),t]));let next=Math.max(0,...tracks.map(t=>Number(t.id)||0))+1;
   function materialize(row){let tr=byKey.get(row.key);if(!tr){tr={...row,id:next++,liked:false,disliked:false,cover:'#2AABEE',mood:'all',modes:[],uncensored:true,coverStatus:'loaded'};tracks.push(tr);byKey.set(row.key,tr);}if(!tr.soundcloudUrn&&row.soundcloudUrn)tr.soundcloudUrn=row.soundcloudUrn;if(!tr.duration&&row.duration)tr.duration=row.duration;if(!tr.coverImg&&row.coverImg)tr.coverImg=row.coverImg;return tr.id;}
   userLikedTrackKeys.clear();data.likes.forEach(t=>{materialize(t);userLikedTrackKeys.add(t.key);});
   tracks.forEach(t=>{t.liked=userLikedTrackKeys.has(getTrackUniqueKey(t));});
   USER_PLAYLISTS.splice(0,USER_PLAYLISTS.length,...data.playlists.map(p=>({...p,trackKeys:p.tracks.map(t=>t.key),trackIds:p.tracks.map(materialize)})));
-  desired=JSON.stringify(pack());paint();
+  desired=JSON.stringify(pack());paint();window.dispatchEvent(new Event('telefy:library-painted'));
  }
  async function request(data,path='/api/me/library'){const r=await fetch(path,{method:data?'POST':'GET',credentials:'same-origin',cache:'no-store',headers:data?{'Content-Type':'application/json'}:undefined,body:data?JSON.stringify(data):undefined,signal:AbortSignal.timeout(20000)});if(!r.ok){const error=new Error('library_'+r.status);error.status=r.status;throw error;}return r.json();}
  function message(error){showToast(error?.status===409?'Библиотека изменилась на другом устройстве. Повтори действие.':error?.status===403?'Для изменения плейлистов нужен Telefy Max.':'Не удалось сохранить в профиль. Проверь подключение и повтори.');}
