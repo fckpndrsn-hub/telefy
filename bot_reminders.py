@@ -52,13 +52,15 @@ def buttons():
  return {'inline_keyboard':[[bot_buttons.make('open',web_app={'url':bot.BASE+'/telefy.html'})],[bot_buttons.make('optout',callback_data='reminders_off')]]}
 def send(uid,stage):
  import telefy_bot as bot
- media=store().media(stage);text=custom_text(stage)or TEXTS[stage];common={'chat_id':uid,'reply_markup':buttons()}
+ import bot_posts
+ template=bot_posts.store().template(stage)
+ media=store().media(stage);text=template['body']if template else TEXTS[stage];entities=template['entities']if template else [];common={'chat_id':uid,'reply_markup':buttons()}
  if media:
   methods={'photo':'sendPhoto','video':'sendVideo','animation':'sendAnimation','audio':'sendAudio','document':'sendDocument'}
-  try:bot.api(methods[media['kind']],**common,**{media['kind']:media['file_id']},caption=text);return 'sent_media'
+  try:bot.api(methods[media['kind']],**common,**{media['kind']:media['file_id']},caption=text,caption_entities=entities);return 'sent_media'
   except bot.BotError as e:
    if not(e.definitive and e.status==400):raise
- bot.api('sendMessage',**common,text=text);return 'sent_text'
+ bot.api('sendMessage',**common,text=text,entities=entities);return 'sent_text'
 def run_one(now=None):
  import telefy_bot as bot
  now=int(time.time())if now is None else int(now)
@@ -134,7 +136,7 @@ def handle(update):
   if stage not in MEDIA_STAGES:return True
   bot.api('answerCallbackQuery',callback_query_id=callback['id'])
   if command=='rm_stage':admin_panel(uid,stage)
-  elif command=='rm_text':store().cancel_upload(uid);bot_posts.store().input(uid,'template',stage);bot.api('sendMessage',chat_id=uid,text='Пришли новый текст с эмоджи — до 1024 символов. Для приветствия можно использовать {name}. Форматирование обычным текстом. Отмена: /cancel')
+  elif command=='rm_text':store().cancel_upload(uid);bot_posts.store().input(uid,'template',stage);bot.api('sendMessage',chat_id=uid,text='Отправь новый текст обычным сообщением: добавляй premium-эмоджи, жирный, курсив, ссылки и другое оформление средствами Telegram. Всё сохранится. Можно прислать и подпись к медиа — само медиа здесь не заменяется. До 1024 символов; для приветствия доступно {name}. После сохранения нажми «Предпросмотр». Отмена: /cancel')
   elif command=='rm_reset':bot_posts.store().reset_text(stage);store().cancel_upload(uid);bot.api('sendMessage',chat_id=uid,text='Стандартный текст восстановлен.')
   elif command=='rm_clear':store().clear_media(stage);store().cancel_upload(uid);bot.api('sendMessage',chat_id=uid,text='Медиа удалено. Сообщение будет текстовым.')
   elif command=='rm_preview':bot.send_welcome(user,preview=True)if stage=='welcome'else send(uid,stage)

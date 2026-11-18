@@ -13,6 +13,36 @@ def store():
 
 def text_size(text):return len(text.encode('utf-16-le'))//2
 
+def rich_entities(body,entities):
+ if not isinstance(entities,list)or len(entities)>100:raise ValueError('entities')
+ size=text_size(body);result=[]
+ for entity in entities:
+  if not isinstance(entity,dict):raise ValueError('entity')
+  entity=dict(entity);start=entity.get('offset');length=entity.get('length')
+  if type(start)is not int or type(length)is not int or start<0 or length<=0 or start+length>size:raise ValueError('entity_range')
+  # Entity boundaries cannot cut a supplementary Unicode character in half.
+  raw=body.encode('utf-16-le')
+  try:raw[:start*2].decode('utf-16-le');raw[:(start+length)*2].decode('utf-16-le')
+  except UnicodeDecodeError:raise ValueError('entity_boundary')from None
+  result.append(entity)
+ return result
+
+def personalize(body,entities,name):
+ import re
+ entities=rich_entities(body,entities)
+ # Telegram offsets are UTF-16 code units, not Python character indices.
+ for match in reversed(list(re.finditer(r'\{name\}',body))):
+  start=text_size(body[:match.start()]);end=start+6;delta=text_size(name)-6;updated=[]
+  for original in entities:
+   entity=dict(original);a=entity['offset'];b=a+entity['length']
+   if b<=start:pass
+   elif a>=end:entity['offset']+=delta
+   elif a<=start and b>=end:entity['length']+=delta
+   else:continue
+   updated.append(entity)
+  entities=updated;body=body[:match.start()]+name+body[match.end():]
+ return {'body':body,'entities':rich_entities(body,entities)}
+
 class PostStore:
  def __init__(self,db):self.db=db;self.ready=False;self.lock=threading.Lock()
  def ensure(self):
@@ -23,6 +53,7 @@ class PostStore:
     if self.db.url:self.db.execute(c,'SELECT pg_advisory_xact_lock(734620114)')
     for sql in [
      'CREATE TABLE IF NOT EXISTS telefy_bot_texts (stage TEXT PRIMARY KEY,body TEXT NOT NULL)',
+     'CREATE TABLE IF NOT EXISTS telefy_bot_text_entities (stage TEXT PRIMARY KEY,entities TEXT NOT NULL)',
      'CREATE TABLE IF NOT EXISTS telefy_bot_buttons (key TEXT PRIMARY KEY,config TEXT NOT NULL)',
      'CREATE TABLE IF NOT EXISTS telefy_post_control (id INTEGER PRIMARY KEY,retry_at BIGINT NOT NULL)',
      'CREATE TABLE IF NOT EXISTS telefy_post_inputs (admin_id BIGINT PRIMARY KEY,kind TEXT NOT NULL,target TEXT NOT NULL,expires_at BIGINT NOT NULL)',
@@ -34,18 +65,29 @@ class PostStore:
  def text(self,stage):
   with self.db.connect()as c:row=self.db.execute(c,'SELECT body FROM telefy_bot_texts WHERE stage=%s',(stage,)).fetchone()
   return row['body']if row else None
+ def template(self,stage):
+  with self.db.connect()as c:
+   row=self.db.execute(c,'SELECT body FROM telefy_bot_texts WHERE stage=%s',(stage,)).fetchone()
+   if not row:return None
+   extra=self.db.execute(c,'SELECT entities FROM telefy_bot_text_entities WHERE stage=%s',(stage,)).fetchone()
+  return {'body':row['body'],'entities':json.loads(extra['entities'])if extra else []}
  def button(self,key,config=None,reset=False):
   with self.db.connect()as c:
    if reset:self.db.execute(c,'DELETE FROM telefy_bot_buttons WHERE key=%s',(key,));return
    if config is not None:self.db.execute(c,'INSERT INTO telefy_bot_buttons VALUES(%s,%s) ON CONFLICT(key) DO UPDATE SET config=excluded.config',(key,json.dumps(config,ensure_ascii=False)));return
    row=self.db.execute(c,'SELECT config FROM telefy_bot_buttons WHERE key=%s',(key,)).fetchone()
   return json.loads(row['config'])if row else {}
- def set_text(self,stage,body):
+ def set_text(self,stage,body,entities=None):
   from reminder_store import MEDIA_STAGES
   if stage not in MEDIA_STAGES or not isinstance(body,str)or not body.strip()or text_size(body)>1024:raise ValueError('text_limit')
-  with self.db.connect()as c:self.db.execute(c,'INSERT INTO telefy_bot_texts VALUES(%s,%s) ON CONFLICT(stage) DO UPDATE SET body=excluded.body',(stage,body))
+  entities=rich_entities(body,entities or [])
+  with self.db.connect()as c:
+   self.db.execute(c,'INSERT INTO telefy_bot_texts VALUES(%s,%s) ON CONFLICT(stage) DO UPDATE SET body=excluded.body',(stage,body))
+   self.db.execute(c,'INSERT INTO telefy_bot_text_entities VALUES(%s,%s) ON CONFLICT(stage) DO UPDATE SET entities=excluded.entities',(stage,json.dumps(entities,ensure_ascii=False)))
  def reset_text(self,stage):
-  with self.db.connect()as c:self.db.execute(c,'DELETE FROM telefy_bot_texts WHERE stage=%s',(stage,))
+  with self.db.connect()as c:
+   self.db.execute(c,'DELETE FROM telefy_bot_texts WHERE stage=%s',(stage,))
+   self.db.execute(c,'DELETE FROM telefy_bot_text_entities WHERE stage=%s',(stage,))
  def input(self,uid,kind=None,target=''):
   with self.db.connect()as c:
    if kind:
@@ -119,7 +161,7 @@ def extract(message):
   if kind=='photo'and isinstance(value,list)and value:value=value[-1]
   if isinstance(value,dict)and value.get('file_id'):media={'kind':kind,'file_id':value['file_id']};break
  if not isinstance(body,str)or (not body.strip()and not media)or text_size(body)>(1024 if media else 4096):raise ValueError('post_limit')
- return {'body':body,'entities':entities,'media':media}
+ return {'body':body,'entities':rich_entities(body,entities),'media':media}
 
 def deliver(uid,payload):
  import telefy_bot as bot
@@ -239,8 +281,8 @@ def handle(update):
  try:
   kind=pending['kind'];target=pending['target']
   if kind=='template':
-   text=msg.get('text')
-   s.set_text(target,text);s.cancel_input(uid);say(uid,'Текст сохранён ✅',[[button('Открыть сообщение','rm_stage:'+target)]]);return True
+   incoming=extract(msg)
+   s.set_text(target,incoming['body'],incoming['entities']);s.cancel_input(uid);say(uid,'Текст, форматирование и premium-эмоджи сохранены ✅',[[button('Предпросмотр','rm_preview:'+target),button('Изменить текст','rm_text:'+target)]]);return True
   if kind=='new':pid=s.create(uid,extract(msg));s.cancel_input(uid);draft(uid,pid);return True
   p=s.post(uid,target)
   if not p or p['status']!='draft':s.cancel_input(uid);say(uid,'Этот пост уже нельзя редактировать. Создай новый.');return True

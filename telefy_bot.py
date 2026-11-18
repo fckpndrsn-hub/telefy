@@ -97,16 +97,21 @@ def welcome_text(user):
 
 def send_welcome(user,preview=False):
     import bot_buttons
+    import bot_posts
     markup={'inline_keyboard':[[bot_buttons.make('open',web_app={'url':BASE+'/telefy.html'})]]}if preview else keyboard(user)
     common={'chat_id':user['id'],'parse_mode':'HTML','reply_markup':markup}
     text=welcome_text(user);media=reminders.store().media('welcome')
+    template=bot_posts.store().template('welcome')
+    entities=None
+    if template:
+        rich=bot_posts.personalize(template['body'],template['entities'],user.get('first_name')or'друг');text=rich['body'];entities=rich['entities'];common.pop('parse_mode',None)
     if media:
         methods={'photo':'sendPhoto','video':'sendVideo','animation':'sendAnimation','audio':'sendAudio','document':'sendDocument'}
         try:
-            api(methods[media['kind']],**common,**{media['kind']:media['file_id']},caption=text);return
+            api(methods[media['kind']],**common,**{media['kind']:media['file_id']},caption=text,**({'caption_entities':entities}if entities is not None else{}));return
         except BotError as e:
             if not(e.definitive and e.status==400):raise
-    api('sendMessage',**common,text=text)
+    api('sendMessage',**common,text=text,**({'entities':entities}if entities is not None else{}))
 
 def show_menu(user):
     store().remember(user)
