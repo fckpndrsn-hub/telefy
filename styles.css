@@ -1164,3 +1164,26 @@ body.theme-light .max-stars-panel{--stars-bg:#f3f3f7;--stars-card:#fff;--stars-t
 #gift-result:empty{display:none}
 .gift-entry{font-family:inherit;font-size:16px;line-height:22px;font-weight:600;min-height:56px}
 .gift-entry-icon{font-size:21px;line-height:1;flex:0 0 24px;text-align:center}
+
+/* The gift uses the same sheet controller, entry animation and drag behavior as checkout. */
+.gift-panel{position:relative;width:100%;max-width:448px;max-height:88dvh;padding:8px 20px calc(22px + var(--telefy-safe-bottom,0px));border-radius:24px 24px 0 0;corner-shape:round;overscroll-behavior:contain}
+.gift-grip{position:relative;display:block;width:100%;height:22px;margin:0 auto 12px;background:transparent;border:0;border-radius:0;touch-action:none}
+.gift-grip::before{content:'';position:absolute;left:50%;top:8px;transform:translateX(-50%);width:36px;height:5px;border-radius:5px;background:#b9bcc3}
+.gift-art,.gift-panel h2,.gift-subtitle{touch-action:none}
+.gift-details>[hidden]{display:none!important}
+.gift-details.is-recipient{border:1px solid var(--border-hairline);border-radius:16px}
+.gift-details.is-recipient>div:not(.gift-comment){display:grid;grid-template-columns:44% 56%;padding:0;gap:0;align-items:stretch;background:linear-gradient(to right,var(--bg-input) 44%,transparent 44%)}
+.gift-details.is-recipient>div:not(.gift-comment)>b{padding:14px 16px;text-align:left;border-left:1px solid var(--border-hairline);font-weight:550}
+.gift-details.is-recipient>div:not(.gift-comment){padding-left:16px;align-items:center}
+.gift-details>.gift-comment{display:block;padding:16px;text-align:left;white-space:pre-wrap;overflow-wrap:anywhere;line-height:22px;font-size:15px;border-bottom:0;border-top:1px solid var(--border-hairline)}
+
+.gift-comment-label{display:block;font-size:12px;line-height:18px;color:var(--text-muted);margin-bottom:7px}.gift-comment-text{margin:0;font-size:15px;line-height:22px;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--text-primary)}
+
+.gift-details.is-recipient>div:not(.gift-comment){display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 15px;background:none}
+.gift-details.is-recipient>div:not(.gift-comment)>b{padding:0;border-left:0;text-align:right;font-weight:600;min-width:0;overflow-wrap:anywhere}
+.gift-recipient-username{color:#2aabee}
+
+#gift-help{margin-bottom:18px}
+
+.artist-agent-notice{display:inline-flex;max-width:100%;padding:3px 8px;margin:6px 0 2px;border-radius:7px;background:var(--bg-elevated);color:var(--text-muted);font-family:inherit;font-size:11px;font-weight:600;line-height:16px;white-space:normal;overflow-wrap:anywhere}
+.artist-agent-notice[hidden]{display:none}

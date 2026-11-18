@@ -3378,6 +3378,7 @@ try {
         if (glyph && !initialAvatar) glyph.textContent = cleanName.charAt(0).toUpperCase();
       }
       document.getElementById('artist-modal-name').textContent = cleanName;
+      window.TelefyArtistNotices.render(cleanName);
       document.getElementById('artist-modal-listeners').textContent = `${getArtistListeners(cleanName)} ${t('monthlyListeners')}`;
 
       const tracksEl = document.getElementById('artist-modal-tracks');
@@ -4636,3 +4637,43 @@ function syncPlaybackSource(){
  const desc=document.getElementById('home-stream-desc');
  if(desc&&['favorites','playlist','search'].includes(context))desc.textContent=context==='favorites'?(english?'Your saved tracks':'Твои сохранённые треки'):context==='search'?(english?'Playing search results':'Треки из результатов поиска'):(english?'Playing the selected playlist':'Играет выбранная подборка');
 }
+
+/* Editorial notice list supplied by the service owner. Match complete aliases only. */
+window.TelefyArtistNotices=(()=>{
+ const normalize=value=>String(value||'').normalize('NFKC').toLocaleLowerCase('ru').replace(/ё/g,'е').replace(/[^\p{L}\p{N}]/gu,'');
+ const entries=[
+  ['Noize MC','Иван Алексеев','Нойз МС'],
+  ['Oxxxymiron','Мирон Фёдоров','Оксимирон'],
+  ['Земфира','Земфира Рамазанова','Zemfira'],
+  ['Монеточка','Елизавета Гырдымова','Monetochka'],
+  ['MORGENSHTERN','Моргенштерн','Алишер Валеев'],
+  ['FACE','Иван Дрёмин','Фейс'],
+  ['Борис Гребенщиков','Boris Grebenshchikov','БГ'],
+  ['Андрей Макаревич','Andrey Makarevich'],
+  ['Лёва Би-2','Лева БИ2','Лёва БИ2','Егор Бортник'],
+  ['Максим Покровский','Max Pokrovsky'],
+  ['Владимир Котляров'],
+  ['Илья Прусикин','Ilya Prusikin','Ильич'],
+  ['Семён Слепаков','Semyon Slepakov'],
+  ['Вася Обломов','Василий Гончаров','Vasya Oblomov'],
+  ['Fuze Krec','Fuze','Артём Бровков'],
+  ['Наоко','Naoko']
+ ];
+ const people=new Set(entries.flat().map(normalize));
+ const groups=new Map([
+  ['Аквариум','Борис Гребенщиков'],['Aquarium','Борис Гребенщиков'],
+  ['Машина времени','Андрей Макаревич'],['Mashina Vremeni','Андрей Макаревич'],
+  ['Би-2','Лёва Би-2'],['Bi-2','Лёва Би-2'],
+  ['Ногу Свело!','Максим Покровский'],['Nogu Svelo','Максим Покровский'],
+  ['Порнофильмы','Владимир Котляров'],['Pornofilmy','Владимир Котляров'],
+  ['Little Big','Илья Прусикин'],['Krec','Артём Бровков'],['Стоптайм','Наоко'],['Stoptime','Наоко']
+ ].map(([alias,person])=>[normalize(alias),person]));
+ function label(name){const key=normalize(name);return people.has(key)?'Иноагент':groups.has(key)?groups.get(key)+' — иноагент':'';}
+ function render(name){
+  const heading=document.getElementById('artist-modal-name');if(!heading)return;
+  let badge=document.getElementById('artist-agent-notice');
+  if(!badge){badge=document.createElement('span');badge.id='artist-agent-notice';badge.className='artist-agent-notice';heading.after(badge);}
+  const text=label(name);badge.textContent=text;badge.hidden=!text;
+ }
+ return {label,render};
+})();
