@@ -124,6 +124,9 @@ def show_gate(user):
 def same_channel(chat):return ('@'+str(chat.get('username',''))).casefold()==CHANNEL.casefold()or str(chat.get('id'))==CHANNEL
 def valid_user(user):return isinstance(user,dict)and type(user.get('id'))is int and 0<user['id']<2**53 and user.get('is_bot')is not True
 def handle(update):
+    import admin_analytics
+    admin_analytics.observe(update)
+    if admin_analytics.handle(update):return
     import max_billing
     if max_billing.handle_update(update):return
     import bot_max_admin

@@ -10,7 +10,7 @@
  function measure(){
   const now=performance.now(),dt=Math.max(0,now-last);last=now;
   if(owner!==uid()){reset();return;}
-  if(budget&&!budget.unlimited&&audible&&!audio.seeking){total+=dt;pending+=dt;if(remaining()<=0)stop();}
+  if(budget&&audible&&!audio.seeking){total+=dt;if(!budget.unlimited){pending+=dt;if(remaining()<=0)stop();}}
  }
  async function report(){
   reset();if(!owner)return false;if(inflight)return inflight;

@@ -113,6 +113,11 @@ class ProfileHandler(LibraryMixin,MaxBillingMixin,base.Handler):
         except Exception:self.reply(503,{'error':'verification_unavailable'});return
         try:token,profile=DB.login(user)
         except Exception:self.reply(503,{'error':'database_unavailable'});return
+        try:
+            import admin_analytics
+            from urllib.parse import parse_qs
+            admin_analytics.store().acquire(user['telegram_id'],parse_qs(raw).get('start_param',[''])[0],opened=True)
+        except Exception:pass
         self.session_reply({'user':profile},token,604800)
     def session_reply(self,data,token,age):
         body=json.dumps(data,ensure_ascii=False).encode()

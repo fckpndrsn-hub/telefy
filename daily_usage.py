@@ -22,6 +22,8 @@ class UsageStore:
    with self.db.connect()as c:
     self.db.execute(c,'CREATE TABLE IF NOT EXISTS telefy_daily_usage(telegram_id BIGINT NOT NULL,day TEXT NOT NULL,listened_ms BIGINT NOT NULL,PRIMARY KEY(telegram_id,day))')
     self.db.execute(c,'CREATE TABLE IF NOT EXISTS telefy_playback_sessions(telegram_id BIGINT NOT NULL,id TEXT NOT NULL,day TEXT NOT NULL,reported_ms BIGINT NOT NULL,updated_ms BIGINT NOT NULL,PRIMARY KEY(telegram_id,id))')
+   import admin_analytics
+   self.analytics=admin_analytics.Analytics(self.db);self.analytics.ensure()
    self.ready=True
  def report(self,uid,session=None,total=0,now=None):
   if session is not None and(not isinstance(session,str)or not re.fullmatch(r'[a-zA-Z0-9_-]{16,64}',session)or type(total)is not int or not 0<=total<=864000000):raise ValueError('invalid_usage')
@@ -43,6 +45,7 @@ class UsageStore:
      delta=max(0,min(total-old['reported_ms'],stamp-old['updated_ms']+500))
     elif old:
      delta=max(0,min(total-old['reported_ms'],stamp-start*1000))
+    self.analytics.playback(c,uid,day,delta)
     if not unlimited:used=min(LISTEN_MS,used+delta)
     # Stale/out-of-order reports must not move the checkpoint backwards.
     if not old or total>=old['reported_ms']:
@@ -67,6 +70,9 @@ class UsageMixin:
   except Exception:self.reply(503,{'error':'usage_unavailable'})
  def do_POST(self):
   path=urlsplit(self.path).path
+  if path=='/api/me/analytics':
+   import admin_analytics
+   return admin_analytics.route(self)
   if path not in('/api/me/usage','/api/soundcloud/stream'):return super().do_POST()
   if not self.same_origin():self.reply(403,{'error':'origin_rejected'});return
   try:

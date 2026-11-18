@@ -15,6 +15,7 @@
   }
  }
  notifyTrackOfflineExport=async function(){
+  window.TelefyAnalytics?.event('export_request');
   const track=getTrack(state.currentTrackId);if(!track?.soundcloudUrn){showToast('Сначала выбери трек.');return;}
   if(exporting.has(track.soundcloudUrn)){showToast('Этот трек уже в очереди на отправку.');return;}
   const exportUrn=track.soundcloudUrn;exporting.add(exportUrn);triggerHaptic('medium');showToast('Готовим трек для отправки в Telegram…');

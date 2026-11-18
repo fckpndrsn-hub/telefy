@@ -29,6 +29,7 @@ COPY daily_usage.py ./daily_usage.py
 COPY daily-usage.js ./web/assets/daily-usage.js
 COPY max_gifts.py ./
 COPY gift-client.js gift-logo.svg gift-animation.json lottie.min.js ./web/assets/
+COPY admin_analytics.py ./
 ENV PYTHONUNBUFFERED=1 TELEFY_PRIVATE_DIR=/tmp/telefy-private
 USER 10001
 EXPOSE 10000

@@ -4677,3 +4677,15 @@ window.TelefyArtistNotices=(()=>{
  }
  return {label,render};
 })();
+
+/* Small first-party events only; no track metadata or third-party analytics SDK. */
+(()=>{
+ let owner='',opened=false;
+ function event(name){if(!window.TelefyProfile?.user?.telegram_id)return;const body=JSON.stringify({event:name,event_id:crypto.randomUUID()});fetch('/api/me/analytics',{method:'POST',headers:{'Content-Type':'application/json'},body,keepalive:true}).catch(()=>{});}
+ function start(){const id=String(window.TelefyProfile?.user?.telegram_id||'');if(owner!==id){owner=id;opened=false;}if(id&&!opened){opened=true;event('app_open');}}
+ window.addEventListener('telefy:profile-ready',start);if(window.TelefyProfile?.user)start();
+ document.getElementById('telefy-audio')?.addEventListener('error',()=>event('playback_error'));
+ const like=toggleLike;toggleLike=function(id,...args){const before=getTrack(id)?.liked;const result=like(id,...args);if(!before&&getTrack(id)?.liked)event('like');return result;};
+ document.getElementById('btn-confirm-create-playlist')?.addEventListener('click',()=>event('playlist_create'));
+ window.TelefyAnalytics={event};
+})();
