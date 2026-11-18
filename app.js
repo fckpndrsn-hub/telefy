@@ -1,3 +1,12 @@
+
+/* Shared content placeholders: no fake titles or clickable rows. */
+window.TelefySkeleton={
+ html(kind='tracks',count=6){
+  const cards=kind==='cards',note=kind==='note';
+  const label=typeof state!=='undefined'&&state.lang==='en'?'Loading':'Загрузка';
+  return `<div class="catalog-skeleton ${cards?'skeleton-cards':note?'skeleton-note':''}" role="status" aria-label="${label}">${Array.from({length:count},()=>note?'<span class="skeleton-line" aria-hidden="true"></span>':`<div class="catalog-skeleton-row" aria-hidden="true"><span class="catalog-skeleton-art ${kind==='artists'?'is-round':''}"></span><span class="catalog-skeleton-copy"><span></span><span></span></span></div>`).join('')}</div>`;
+ }
+};
 // Capture legacy data before startup catalog refresh changes numeric IDs.
 try {
  window.TelefyLegacyLibrary = JSON.parse(localStorage.getItem('telefy_legacy_library_pending_v1')||'null') || { keys:localStorage.getItem('telefy_user_liked_keys_v8'), playlists:localStorage.getItem('telefy_user_playlists_v6'), catalog:localStorage.getItem('telefy_parsed_catalog_v8') };
@@ -1340,12 +1349,7 @@ try {
           container.querySelector('.catalog-retry').addEventListener('click',()=>window.TelefySoundCloud.initialize());
           return;
         }
-        container.innerHTML = `
-          <div class="py-8 px-4 text-center space-y-2">
-            <div class="w-10 h-10 rounded-2xl mx-auto cover-loading relative overflow-hidden bg-[#1E3A8A]/40 flex items-center justify-center text-white text-sm">♫</div>
-            <p class="text-xs text-muted">${state.lang === 'en' ? 'Loading tracks, albums & covers...' : 'Загружаем треки, альбомы и обложки...'}</p>
-          </div>
-        `;
+        container.innerHTML = window.TelefySkeleton.html();
         return;
       }
       container.innerHTML = displayPool.slice(0, 12).map(createTrackRowHTML).join('');
@@ -1512,7 +1516,7 @@ try {
         const empty = document.createElement('div');
         empty.className = 'native-search-empty';
         if (state.isCatalogParsing || (q.length >= 2 && state.isSearchParsing)) {
-          empty.textContent = state.lang === 'en' ? 'Searching for music…' : 'Ищем музыку…';
+          empty.className='';empty.innerHTML=window.TelefySkeleton.html();
         } else if (state.catalogError) {
           empty.textContent=getCatalogErrorText();
         } else {
@@ -1539,7 +1543,7 @@ try {
       const q=state.searchQuery.trim(),local=getFilteredSearchTracks().length>searchDisplayLimit;
       const remote=q.length>=2&&searchPagination.query===q&&searchPagination.hasMore&&state.searchFilter!=='liked';
       box.hidden=!(local||remote||state.isSearchParsing);button.disabled=searchPagination.loading||state.isSearchParsing;
-      button.textContent=button.disabled?(state.lang==='en'?'Loading…':'Загрузка…'):(state.lang==='en'?'Show more':'Показать ещё');
+      button.textContent=state.lang==='en'?'Show more':'Показать ещё';button.hidden=button.disabled;let placeholder=box.querySelector('.search-more-skeleton');if(button.disabled&&getFilteredSearchTracks().length){if(!placeholder){placeholder=document.createElement('div');placeholder.className='search-more-skeleton';placeholder.innerHTML=window.TelefySkeleton.html('tracks',3);box.prepend(placeholder);}}else placeholder?.remove();
     }
 
     async function loadMoreSearchResults() {
@@ -1759,7 +1763,7 @@ try {
       const colTracks = col.trackIds.map(id => tracks.find(x => x.id === id)).filter(Boolean);
       listEl.innerHTML = colTracks.length
         ? colTracks.map(createTrackRowHTML).join('')
-        : `<div class="text-center py-8 text-xs text-muted">${state.lang === 'en' ? 'Loading collection tracks...' : 'Загружаем треки подборки...'}</div>`;
+        : window.TelefySkeleton.html();
       bindTrackRowEvents(listEl, cText.title);
 
       updateCollectionPresentation();
@@ -1801,7 +1805,8 @@ try {
       // Render User Playlists Grid
       const gridEl = document.getElementById('max-playlists-grid');
       if (gridEl) {
-        if (USER_PLAYLISTS.length === 0) {
+        if (window.TelefyLibrary?.loading && !USER_PLAYLISTS.length) {gridEl.innerHTML=window.TelefySkeleton.html('cards',2);}
+        else if (USER_PLAYLISTS.length === 0) {
           gridEl.innerHTML = `<div class="playlist-empty-state col-span-2"><span class="playlist-empty-icon tg-ico" aria-hidden="true">&#xF0BF;</span><div><p>${state.lang === 'en' ? 'Your music, together' : 'Твоя музыка — вместе'}</p><span>${state.lang === 'en' ? 'Create a playlist and add your favourite tracks' : 'Создай плейлист и добавь любимые треки'}</span></div></div>`;
         } else {
           gridEl.innerHTML = USER_PLAYLISTS.map(pl => {
@@ -3319,7 +3324,7 @@ try {
       if (activeAlbumTracks.length) {
         renderAlbumModalTracks();
       } else {
-        listEl.innerHTML = `<div class="text-center py-10 text-xs text-muted">${t('albumTracksLoading')}</div>`;
+        listEl.innerHTML = window.TelefySkeleton.html();
       }
 
       openSheetModal('album-modal', 'light');
@@ -3388,7 +3393,7 @@ try {
         tracksEl.innerHTML = artistTracks.slice(0, 6).map(createTrackRowHTML).join('');
         bindTrackRowEvents(tracksEl);
       } else {
-        tracksEl.innerHTML = `<div class="w-full py-6 text-center text-xs text-muted">${state.lang === 'en' ? 'Loading artist tracks...' : 'Загружаем треки артиста...'}</div>`;
+        tracksEl.innerHTML = window.TelefySkeleton.html();
       }
 
       const albumsEl = document.getElementById('artist-modal-albums');
@@ -3396,7 +3401,7 @@ try {
       if (localAlbums.length) {
         renderArtistAlbumsCarousel(localAlbums, cleanName, albumsEl);
       } else {
-        albumsEl.innerHTML = `<div class="w-full py-6 text-center text-xs text-muted">${t('albumsLoading')}</div>`;
+        albumsEl.innerHTML = window.TelefySkeleton.html('cards',2);
       }
 
       openSheetModal('artist-modal', 'light');
@@ -3415,6 +3420,7 @@ try {
         }
       }
 
+      if(document.getElementById('artist-modal-name').textContent===cleanName&&!artistTracks.length)tracksEl.innerHTML='<p class="release-empty">'+(state.lang==='en'?'No tracks found':'Треки не найдены')+'</p>';
       const albums = await fetchDeezerArtistAlbums(cleanName);
       if (document.getElementById('artist-modal-name').textContent !== cleanName) return;
 
@@ -3706,67 +3712,27 @@ try {
       e.currentTarget.classList.toggle('text-muted', !isShuffle);
       showToast(isShuffle ? t('toastShuffleOn') : t('toastShuffleOff'));
     });
-    document.getElementById('btn-full-queue').addEventListener('click', () => {
-      closeFullPlayer();
-      switchTab('flow');
-    });
+    document.getElementById('btn-full-queue').addEventListener('click', () => window.TelefyPlayerQueue.open());
 
-    // Swipe Left/Right on Fullscreen Player Card
-    let fullSwipeStartX = 0;
-    let fullSwipeLastX = 0;
-    let fullSwiping = false;
-    const fullCoverEl = document.getElementById('full-cover');
-
-    function animateFullSwipe(dir) {
-      resetFullPos();
-      if (dir < 0) playNext();
-      else playPrev();
+    const fullCoverEl=document.getElementById('full-cover');
+    let fullSwipe=null,fullSwipeBusy=false;
+    const fullReduced=()=>matchMedia('(prefers-reduced-motion: reduce)').matches;
+    async function fullCoverAnimate(frames,duration){if(fullReduced()){Object.assign(fullCoverEl.style,frames[frames.length-1]);return;}const a=fullCoverEl.animate(frames,{duration,easing:'cubic-bezier(.22,1,.36,1)',fill:'forwards'});try{await a.finished;}catch(_){}const last=frames[frames.length-1];Object.assign(fullCoverEl.style,last);a.cancel();}
+    async function resetFullPos(){fullSwipeBusy=true;try{await fullCoverAnimate([{transform:fullCoverEl.style.transform||'none',opacity:1},{transform:'translateX(0px) rotate(0deg)',opacity:1}],240);}finally{fullSwipeBusy=false;}}
+    async function animateFullSwipe(direction){
+      if(fullSwipeBusy)return;fullSwipeBusy=true;
+      try{
+        await fullCoverAnimate([{transform:fullCoverEl.style.transform||'none',opacity:1},{transform:`translateX(${direction*220}px) rotate(${direction*34}deg) scale(.9)`,opacity:0}],190);
+        // Preserve the existing ordered queue and previous/restart behavior.
+        if(direction<0)playNext();else playPrev();
+        fullCoverEl.style.transform=`translateX(${-direction*200}px) rotate(${-direction*30}deg) scale(.9)`;fullCoverEl.style.opacity='0';
+        await fullCoverAnimate([{transform:fullCoverEl.style.transform,opacity:0},{transform:'translateX(0px) rotate(0deg) scale(1)',opacity:1}],340);
+      }finally{fullCoverEl.style.transform='translateX(0px) rotate(0deg)';fullCoverEl.style.opacity='1';fullSwipeBusy=false;}
     }
-
-    fullCoverEl.addEventListener('pointerdown', (e) => {
-      if (lyricsOpen) return;
-      if (e.target.closest('button') || e.target.closest('input')) return;
-      fullSwipeStartX = e.clientX;
-      fullSwipeLastX = e.clientX;
-      fullSwiping = true;
-      fullCoverEl.style.transition = 'none';
-      try { fullCoverEl.setPointerCapture(e.pointerId); } catch (_) {}
-    });
-
-    fullCoverEl.addEventListener('pointermove', (e) => {
-      if (!fullSwiping) return;
-      fullSwipeLastX = e.clientX;
-      const dx = fullSwipeLastX - fullSwipeStartX;
-      if (Math.abs(dx) > 10) {
-        const offset = Math.max(-22, Math.min(22, dx * 0.16));
-        fullCoverEl.style.transform = `translateX(${offset}px)`;
-      }
-    });
-
-    function resetFullPos() {
-      fullCoverEl.style.transition = 'transform 0.28s cubic-bezier(.22,1,.36,1)';
-      fullCoverEl.style.transform = 'translateX(0px) rotate(0deg)';
-    }
-
-    fullCoverEl.addEventListener('pointerup', (e) => {
-      if (!fullSwiping) return;
-      fullSwiping = false;
-      try { fullCoverEl.releasePointerCapture(e.pointerId); } catch (_) {}
-      const dx = (e.clientX ?? fullSwipeLastX) - fullSwipeStartX;
-      if (Math.abs(dx) > 48) {
-        animateFullSwipe(dx > 0 ? 1 : -1);
-      } else {
-        resetFullPos();
-      }
-    });
-
-    fullCoverEl.addEventListener('pointercancel', () => {
-      if (!fullSwiping) return;
-      fullSwiping = false;
-      resetFullPos();
-    });
-
-
+    fullCoverEl.addEventListener('pointerdown',e=>{if(fullSwipeBusy||e.isPrimary===false||e.button>0)return;fullSwipe={x:e.clientX,y:e.clientY,id:e.pointerId,axis:null};fullCoverEl.style.transition='none';try{fullCoverEl.setPointerCapture(e.pointerId);}catch(_){}});
+    fullCoverEl.addEventListener('pointermove',e=>{if(!fullSwipe||fullSwipe.id!==e.pointerId)return;const dx=e.clientX-fullSwipe.x,dy=e.clientY-fullSwipe.y;if(!fullSwipe.axis&&Math.max(Math.abs(dx),Math.abs(dy))>8)fullSwipe.axis=Math.abs(dx)>Math.abs(dy)?'x':'y';if(fullSwipe.axis!=='x')return;const offset=Math.max(-150,Math.min(150,dx*.65));fullCoverEl.style.transform=`translateX(${offset}px) rotate(${offset*.13}deg)`;});
+    function finishFullSwipe(e,cancel=false){if(!fullSwipe||fullSwipe.id!==e.pointerId)return;const swipe=fullSwipe;fullSwipe=null;try{fullCoverEl.releasePointerCapture(e.pointerId);}catch(_){}const dx=e.clientX-swipe.x;if(!cancel&&swipe.axis==='x'&&Math.abs(dx)>52)animateFullSwipe(dx>0?1:-1);else resetFullPos();}
+    fullCoverEl.addEventListener('pointerup',e=>finishFullSwipe(e));fullCoverEl.addEventListener('pointercancel',e=>finishFullSwipe(e,true));
 
     let fModeStartX = 0;
     let fModeLastX = 0;
@@ -3959,7 +3925,7 @@ try {
 
       if (displayTracks.length === 0) {
         if (isPlaylistEditorSearching || state.isCatalogParsing) {
-          listEl.innerHTML = `<div class="py-10 px-4 text-center text-xs text-muted">${state.lang === 'en' ? 'Loading tracks...' : 'Загружаем треки...'}</div>`;
+          listEl.innerHTML = window.TelefySkeleton.html();
         } else if (playlistEditorShowOnlySelected && !playlistEditorSearchQuery.trim()) {
           listEl.innerHTML = `<div class="py-10 px-4 text-center text-xs text-muted">${state.lang === 'en' ? 'No tracks selected yet' : 'Вы пока не выбрали ни одного трека'}</div>`;
         } else {
@@ -4705,6 +4671,7 @@ window.TelefyAlbums=(()=>{
  function cards(items){return '<div class="album-grid">'+items.map((a,i)=>`<button class="release-card" data-release="${i}"><div class="release-art"><span class="tg-ico release-fallback">&#xF0BF;</span>${a.coverImg?`<img src="${esc(a.coverImg)}" alt="" loading="lazy">`:''}</div><strong>${esc(a.title)}</strong><span>${esc(a.artist)}</span><small>${esc(a.year||'')}</small></button>`).join('')+'</div>';}
  function releaseRows(items){return '<div class="release-row-list">'+items.map((a,i)=>`<button class="release-row" data-release="${i}"><div class="release-row-art">${a.coverImg?`<img src="${esc(a.coverImg)}" alt="">`:'<span class="tg-ico">&#xF0BF;</span>'}</div><span class="release-row-meta"><span class="release-row-title"><strong>${esc(a.title)}</strong><span class="release-type">Альбом</span></span><span class="release-row-subtitle">${esc(a.artist)}${a.year?' · '+esc(a.year):''}</span></span><span class="release-row-chevron">›</span></button>`).join('')+'</div>';}
  function bindCards(box,items){box.querySelectorAll('.release-art img,.release-row-art img').forEach(img=>img.onerror=()=>img.remove());box.querySelectorAll('[data-release]').forEach(b=>b.onclick=()=>open(items[Number(b.dataset.release)]));}
+ function loadingRows(kind){return window.TelefySkeleton.html(kind);}
  function renderExtra(){
   const box=document.getElementById('search-results-list');if(!box)return;const type=state.searchFilter;box.classList.toggle('release-result-cards',type==='albums'||type==='all');
   box.querySelector('.release-search-extra')?.remove();
@@ -4715,16 +4682,16 @@ window.TelefyAlbums=(()=>{
   else box.prepend(host);
   if(type==='albums'){
    if(results.length){host.innerHTML=(type==='all'?'<h3 class="release-heading">Альбомы</h3>':'')+releaseRows(type==='all'?results.slice(0,4):results);bindCards(host,results);}
-   else if(type==='albums')host.textContent=busy?'Ищем альбомы…':error?'Не удалось загрузить альбомы. Попробуй ещё раз.':nextAlbums!==null?'В этой порции релизов нет. Загрузи следующую.':'Альбомы не найдены';
+   else if(type==='albums'&&busy)host.innerHTML=loadingRows('albums');else if(type==='albums')host.textContent=error?'Не удалось загрузить альбомы. Попробуй ещё раз.':nextAlbums!==null?'В этой порции релизов нет. Загрузи следующую.':'Альбомы не найдены';
   }
   if(type==='albums'&&error){const retry=document.createElement('button');retry.className='release-load-more';retry.textContent='Повторить загрузку';retry.onclick=()=>{cache.delete(query);query='';search();};host.append(retry);}
   if(type==='artists'||type==='all'){
-   if(artists.length){const list=document.createElement('div');list.className='artist-search-list';list.innerHTML=(type==='all'?'<h3 class="release-heading">Артисты</h3>':'')+artists.map((a,i)=>`<button data-found-artist="${i}">${a.coverImg?`<img src="${esc(a.coverImg)}" alt="">`:''}<span>${esc(a.name)}</span><span>›</span></button>`).join('');list.querySelectorAll('[data-found-artist]').forEach(b=>b.onclick=()=>openArtistCard(artists[Number(b.dataset.foundArtist)].name));host.append(list);}
-   else if(type==='artists')host.textContent=busy?'Ищем артистов…':error?'Не удалось загрузить артистов.':'Артисты не найдены';
+   if(artists.length){const list=document.createElement('div');list.className='artist-search-list';list.innerHTML=(type==='all'?'<h3 class="release-heading">Артисты</h3>':'')+artists.map((a,i)=>`<button data-found-artist="${i}"><span class="artist-search-avatar"><span>${esc(Array.from(a.name||'?')[0])}</span>${(a.coverImg||getArtistAvatarUrl(a.name))?`<img src="${esc(a.coverImg||getArtistAvatarUrl(a.name))}" alt="">`:''}</span><span>${esc(a.name)}</span><span class="artist-search-chevron">›</span></button>`).join('');list.querySelectorAll('img').forEach(img=>img.onerror=()=>img.remove());list.querySelectorAll('[data-found-artist]').forEach(b=>b.onclick=()=>openArtistCard(artists[Number(b.dataset.foundArtist)].name));host.append(list);}
+   else if(type==='artists'&&busy)host.innerHTML=loadingRows('artists');else if(type==='artists')host.textContent=error?'Не удалось загрузить артистов.':'Артисты не найдены';
   }
   if(['artists','albums'].includes(type)){
    document.getElementById('search-scroll-sentinel').hidden=true;
-   if((type==='albums'?nextAlbums:nextArtists)!==null){const more=document.createElement('button');more.className='release-load-more';more.textContent=busy?'Загружаем…':'Загрузить ещё';more.disabled=busy;more.onclick=()=>loadMore(type);host.append(more);}
+   if((type==='albums'?nextAlbums:nextArtists)!==null){const more=document.createElement('button');more.className='release-load-more';if(busy){more.innerHTML='<span class="catalog-spinner" aria-label="Загрузка"></span>';}else more.textContent='Загрузить ещё';more.disabled=busy;more.onclick=()=>loadMore(type);host.append(more);}
   }
  }
  async function loadMore(kind){if(busy)return;busy=true;const rev=revision,offset=kind==='albums'?nextAlbums:nextArtists;renderExtra();try{const data=await request('telefy:'+kind+':'+state.searchQuery.trim(),offset);if(rev!==revision)return;if(kind==='albums'){results=uniqueAlbums([...results,...(data.albums||[])]);nextAlbums=data.hasMore?data.nextOffset:null;}else{artists=[...new Map([...artists,...(data.artists||[])].map(a=>[a.id,a])).values()];nextArtists=data.hasMore?data.nextOffset:null;}}catch(error){starterMode=false;if(error.message==='album_catalog_cursor_expired'&&kind==='albums'){nextAlbums=0;cache.delete(query);showToast('Каталог обновился. Нажми «Загрузить ещё» для продолжения.');}else showToast('Не удалось загрузить следующую страницу. Попробуй ещё раз.');}finally{if(rev===revision){busy=false;renderExtra();continueStarter();}}}
@@ -4734,17 +4701,17 @@ window.TelefyAlbums=(()=>{
   try{let data=cache.get(key);if(!data){data=await Promise.all([type==='albums'?request('telefy:albums:'+q):Promise.resolve({albums:[]}),(type==='artists'||q.length>=2&&type==='all')?request('telefy:artists:'+q):Promise.resolve({artists:[]})]);cache.set(key,data);if(cache.size>40)cache.delete(cache.keys().next().value);}if(rev!==revision)return;starterMode=data[0].starter===true;results=uniqueAlbums(data[0].albums||[]);artists=data[1].artists||[];nextAlbums=data[0].hasMore?data[0].nextOffset:null;nextArtists=data[1].hasMore?data[1].nextOffset:null;}catch(_){if(rev===revision){error='failed';starterMode=false;}}finally{if(rev===revision){busy=false;renderExtra();continueStarter();}}
  }
  function paintHeart(){const b=document.getElementById('album-save-heart');if(!b||!active)return;const yes=liked(active);b.classList.toggle('is-liked',yes);b.setAttribute('aria-pressed',String(yes));b.setAttribute('aria-label',yes?'Удалить альбом из любимого':'Добавить альбом в любимое');b.innerHTML=`<span class="tg-ico">${yes?'&#xF016;':'&#xF1D9;'}</span>`;}
- async function toggleAlbum(){if(!active||!window.TelefyLibrary?.ready)return;const a=active;const i=window.TelefySavedAlbums.findIndex(x=>albumKey(x)===albumKey(a));if(i<0)window.TelefySavedAlbums.push({...a});else window.TelefySavedAlbums=window.TelefySavedAlbums.filter(x=>albumKey(x)!==albumKey(a));paintHeart();renderFavorites();await window.TelefyLibrary.save();paintHeart();}
+ async function toggleAlbum(){if(!active)return;if(!window.TelefyLibrary?.ready){await window.TelefyLibrary?.restore();if(!window.TelefyLibrary?.ready){showToast('Библиотека ещё загружается. Попробуй через несколько секунд.');return;}}const heart=document.getElementById('album-save-heart');if(heart.disabled)return;heart.disabled=true;const a=active;const i=window.TelefySavedAlbums.findIndex(x=>albumKey(x)===albumKey(a));if(i<0)window.TelefySavedAlbums.push({...a});else window.TelefySavedAlbums=window.TelefySavedAlbums.filter(x=>albumKey(x)!==albumKey(a));paintHeart();renderFavorites();try{await window.TelefyLibrary.save();}finally{heart.disabled=false;paintHeart();}}
  function renderAlbum(){const box=document.getElementById('album-modal-tracks');box.innerHTML=albumTracks.map(createTrackRowHTML).join('');box.querySelectorAll('.track-play-trigger').forEach(b=>b.onclick=()=>{window.TelefyOrderedQueue.start(albumTracks.map(t=>t.id),Number(b.dataset.play),active.title,'playlist');syncTrackRowPlayback();});box.querySelectorAll('[data-like]').forEach(b=>b.onclick=()=>{toggleLike(Number(b.dataset.like));renderAlbum();});syncTrackRowPlayback();}
  async function open(a){
-  active=a;document.getElementById('album-modal').classList.add('soundcloud-album');document.getElementById('album-modal-cover').parentElement.classList.add('album-release-header');albumTracks=[];const rev=++albumRequest;document.getElementById('album-back-artist-label').textContent=a.artist;document.getElementById('album-modal-title').textContent=a.title;document.getElementById('album-modal-artist').textContent=a.artist;document.getElementById('album-modal-meta').textContent=[a.year,a.trackCount?`${a.trackCount} треков`:''].filter(Boolean).join(' · ');applyCoverStyle(document.getElementById('album-modal-cover'),{coverImg:a.coverImg,cover:'#2857a2'});const releaseArt=document.getElementById('album-modal-cover');releaseArt.style.backgroundImage='';releaseArt.innerHTML='<span class="tg-ico release-fallback">&#xF0BF;</span>';if(a.coverImg){const img=document.createElement('img');img.src=a.coverImg;img.alt='';img.className='release-cover-img';img.onerror=()=>img.remove();releaseArt.append(img);}document.getElementById('album-modal-tracks').textContent='Загружаем альбом…';document.getElementById('btn-album-shuffle').hidden=true;
+  active=a;document.getElementById('album-modal').classList.add('soundcloud-album');document.getElementById('album-modal-cover').parentElement.classList.add('album-release-header');albumTracks=[];const rev=++albumRequest;document.getElementById('album-back-artist-label').textContent=a.artist;document.getElementById('album-modal-title').textContent=a.title;document.getElementById('album-modal-artist').textContent=a.artist;document.getElementById('album-modal-meta').textContent=[a.year,a.trackCount?`${a.trackCount} треков`:''].filter(Boolean).join(' · ');applyCoverStyle(document.getElementById('album-modal-cover'),{coverImg:a.coverImg,cover:'#2857a2'});const releaseArt=document.getElementById('album-modal-cover');releaseArt.style.backgroundImage='';releaseArt.innerHTML='<span class="tg-ico release-fallback">&#xF0BF;</span>';if(a.coverImg){const img=document.createElement('img');img.src=a.coverImg;img.alt='';img.className='release-cover-img';img.onerror=()=>img.remove();releaseArt.append(img);}document.getElementById('album-modal-tracks').innerHTML=loadingRows('tracks');document.getElementById('btn-album-shuffle').hidden=true;
   let heart=document.getElementById('album-save-heart');if(!heart){heart=document.createElement('button');heart.id='album-save-heart';heart.className='album-save-heart';heart.onclick=toggleAlbum;document.getElementById('btn-album-play-all').after(heart);}heart.hidden=false;paintHeart();
   const play=document.getElementById('btn-album-play-all');play.disabled=true;document.getElementById('album-back-artist-label').textContent='Назад';document.querySelector('#album-modal > .col-sheet-panel').scrollTop=0;openSheetModal('album-modal','light');
   try{const data=await request('telefy:album:'+a.id);if(rev!==albumRequest)return;mergeParsedTracksIntoCatalog(data.tracks||[]);albumTracks=(data.tracks||[]).map(row=>tracks.find(t=>t.soundcloudUrn===row.soundcloudUrn)).filter(Boolean);document.getElementById('album-modal-meta').textContent=[a.year,`${albumTracks.length} треков`].filter(Boolean).join(' · ');if(!albumTracks.length)document.getElementById('album-modal-tracks').textContent='В альбоме нет доступных для воспроизведения треков.';else renderAlbum();play.disabled=!albumTracks.length;}catch(_){if(rev===albumRequest)document.getElementById('album-modal-tracks').textContent='В этом источнике нет доступных треков. Выбери другой релиз.';}
  }
  function renderFavorites(){
   const view=document.getElementById('view-favorites');if(!view)return;view.querySelectorAll('[data-fav-kind]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.favKind===favKind)));
-  const box=document.getElementById('favorites-content'),q=favQuery.trim().toLocaleLowerCase();box.classList.toggle('is-albums',favKind==='albums');
+  const box=document.getElementById('favorites-content'),q=favQuery.trim().toLocaleLowerCase();if(window.TelefyLibrary?.loading&&!window.TelefySavedAlbums.length&&!tracks.some(t=>t.liked)){box.innerHTML=window.TelefySkeleton.html(favKind==='albums'?'cards':'tracks',favKind==='albums'?2:6);return;}box.classList.toggle('is-albums',favKind==='albums');
   if(favKind==='albums'){const items=uniqueAlbums(window.TelefySavedAlbums).filter(a=>(a.title+' '+a.artist).toLocaleLowerCase().includes(q));box.innerHTML=items.length?cards(items):'<p class="release-empty">Здесь появятся любимые альбомы</p>';bindCards(box,items);}
   else{const items=tracks.filter(t=>t.liked&&(t.title+' '+t.artist).toLocaleLowerCase().includes(q));box.innerHTML=items.length?items.map(createTrackRowHTML).join(''):'<p class="release-empty">Здесь появятся любимые треки</p>';box.querySelectorAll('.track-play-trigger').forEach(b=>b.onclick=()=>window.TelefyOrderedQueue.start(items.map(t=>t.id),Number(b.dataset.play),'Любимое','favorites'));box.querySelectorAll('[data-like]').forEach(b=>b.onclick=()=>{toggleLike(Number(b.dataset.like));renderFavorites();});syncTrackRowPlayback();}
  }
@@ -4756,7 +4723,7 @@ window.TelefyAlbums=(()=>{
  window.addEventListener('telefy:library-painted',()=>{paintHeart();if(state.activeTab==='favorites')renderFavorites();});
  const oldSwitch=switchTab;switchTab=function(tab,...args){const r=oldSwitch(tab,...args);if(tab==='search'){renderSearchView();}return r;};
  fetchDeezerArtistAlbums=async function(name){try{const d=await request('telefy:albums:'+name);artistPages.set(name,{next:d.nextOffset,more:d.hasMore});return(d.albums||[]).map(a=>({...a,img:a.coverImg,artistName:a.artist}));}catch(_){return [];}};
- renderArtistAlbumsCarousel=function(albums,name,box){if(!box)return;const items=albums.map(a=>({...a,coverImg:a.coverImg||a.img||'',artist:a.artist||a.artistName||name}));box.innerHTML=cards(items);box.querySelector('.album-grid')?.classList.add('artist-release-grid');box.querySelectorAll('.release-art img').forEach(img=>img.onerror=()=>img.remove());box.querySelectorAll('[data-release]').forEach(b=>b.onclick=()=>openAlbumModal(albums[Number(b.dataset.release)],name));if(artistPages.get(name)?.more){const more=document.createElement('button');more.className='release-load-more';more.textContent='Все альбомы';more.onclick=async()=>{more.disabled=true;try{const page=artistPages.get(name);const d=await request('telefy:albums:'+name,page.next);artistPages.set(name,{next:d.nextOffset,more:d.hasMore});const merged=uniqueAlbums([...albums,...(d.albums||[]).map(a=>({...a,img:a.coverImg,artistName:a.artist}))]);renderArtistAlbumsCarousel(merged,name,box);}catch(_){more.disabled=false;showToast('Не удалось загрузить альбомы. Повтори позже.');}};box.append(more);}};
+ renderArtistAlbumsCarousel=function(albums,name,box){if(!box)return;const items=albums.map(a=>({...a,coverImg:a.coverImg||a.img||'',artist:a.artist||a.artistName||name}));box.innerHTML=cards(items);box.querySelector('.album-grid')?.classList.add('artist-release-grid');box.querySelectorAll('.release-art img').forEach(img=>img.onerror=()=>img.remove());box.querySelectorAll('[data-release]').forEach(b=>b.onclick=()=>openAlbumModal(albums[Number(b.dataset.release)],name));if(artistPages.get(name)?.more){const more=document.createElement('button');more.className='release-load-more';more.textContent='Все альбомы';more.onclick=async()=>{more.disabled=true;const placeholder=document.createElement('div');placeholder.innerHTML=window.TelefySkeleton.html('cards',2);box.append(placeholder);try{const page=artistPages.get(name);const d=await request('telefy:albums:'+name,page.next);artistPages.set(name,{next:d.nextOffset,more:d.hasMore});const merged=uniqueAlbums([...albums,...(d.albums||[]).map(a=>({...a,img:a.coverImg,artistName:a.artist}))]);renderArtistAlbumsCarousel(merged,name,box);}catch(_){placeholder.remove();more.disabled=false;showToast('Не удалось загрузить альбомы. Повтори позже.');}};box.append(more);}};
  const originalArtistCard=openArtistCard;
  openArtistCard=function(name){const canonicalName=findRosterConfig(name)?.name||name;return originalArtistCard(canonicalName);};
  const oldAlbum=openAlbumModal;openAlbumModal=function(a,artist){if(a?.id?.startsWith?.('soundcloud:playlists:'))return open(a);if(a?.collectionId?.startsWith?.('soundcloud:playlists:'))return open({id:a.collectionId,title:a.title,artist:artist||a.artistName,year:a.year||'',coverImg:a.img||'',url:''});active=null;document.getElementById('btn-album-play-all').disabled=false;document.getElementById('btn-album-shuffle').hidden=false;document.getElementById('album-modal').classList.remove('soundcloud-album');document.getElementById('album-save-heart')?.setAttribute('hidden','');return oldAlbum(a,artist);};
@@ -4766,3 +4733,65 @@ window.TelefyAlbums=(()=>{
 })();
 
 window.TelefyArtistCredits=(credit,name)=>{const cfg=findRosterConfig(name);const names=[name,...(cfg?.aliases||[])];const key=s=>String(s||'').toLocaleLowerCase().replace(/ё/g,'е').replace(/[^\p{L}\p{N}]/gu,'');return String(credit||'').split(/\s+(?:feat\.?|ft\.?|featuring)\s+|[,&/]/i).some(part=>names.some(alias=>key(part.replace(/[()]/g,''))===key(alias)));};
+
+window.addEventListener('telefy:library-loading',()=>{renderMaxBetaView();if(state.activeTab==='favorites')window.TelefyAlbums.renderFavorites();});
+
+const renderBeforeContentSkeletons=renderPlayerUI;
+renderPlayerUI=function(...args){const result=renderBeforeContentSkeletons(...args);const current=getTrack(state.currentTrackId);if(!current?.id&&(state.isCatalogParsing||window.TelefyFirstRun?.loading)){for(const id of ['hero-track-title','mini-title','full-title']){const el=document.getElementById(id);if(el)el.innerHTML=window.TelefySkeleton.html('note',1);}}return result;};
+
+/* Full player composition; existing controls keep their original listeners. */
+(() => {
+ const modal=document.getElementById('full-player-modal'),cover=document.getElementById('full-cover');
+ modal.classList.add('player-refresh');
+ const top=document.getElementById('btn-close-full-player').parentElement,art=cover.parentElement,deck=modal.lastElementChild;
+ top.classList.add('player-refresh-top');art.classList.add('player-refresh-art');deck.className='player-refresh-deck';
+ const title=document.getElementById('full-title'),artist=document.getElementById('full-artist'),avatar=document.getElementById('btn-open-artist-card');
+ const timeline=document.getElementById('full-seek-slider').parentElement;
+ const titleRow=document.createElement('div');titleRow.className='player-refresh-title';titleRow.append(title,document.getElementById('full-explicit-badge'));
+ const credit=document.createElement('div');credit.className='player-refresh-credit';credit.append(avatar,artist);
+ const info=document.createElement('div');info.className='player-refresh-info';info.append(titleRow,credit);
+ const transport=document.createElement('div');transport.className='player-refresh-transport';
+ for(const id of ['btn-full-shuffle','full-prev-btn','full-play-btn','full-next-btn','btn-full-queue'])transport.append(document.getElementById(id));
+ const tools=document.createElement('div');tools.className='player-refresh-tools';for(const id of ['btn-full-repeat','full-dislike-btn','btn-send-to-bot'])tools.append(document.getElementById(id));
+ const dormant=document.createElement('div');dormant.hidden=true;for(const id of ['btn-full-lyrics','full-album-btn','full-album-sep'])dormant.append(document.getElementById(id));
+ const label=document.createElement('span');label.id='player-refresh-caption';label.className='player-refresh-caption';
+ top.replaceChildren(document.getElementById('btn-close-full-player'),label,document.getElementById('full-like-btn'));
+ document.getElementById('btn-close-full-player').innerHTML='<svg width="21" height="21" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m14 6-6 6 6 6M8 12h11" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+ deck.replaceChildren(info,timeline,transport,tools,dormant);timeline.classList.add('player-refresh-timeline');
+ const ambient=document.createElement('div');ambient.className='player-refresh-ambient';ambient.setAttribute('aria-hidden','true');modal.prepend(ambient);
+ let lastCover='';
+ const before=renderPlayerUI;renderPlayerUI=function(...args){const result=before(...args),track=getTrack(state.currentTrackId);label.textContent=state.lang==='en'?'Now playing':'Сейчас играет';if(track?.coverImg!==lastCover){lastCover=track?.coverImg||'';ambient.style.backgroundImage=/^https?:\/\//.test(lastCover)?'url('+JSON.stringify(lastCover)+')':'';}return result;};
+ renderPlayerUI();
+})();
+
+/* Queue is a view of the playback source, never a navigation shortcut. */
+window.TelefyPlayerQueue=(()=>{
+ const modal=document.getElementById('player-queue-modal'),list=document.getElementById('player-queue-list');
+ function items(){const ordered=window.TelefyOrderedQueue?.snapshot();return {ordered,ids:(ordered?ordered.ids.slice(ordered.index+1):state.queueIds||[]).filter(id=>id!==state.currentTrackId&&tracks.some(t=>t.id===id))};}
+ function choose(id){
+  const {ordered,ids}=items();if(!ids.includes(id))return;
+  if(ordered)window.TelefyOrderedQueue.start(ordered.ids,id,ordered.label,ordered.kind);
+  else{state.queueIds=ids.slice(ids.indexOf(id)+1);playTrack(id,state.sourceLabel);}
+  render();
+ }
+ function render(){
+  const english=state.lang==='en',queue=items(),current=tracks.find(t=>t.id===state.currentTrackId);
+  document.getElementById('player-queue-title').textContent=english?'Up next':'Далее';
+  document.getElementById('player-queue-source').textContent=state.sourceLabel||'';
+  document.getElementById('player-queue-current-label').textContent=english?'Now playing':'Сейчас играет';
+  document.getElementById('player-queue-next-label').textContent=english?'Playing next:':'Играет далее:';
+  const now=document.getElementById('player-queue-current');now.innerHTML=current?createTrackRowHTML(current):'';
+  now.querySelector('[data-play]')?.addEventListener('click',()=>togglePlay());
+  now.querySelector('[data-like]')?.addEventListener('click',()=>{toggleLike(current.id);render();});
+  list.innerHTML=queue.ids.length?queue.ids.map(id=>createTrackRowHTML(tracks.find(t=>t.id===id))).join(''):'<p class="release-empty">'+(english?'The queue is empty':'Очередь пока пуста')+'</p>';
+  list.querySelectorAll('[data-play]').forEach(button=>button.onclick=()=>choose(Number(button.dataset.play)));
+  list.querySelectorAll('[data-like]').forEach(button=>button.onclick=()=>{toggleLike(Number(button.dataset.like));render();});
+  document.getElementById('player-queue-shuffle').textContent=isShuffle?(english?'Shuffle is on':'Включён случайный порядок'):'';
+  syncTrackRowPlayback();
+ }
+ function open(){render();openSheetModal(modal);modal.querySelector('.col-sheet-panel').scrollTop=0;}
+ document.getElementById('player-queue-close').onclick=()=>closeSheetModal(modal);
+ modal.addEventListener('click',e=>{if(e.target===modal)closeSheetModal(modal);});
+ const before=renderPlayerUI;renderPlayerUI=function(...args){const result=before(...args);if(!modal.classList.contains('hidden'))render();return result;};
+ return {open,render};
+})();

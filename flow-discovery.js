@@ -37,7 +37,7 @@
     const nextButton=document.getElementById('flow-discovery-next');
     nextButton.disabled=!track.id;
     if (!track.id) {
-      title.textContent=state.isCatalogParsing ? (state.lang==='en'?'Loading music…':'Загружаем музыку…') : (state.lang==='en'?'Catalog unavailable':'Каталог недоступен');
+      if(state.isCatalogParsing)title.innerHTML=window.TelefySkeleton.html('note',1);else title.textContent=state.lang==='en'?'Catalog unavailable':'Каталог недоступен';
       artist.textContent=''; source.textContent=state.lang==='en'?'Your stream':'Мой поток';
       description.textContent=state.isCatalogParsing ? '' : getCatalogErrorText();
       backdrop.style.backgroundImage=art.style.backgroundImage='none'; art.classList.add('no-cover');
@@ -61,7 +61,7 @@
       animation = card.animate([{opacity:.65},{opacity:1}],{duration:220,easing:'ease-out'});
     }
     if (!provider || state.activeTab !== 'flow') return;
-    description.textContent = english ? 'Preparing a note about this track…' : 'Готовим заметку об этом треке…';
+    description.innerHTML=window.TelefySkeleton.html('note',3);
     try {
       const cacheKey = `${track.id}:${state.lang}`;
       let text = descriptions.get(cacheKey);

@@ -5,6 +5,8 @@ from urllib.parse import quote
 LOCK=threading.RLock();CACHE={};BROWSE_LOCK=threading.Lock();BROWSE={}
 PINS=[{'url':'https://soundcloud.com/members-only-forever/sets/12-ep','title':'12+ (EP)','artist':'i61 & stereoRYZE','year':'2017','keys':'i61 stereoRYZE 12+ 12 ep голыедети мне очень весело мононоке санандреас'}, {'url':'https://soundcloud.com/pharaohdd/sets/red-um-dullboy-ep','title':'REDЯUM (DULLBOY EP)','artist':'PHARAOH','year':'2019','keys':'pharaoh фара redяum redrum redum dullboy никакой любви фул клип enfants rich убийца узы моба'}]
 STARTER=[('PHARAOH','Фосфор','2016'),('PHARAOH','Pink Phloyd','2017'),('PHARAOH','PHUNERAL','2018'),('PHARAOH','Правило','2020'),('Boulevard Depo','RAPP2','2018'),('Boulevard Depo','OLD BLOOD','2020'),('ЛСП','Magic City','2015'),('ЛСП','Трагик Сити','2017'),('Big Baby Tape','Dragonborn','2018'),('Big Baby Tape','VARSKVA','2023'),('KIZARU','Karmageddon','2019'),('KIZARU','Born To Trap','2020'),('OG Buda','ОПГ СИТИ','2019'),('FRIENDLY THUG 52 NGG','Cristoforo Colombo','2023'),('Kai Angel & 9mice','HEAVY METAL','2023'),('MORGENSHTERN','Легендарная пыль','2020')]
+ARTIST_PROFILES={'pharaoh':'https://soundcloud.com/deaddynastyph'}
+AUTHOR_RELEASES={'pinkphloyd':'https://soundcloud.com/deaddynastyph/sets/pink-phloyd','phuneral':'https://soundcloud.com/deaddynastyph/sets/phuneral','правило':'https://soundcloud.com/deaddynastyph/sets/pravilo','milliondollardepression':'https://soundcloud.com/deaddynastyph/sets/million-dollar-depression'}
 def key(value):return re.sub(r'[^\w]','',str(value).casefold().replace('ё','е'))
 def clean_title(title,artist):
  title=str(title).strip();title=re.sub(r'^'+re.escape(artist)+r'\s*[-–—:]\s*','',title,flags=re.I)
@@ -69,6 +71,13 @@ def detail(sc,identity):
 def starter(sc,page):
  albums=[];start=page*2
  for artist,title,year in STARTER[start:start+2]:
+  authoritative=AUTHOR_RELEASES.get(key(title))if key(artist)=='pharaoh'else None
+  if authoritative:
+   try:
+    raw=cached(authoritative,lambda:sc.api('/resolve',{'url':authoritative}));identity=normal(sc,raw)['id'];data=cached(('validated_album',identity),lambda:detail(sc,identity));album=dict(data['album']);album.update(title=title,artist=artist,year=year);albums.append(album)
+   except sc.APIError as e:
+    if e.status not in(403,404):raise
+   continue
   raw=cached(('starter',artist,title),lambda:sc.api('/playlists',{'q':artist+' '+title,'limit':25,'linked_partitioning':'true'}));rows=raw.get('collection',[])if isinstance(raw,dict)else raw
   candidates=[]
   for row in rows:
@@ -126,13 +135,13 @@ def artist_search(sc,query,offset):
  q=key(query);rows=canonical_roster(sc);matches=[r for r in rows if not q or any(q in key(alias)for alias in r['aliases'])]
  if hasattr(sc,'smart_queries')and q:
   _,names=sc.smart_queries(query);wanted={key(n)for n in names};matches=[r for r in rows if r in matches or key(r['name'])in wanted]
- matches.sort(key=lambda r:(0 if key(r['name'])==q else 1,len(r['name'])))
+ if q:matches.sort(key=lambda r:(0 if key(r['name'])==q else 1,len(r['name'])))
  output=[]
  for row in matches[offset:offset+20]:
   name=row['name'];cover=''
   if q and len(output)<2:
    try:
-    if key(name)=='pharaoh':profile=cached('artist:pharaohdd',lambda:sc.api('/resolve',{'url':'https://soundcloud.com/pharaohdd'}));cover=sc.safe_url(profile.get('avatar_url'))
+    if key(name)in ARTIST_PROFILES:profile=cached(('artist_profile',key(name)),lambda:sc.api('/resolve',{'url':ARTIST_PROFILES[key(name)]}));cover=sc.safe_url(profile.get('avatar_url'))
     else:
      raw=cached(('canonical_users',key(name)),lambda:sc.api('/users',{'q':name,'limit':25}));users=raw.get('collection',[])if isinstance(raw,dict)else raw
      exact=[u for u in users if key(u.get('username'))in{key(alias)for alias in row['aliases']}]
@@ -140,6 +149,19 @@ def artist_search(sc,query,offset):
    except sc.APIError:pass
   output.append({'id':'telefy:artist:'+key(name),'name':name,'coverImg':cover})
  return {'artists':output,'tracks':[],'hasMore':offset+20<len(matches),'nextOffset':offset+20}
+
+def profile_releases(sc,name,offset):
+ profile=cached(('artist_profile',key(name)),lambda:sc.api('/resolve',{'url':ARTIST_PROFILES[key(name)]}))
+ urn=str(profile.get('urn')or'soundcloud:users:'+str(profile.get('id','')))
+ if not re.fullmatch(r'soundcloud:users:\d+',urn):raise sc.APIError(502,'invalid_artist_profile')
+ raw=cached(('profile_releases',urn,offset),lambda:sc.api('/users/'+quote(urn,safe='')+'/playlists',{'limit':50,'offset':offset,'linked_partitioning':'true'}))
+ rows=raw.get('collection',[])if isinstance(raw,dict)else raw;albums=[]
+ for row in rows:
+  if row.get('track_count',len(row.get('tracks')or[]))<=0:continue
+  if re.search(r'(?i)remix|tribute|karaoke|slowed|sped|favorites|best of|любимое|лучшее',row.get('title')or''):continue
+  try:albums.append(normal(sc,row,{'artist':name}))
+  except sc.APIError:continue
+ return {'albums':dedupe(albums),'tracks':[],'hasMore':bool(raw.get('next_href'))if isinstance(raw,dict)else len(rows)==50,'nextOffset':offset+50}
 
 def browse(sc,page):
  names=roster(sc);period=int(time.time()//21600);key=(period,tuple(names))
@@ -186,6 +208,7 @@ def search(sc,query,offset=0,kind='albums'):
  if kind=='albums'and not query:return starter(sc,offset)
  if kind=='artists':
   return artist_search(sc,query,offset)
+ if key(api_query)in ARTIST_PROFILES:return profile_releases(sc,api_query,offset)
  for pin in PINS:
   if offset==0 and(not query or query.casefold()in pin['keys'].casefold()):items.append(normal(sc,resolve_pin(sc,pin),pin))
  if len(query)>=2:

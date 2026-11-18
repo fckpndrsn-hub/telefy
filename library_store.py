@@ -19,6 +19,13 @@ def track(value):
     clean['duration']=duration
     return clean
 
+def saved_album(value):
+    if not isinstance(value,dict):raise LibraryError(400,'invalid_album')
+    identity=text(value.get('id'),120,True)
+    if not re.fullmatch(r'soundcloud:playlists:\d+',identity):raise LibraryError(400,'invalid_album')
+    cover=text(value.get('coverImg',''),2000);url=text(value.get('url',''),2000)
+    return {'id':identity,'title':text(value.get('title'),300,True),'artist':text(value.get('artist'),300,True),'year':text(str(value.get('year','')),4),'coverImg':cover if cover.startswith('https://')else'','url':url if url.startswith('https://soundcloud.com/')else''}
+
 def library(value):
     if not isinstance(value,dict):raise LibraryError(400,'invalid_library')
     likes=value.get('likes');playlists=value.get('playlists')
@@ -37,7 +44,11 @@ def library(value):
         cover=text(p.get('coverImg',''),2000)
         result.append({'id':pid,'title':text(p.get('title'),150,True),'subtitle':text(p.get('subtitle',''),300),'coverImg':cover if cover.startswith('https://')else '', 'cover':text(p.get('cover','#2AABEE'),40),'personal':p.get('personal')is True,'tracks':items})
     if sum(p['personal']for p in result)>1:raise LibraryError(400,'duplicate_personal_playlist')
-    return {'likes':likes,'playlists':result}
+    albums=value.get('albums',[])
+    if not isinstance(albums,list)or len(albums)>500:raise LibraryError(400,'too_many_albums')
+    albums=[saved_album(a)for a in albums]
+    if len({a['id']for a in albums})!=len(albums):raise LibraryError(400,'duplicate_album')
+    return {'likes':likes,'playlists':result,'albums':albums}
 
 class LibraryStore:
     def __init__(self,db):self.db=db;self.lock=threading.Lock();self.initialized=False
@@ -60,8 +71,12 @@ class LibraryStore:
         with self.db.connect()as c:return self._read(c,uid)
     def _read(self,c,uid):
         row=self.db.execute(c,'SELECT revision,library_json FROM telefy_user_libraries WHERE telegram_id=%s',(uid,)).fetchone()
-        return {'revision':row['revision'],'library':json.loads(row['library_json'])}if row else {'revision':0,'library':{'likes':[],'playlists':[]}}
+        if row:
+            data=json.loads(row['library_json']);data.setdefault('albums',[])
+            return {'revision':row['revision'],'library':data}
+        return {'revision':0,'library':{'likes':[],'playlists':[],'albums':[]}}
     def write(self,uid,revision,value,can_edit):
+        albums_supplied=isinstance(value,dict)and'albums'in value
         value=library(value);self.ensure()
         if type(revision)is not int or revision<0:raise LibraryError(400,'invalid_revision')
         with self.db.connect()as c:
@@ -69,6 +84,7 @@ class LibraryStore:
             self.db.execute(c,'SELECT telegram_id FROM telefy_users WHERE telegram_id=%s'+(' FOR UPDATE'if self.db.url else ''),(uid,))
             current=self._read(c,uid)
             if current['revision']!=revision:raise LibraryError(409,'library_changed')
+            if not albums_supplied:value['albums']=current['library'].get('albums',[])
             previous={p['id']:p for p in current['library']['playlists']}
             # Reads, likes and deletion remain available after Max expires.
             if not can_edit and any(previous.get(p['id'])!=p for p in value['playlists']):raise LibraryError(403,'max_required')

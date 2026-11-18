@@ -16,14 +16,14 @@
   USER_PLAYLISTS.splice(0,USER_PLAYLISTS.length,...data.playlists.map(p=>({...p,trackKeys:p.tracks.map(t=>t.key),trackIds:p.tracks.map(materialize)})));
   desired=JSON.stringify(pack());paint();window.dispatchEvent(new Event('telefy:library-painted'));
  }
- async function request(data,path='/api/me/library'){const r=await fetch(path,{method:data?'POST':'GET',credentials:'same-origin',cache:'no-store',headers:data?{'Content-Type':'application/json'}:undefined,body:data?JSON.stringify(data):undefined,signal:AbortSignal.timeout(20000)});if(!r.ok){const error=new Error('library_'+r.status);error.status=r.status;throw error;}return r.json();}
+ async function request(data,path='/api/me/library'){const r=await fetch(path,{method:data?'POST':'GET',credentials:'same-origin',cache:'no-store',headers:data?{'Content-Type':'application/json'}:undefined,body:data?JSON.stringify(data):undefined,signal:AbortSignal.timeout(20000)});if(!r.ok){const error=new Error('library_'+r.status);error.status=r.status;throw error;}const result=await r.json();if(Array.isArray(data?.library?.albums)&&!Array.isArray(result?.library?.albums)){const error=new Error('album_schema_not_supported');error.status=503;throw error;}return result;}
  function message(error){showToast(error?.status===409?'Библиотека изменилась на другом устройстве. Повтори действие.':error?.status===403?'Для изменения плейлистов нужен Telefy Max.':'Не удалось сохранить в профиль. Проверь подключение и повтори.');}
  async function restore(force=false){
   const current=account();if(!current||loading||pending)return;
   if(uid!==current){uid=current;ready=false;epoch++;committed=null;apply(empty());}
   claimLegacy(current);
   if(ready&&!force)return;
-  loading=true;const generation=epoch;
+  loading=true;window.dispatchEvent(new Event('telefy:library-loading'));const generation=epoch;
   try{
    const data=await request();if(generation!==epoch||current!==account()||pending||(ready&&data.revision<revision))return;
    revision=data.revision;committed=data.library;ready=false;apply(committed);
@@ -32,7 +32,7 @@
    ready=true;apply(committed);window.dispatchEvent(new Event('telefy:library-ready'));
   }
   catch(_){if(!ready)showToast('Библиотека пока недоступна. Открой профиль повторно после подключения.');}
-  finally{loading=false;if(current!==account())queueMicrotask(()=>restore());}
+  finally{loading=false;window.dispatchEvent(new Event('telefy:library-loading'));if(current!==account())queueMicrotask(()=>restore());}
  }
  function save(){
   if(!ready||uid!==account()){if(committed)apply(committed);message();return Promise.resolve(false);}
@@ -104,7 +104,7 @@
    }
   }
  }
- window.TelefyLibrary={save,get ready(){return ready&&uid===account();},restore};
+ window.TelefyLibrary={save,get loading(){return loading;},get ready(){return ready&&uid===account();},restore};
  window.addEventListener('telefy:profile-ready',()=>{
   if(uid!==account()){uid=account();epoch++;ready=false;committed=null;apply(empty());clearTimeout(migrationTimer);migrationAttempts=0;migrationWarning=false;}
   restore();

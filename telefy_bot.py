@@ -89,7 +89,7 @@ def launch_url(user,screen,ttl=3600):
 def keyboard(user):
     import bot_buttons
     def button(text,screen):return bot_buttons.make(screen,text,web_app={'url':launch_url(user,screen)})
-    return {'keyboard':[[button('🎧 Открыть Mini App','home')],[button('👤 Мой профиль','profile'),button('⚙️ Настройки','settings')],[button('⭐ Telefy Max','max'),button('💬 Поддержка','support')]],'resize_keyboard':True,'is_persistent':True,'input_field_placeholder':'Выбери раздел Telefy'}
+    return {'keyboard':[[bot_buttons.make('open',web_app={'url':launch_url(user,'home',300)})]],'resize_keyboard':True,'is_persistent':True,'input_field_placeholder':'Открыть Telefy'}
 def welcome_text(user):
     custom=reminders.custom_text('welcome')
     if custom:return html.escape(custom.replace('{name}',user.get('first_name')or'друг'))

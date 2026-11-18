@@ -31,6 +31,7 @@
   box.innerHTML=col.trackIds.length?col.trackIds.map(id=>createTrackRowHTML(getTrack(id))).join(''):'';
   if(col.trackIds.length)bindTrackRowEvents(box,col.title);
   if(error){const p=document.createElement('p');p.className='px-4 py-5 text-center text-muted text-sm';p.textContent=error.status===429?'Музыкальный сервис временно ограничил запросы. Загруженные треки сохранены.':'Не удалось обновить подборку. Загруженные треки сохранены.';box.append(p);}
+  else if(col.importPending){const skeleton=document.createElement('div');skeleton.innerHTML=window.TelefySkeleton.html('tracks',col.trackIds.length?3:6);box.append(skeleton);}
   else if(!col.trackIds.length){const p=document.createElement('p');p.className='px-4 py-5 text-center text-muted text-sm';p.textContent=col.importError?'Не удалось подключить источник. Повтори загрузку.':col.importPending?'Подготавливаем треки подборки…':'Треки пока не найдены';box.append(p);}
   if(!finished.has(col.id)||error){const b=document.createElement('button');b.type='button';b.className='w-full py-4 text-sm text-[#2AABEE]';b.textContent=error?'Повторить загрузку':'Загрузить ещё';b.onclick=()=>ensureCollectionTracksLoaded(col,true);box.append(b);}
  }
@@ -43,6 +44,7 @@
   if(more&&finished.has(col.id))return;
   const task=(async()=>{
    try{
+    const box=document.getElementById('col-modal-tracks');let placeholder;if(state.activeCollectionId===col.id){placeholder=document.createElement('div');placeholder.innerHTML=window.TelefySkeleton.html('tracks',col.trackIds.length?3:6);if(!col.trackIds.length)box.replaceChildren(placeholder);else box.append(placeholder);}
     const offset=positions.get(col.id)||0,data=await fetchBatch(col.id,offset);
     col.importPending=data.importPending||0;col.importError=data.importError||null;const editorial=editorialOrder.get(col.id)||new Map();for(const row of data.tracks||[])editorial.set(row.soundcloudUrn,{year:Number(row.editorialYear)||0,order:Number(row.editorialOrder)||0});editorialOrder.set(col.id,editorial);
     const urns=memberships.get(col.id)||new Set();(data.tracks||[]).forEach(t=>urns.add(t.soundcloudUrn));importBatch(data.tracks||[]);memberships.set(col.id,urns);

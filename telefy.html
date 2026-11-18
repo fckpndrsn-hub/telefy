@@ -8,7 +8,7 @@
 
     <!-- Embedded SF Pro fonts: Latin and Cyrillic, no external font requests. -->
 
-  <link rel="stylesheet" href="assets/styles.css?v=551322dedbf2">
+  <link rel="stylesheet" href="assets/styles.css?v=53b4552fd6a9">
   <link rel="stylesheet" href="assets/max-logo.css?v=64a86089965c">
                                             <meta name="telefy-build" content="telegram-ui-20261114-2">
 </head>
@@ -618,6 +618,13 @@
       </div>
     </div>
 
+    <div id="player-queue-modal" class="tg-sheet-modal hidden fixed inset-0 bg-black/45 backdrop-blur-sm flex items-end justify-center" style="z-index:70">
+      <div class="col-sheet-panel app-surface player-queue-panel">
+        <header class="player-queue-header"><div><h2 id="player-queue-title" class="font-rounded">Далее</h2><p id="player-queue-source" class="text-muted"></p></div><button id="player-queue-close" aria-label="Закрыть очередь"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button></header>
+        <h3 id="player-queue-current-label" class="text-muted">Сейчас играет</h3><div id="player-queue-current" class="tg-card"></div>
+        <h3 id="player-queue-next-label" class="text-muted">Играет далее:</h3><p id="player-queue-shuffle" class="text-muted"></p><div id="player-queue-list" class="tg-card"></div>
+      </div>
+    </div>
     <!-- Fullscreen Player Modal (Yandex Music Layout + Blurred Cover Ambient Background) -->
     <div id="full-player-modal" class="hidden sheet-closed app-surface fixed inset-0 z-50 flex flex-col justify-between px-5 pt-4 pb-6 max-w-md mx-auto overflow-hidden">
       <!-- Top Bar: Close Chevron + Queue Icon (No Title) -->
@@ -1041,17 +1048,17 @@
   <script src="assets/telegram-layout.js?v=f870b09273a9" defer></script>
   <script src="assets/music-policy.js?v=88d9187f01f3" defer></script>
   <script src="assets/first-run.js?v=e4a199c6e358" defer></script>
-  <script src="assets/app.js?v=306cfef78e76" defer></script>
+  <script src="assets/app.js?v=09727499498f" defer></script>
   <script src="assets/player-controls.js?v=38f1a02f2bce" defer></script>
   <script src="assets/max-logo.js?v=7c9b6dd5da8f" defer></script>
-  <script src="assets/flow-discovery.js?v=739bd5bcd752" defer></script>
+  <script src="assets/flow-discovery.js?v=11fe864b8be3" defer></script>
   <script src="assets/vendor/hls.light.min.js?v=482cccb3a224" defer></script>
   <script src="assets/audio-player.js?v=836796cd503b" defer></script>
   <audio id="telefy-audio" preload="none"></audio>
-<script src="assets/freshmen.js?v=fd8bd436d9c6" defer></script>
+<script src="assets/freshmen.js?v=770a2edbf46c" defer></script>
 <script src="assets/personal-vibe.js?v=20243185e3c6" defer></script>
-<script src="assets/discovery.js?v=81200e4e9150" defer></script>
-<script src="assets/library-client.js?v=3e32fa01b9aa" defer></script>
+<script src="assets/discovery.js?v=e08fc3a54332" defer></script>
+<script src="assets/library-client.js?v=9e42e5729536" defer></script>
 <script src="assets/reminders-client.js?v=866cd2e8ea6d" defer></script>
 <script src="assets/user-profile.js?v=3c6e3a651c04" defer></script>
 <script>document.addEventListener('DOMContentLoaded',()=>window.TelefyFirstRun?.boot());</script>
