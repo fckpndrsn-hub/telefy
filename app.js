@@ -4702,17 +4702,18 @@ window.TelefyAlbums=(()=>{
  function cards(items){return '<div class="album-grid">'+items.map((a,i)=>`<button class="release-card" data-release="${i}"><div class="release-art"><span class="tg-ico release-fallback">&#xF0BF;</span>${a.coverImg?`<img src="${esc(a.coverImg)}" alt="" loading="lazy">`:''}</div><strong>${esc(a.title)}</strong><span>${esc(a.artist)}</span><small>${esc(a.year||'')}</small></button>`).join('')+'</div>';}
  function bindCards(box,items){box.querySelectorAll('.release-art img').forEach(img=>img.onerror=()=>img.remove());box.querySelectorAll('[data-release]').forEach(b=>b.onclick=()=>open(items[Number(b.dataset.release)]));}
  function renderExtra(){
-  const box=document.getElementById('search-results-list');if(!box)return;const type=state.searchFilter;box.classList.toggle('release-result-cards',type==='albums');
+  const box=document.getElementById('search-results-list');if(!box)return;const type=state.searchFilter;box.classList.toggle('release-result-cards',type==='albums'||type==='all');
   box.querySelector('.release-search-extra')?.remove();
   document.getElementById('search-scroll-sentinel').hidden=['artists','albums'].includes(type);
   if(type==='tracks')return;
   const host=document.createElement('div');host.className='release-search-extra';
   if(type==='albums'||type==='artists'){box.replaceChildren(host);box._searchRows=[];box.classList.add('search-was-empty');}
   else box.prepend(host);
-  if(type==='albums'||type==='all'){
+  if(type==='albums'){
    if(results.length){host.innerHTML=(type==='all'?'<h3 class="release-heading">Альбомы</h3>':'')+cards(type==='all'?results.slice(0,4):results);bindCards(host,results);}
-   else if(type==='albums')host.textContent=busy?'Ищем альбомы…':error?'Не удалось загрузить альбомы. Попробуй ещё раз.':'Альбомы не найдены';
+   else if(type==='albums')host.textContent=busy?'Ищем альбомы…':error?'Не удалось загрузить альбомы. Попробуй ещё раз.':nextAlbums!==null?'В этой порции релизов нет. Загрузи следующую.':'Альбомы не найдены';
   }
+  if(type==='albums'&&error){const retry=document.createElement('button');retry.className='release-load-more';retry.textContent='Повторить загрузку';retry.onclick=()=>{cache.delete(query);query='';search();};host.append(retry);}
   if(type==='artists'||type==='all'){
    if(artists.length){const list=document.createElement('div');list.className='artist-search-list';list.innerHTML=(type==='all'?'<h3 class="release-heading">Артисты</h3>':'')+artists.map((a,i)=>`<button data-found-artist="${i}">${a.coverImg?`<img src="${esc(a.coverImg)}" alt="">`:''}<span>${esc(a.name)}</span><span>›</span></button>`).join('');list.querySelectorAll('[data-found-artist]').forEach(b=>b.onclick=()=>openArtistCard(artists[Number(b.dataset.foundArtist)].name));host.append(list);}
    else if(type==='artists')host.textContent=busy?'Ищем артистов…':error?'Не удалось загрузить артистов.':'Артисты не найдены';
@@ -4722,11 +4723,11 @@ window.TelefyAlbums=(()=>{
    if((type==='albums'?nextAlbums:nextArtists)!==null){const more=document.createElement('button');more.className='release-load-more';more.textContent=busy?'Загружаем…':'Загрузить ещё';more.disabled=busy;more.onclick=()=>loadMore(type);host.append(more);}
   }
  }
- async function loadMore(kind){if(busy)return;busy=true;const rev=revision,offset=kind==='albums'?nextAlbums:nextArtists;renderExtra();try{const data=await request('telefy:'+kind+':'+state.searchQuery.trim(),offset);if(rev!==revision)return;if(kind==='albums'){results=[...new Map([...results,...(data.albums||[])].map(a=>[a.id,a])).values()];nextAlbums=data.hasMore?data.nextOffset:null;}else{artists=[...new Map([...artists,...(data.artists||[])].map(a=>[a.id,a])).values()];nextArtists=data.hasMore?data.nextOffset:null;}}catch(_){showToast('Не удалось загрузить следующую страницу. Попробуй ещё раз.');}finally{if(rev===revision){busy=false;renderExtra();}}}
+ async function loadMore(kind){if(busy)return;busy=true;const rev=revision,offset=kind==='albums'?nextAlbums:nextArtists;renderExtra();try{const data=await request('telefy:'+kind+':'+state.searchQuery.trim(),offset);if(rev!==revision)return;if(kind==='albums'){results=[...new Map([...results,...(data.albums||[])].map(a=>[a.id,a])).values()];nextAlbums=data.hasMore?data.nextOffset:null;}else{artists=[...new Map([...artists,...(data.artists||[])].map(a=>[a.id,a])).values()];nextArtists=data.hasMore?data.nextOffset:null;}}catch(error){if(error.message==='album_catalog_cursor_expired'&&kind==='albums'){nextAlbums=0;cache.delete(query);showToast('Каталог обновился. Нажми «Загрузить ещё» для продолжения.');}else showToast('Не удалось загрузить следующую страницу. Попробуй ещё раз.');}finally{if(rev===revision){busy=false;renderExtra();}}}
  async function search(){
   const q=state.searchQuery.trim(),type=state.searchFilter;if(type==='tracks')return;
   const key=q+'::'+type;if(key===query)return;query=key;const rev=++revision;busy=true;error='';results=[];artists=[];nextAlbums=null;nextArtists=null;renderExtra();if(q&&q.length<2){busy=false;renderExtra();return;}
-  try{let data=cache.get(key);if(!data){data=await Promise.all([type!=='artists'?request('telefy:albums:'+q):Promise.resolve({albums:[]}),q.length>=2&&type!=='albums'?request('telefy:artists:'+q):Promise.resolve({artists:[]})]);cache.set(key,data);if(cache.size>40)cache.delete(cache.keys().next().value);}if(rev!==revision)return;results=data[0].albums||[];artists=data[1].artists||[];nextAlbums=data[0].hasMore?data[0].nextOffset:null;nextArtists=data[1].hasMore?data[1].nextOffset:null;}catch(_){if(rev===revision)error='failed';}finally{if(rev===revision){busy=false;renderExtra();}}
+  try{let data=cache.get(key);if(!data){data=await Promise.all([type==='albums'?request('telefy:albums:'+q):Promise.resolve({albums:[]}),q.length>=2&&type!=='albums'?request('telefy:artists:'+q):Promise.resolve({artists:[]})]);cache.set(key,data);if(cache.size>40)cache.delete(cache.keys().next().value);}if(rev!==revision)return;results=data[0].albums||[];artists=data[1].artists||[];nextAlbums=data[0].hasMore?data[0].nextOffset:null;nextArtists=data[1].hasMore?data[1].nextOffset:null;}catch(_){if(rev===revision)error='failed';}finally{if(rev===revision){busy=false;renderExtra();}}
  }
  function paintHeart(){const b=document.getElementById('album-save-heart');if(!b||!active)return;const yes=liked(active);b.classList.toggle('is-liked',yes);b.setAttribute('aria-pressed',String(yes));b.setAttribute('aria-label',yes?'Удалить альбом из любимого':'Добавить альбом в любимое');b.innerHTML=`<span class="tg-ico">${yes?'&#xF016;':'&#xF1D9;'}</span>`;}
  async function toggleAlbum(){if(!active||!window.TelefyLibrary?.ready)return;const a=active;const i=window.TelefySavedAlbums.findIndex(x=>x.id===a.id);if(i<0)window.TelefySavedAlbums.push({...a});else window.TelefySavedAlbums.splice(i,1);paintHeart();renderFavorites();await window.TelefyLibrary.save();paintHeart();}

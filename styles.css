@@ -1210,3 +1210,5 @@ body.theme-light .max-stars-panel{--stars-bg:#f3f3f7;--stars-card:#fff;--stars-t
 .release-load-more{display:block;width:100%;padding:16px;border:0;background:transparent;color:#2aabee;font:inherit;font-size:14px}
 
 .artist-release-grid{display:flex;gap:14px}.artist-release-grid .release-card{width:144px;flex:0 0 144px}
+
+#search-results-list.release-result-cards .release-search-extra{background:transparent;box-shadow:none}#search-results-list.release-result-cards>.tg-row{background:var(--bg-card)}
