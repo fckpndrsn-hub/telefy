@@ -1212,3 +1212,14 @@ body.theme-light .max-stars-panel{--stars-bg:#f3f3f7;--stars-card:#fff;--stars-t
 .artist-release-grid{display:flex;gap:14px}.artist-release-grid .release-card{width:144px;flex:0 0 144px}
 
 #search-results-list.release-result-cards .release-search-extra{background:transparent;box-shadow:none}#search-results-list.release-result-cards>.tg-row{background:var(--bg-card)}
+
+/* One scroller for the whole release, including header, actions and every track. */
+.soundcloud-album>.col-sheet-panel{display:block!important;overflow-y:auto!important;max-height:88dvh;overscroll-behavior:contain;padding-bottom:calc(24px + var(--telefy-safe-bottom,0px))}
+.soundcloud-album #album-modal-tracks{overflow:visible!important;max-height:none!important;height:auto!important;flex:none!important;display:block;margin-top:18px}
+.soundcloud-album #album-modal-tracks .tg-row{min-height:72px}
+.soundcloud-album .album-release-header{margin-top:18px;margin-bottom:20px}
+.release-row-list{background:var(--bg-card);border-radius:16px;overflow:hidden}
+.release-row{display:flex;align-items:center;gap:12px;width:100%;padding:12px 14px;text-align:left;border:0;border-bottom:1px solid var(--border-hairline);background:transparent;color:var(--text-primary);font-family:inherit}
+.release-row:last-child{border-bottom:0}.release-row-art{width:48px;height:48px;border-radius:9px;background:var(--bg-elevated);overflow:hidden;flex:0 0 48px;display:grid;place-items:center}.release-row-art img{width:100%;height:100%;object-fit:cover}.release-row-meta{flex:1;min-width:0}.release-row-title{display:flex;align-items:center;gap:7px}.release-row-title strong{font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.release-type{font-size:10px;line-height:16px;padding:0 5px;border-radius:4px;background:var(--bg-elevated);color:var(--text-muted);flex-shrink:0}.release-row-subtitle{display:block;margin-top:3px;font-size:12px;line-height:17px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.release-row-chevron{font-size:25px;color:var(--text-muted)}
+
+#album-modal.soundcloud-album>.col-sheet-panel{max-height:88dvh!important;overflow-y:auto!important;display:block!important}#album-modal.soundcloud-album #album-modal-tracks{max-height:none!important;overflow:visible!important;flex:none!important}
