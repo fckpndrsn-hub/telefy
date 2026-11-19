@@ -4,7 +4,7 @@ from pathlib import Path
 from urllib.parse import quote,urlsplit,parse_qs
 LOCK=threading.RLock();CACHE={};BROWSE_LOCK=threading.Lock();BROWSE={}
 PINS=[{'url':'https://soundcloud.com/members-only-forever/sets/12-ep','title':'12+ (EP)','artist':'i61 & stereoRYZE','year':'2017','keys':'i61 stereoRYZE 12+ 12 ep голыедети мне очень весело мононоке санандреас'}, {'url':'https://soundcloud.com/pharaohdd/sets/red-um-dullboy-ep','title':'REDЯUM (DULLBOY EP)','artist':'PHARAOH','year':'2019','keys':'pharaoh фара redяum redrum redum dullboy никакой любви фул клип enfants rich убийца узы моба'}]
-OG_PINS=[{'url':'https://soundcloud.com/ogbuda/sets/freerio-2','title':'FREERIO','artist':'OG Buda','year':'2021','keys':'freerio фририо OG Buda буда'},{'url':'https://soundcloud.com/ogbuda/sets/freerio-3-2','title':'FREERIO 3','artist':'OG Buda','year':'2023','keys':'freerio 3 фририо OG Buda буда'},{'url':'https://soundcloud.com/ogbuda/sets/gbqqtyuwtqzv','title':'ОПГ СИТИ','artist':'OG Buda','year':'2019','keys':'опг сити opg city OG Buda буда'}]
+OG_PINS=[{'url':'https://soundcloud.com/ogbuda/sets/freerio-2','title':'FREERIO','artist':'OG Buda','year':'2021','keys':'freerio фририо OG Buda буда'},{'url':'https://soundcloud.com/ogbuda/sets/freerio-3-2','title':'FREERIO 3','artist':'OG Buda','year':'2024','keys':'freerio 3 фририо OG Buda буда'},{'url':'https://soundcloud.com/ogbuda/sets/gbqqtyuwtqzv','title':'ОПГ СИТИ','artist':'OG Buda','year':'2019','keys':'опг сити opg city OG Buda буда'}]
 for pin,urn,cover in zip(OG_PINS,['soundcloud:playlists:1269973384','soundcloud:playlists:1957256741','soundcloud:playlists:1269973471'],['https://i1.sndcdn.com/artworks-41f11c63-3045-43b3-97f3-aad957dc862c-0-t500x500.jpg','https://i1.sndcdn.com/artworks-00ed4585-c6b7-4a28-a2a7-df3b451779bb-0-t500x500.jpg','https://i1.sndcdn.com/artworks-f57b83e0-0da1-4f1c-8d5b-44c767258cc4-0-t500x500.jpg']):pin.update(urn=urn,coverImg=cover)
 PINS+=OG_PINS
 STARTER=[('PHARAOH','Фосфор','2016'),('PHARAOH','Pink Phloyd','2017'),('PHARAOH','PHUNERAL','2018'),('PHARAOH','Правило','2020'),('Boulevard Depo','RAPP2','2018'),('Boulevard Depo','OLD BLOOD','2020'),('ЛСП','Magic City','2015'),('ЛСП','Трагик Сити','2017'),('Big Baby Tape','Dragonborn','2018'),('Big Baby Tape','VARSKVA','2023'),('KIZARU','Karmageddon','2019'),('KIZARU','Born To Trap','2020'),('OG Buda','ОПГ СИТИ','2019'),('FRIENDLY THUG 52 NGG','Cristoforo Colombo','2023'),('Kai Angel & 9mice','HEAVY METAL','2023'),('MORGENSHTERN','Легендарная пыль','2020')]
@@ -59,7 +59,8 @@ def cached(key,call):
  value=call()
  with LOCK:
   if len(CACHE)>256:CACHE.clear()
-  CACHE[key]=(time.time()+21600,value)
+  retry_soon=isinstance(value,dict)and(value.get('_retry_soon')or(value.get('album')or{}).get('complete')is False)
+  CACHE[key]=(time.time()+(60 if retry_soon else 21600),value)
  return value
 def normal(sc,raw,pin=None):
  user=raw.get('user')or{};urn=str(raw.get('urn')or'soundcloud:playlists:'+str(raw.get('id','')))
@@ -77,7 +78,16 @@ def normal(sc,raw,pin=None):
  title=clean_title(title,artist);known=next((s for s in STARTER if key(s[0])==key(artist)and key(s[1])==key(title)),None)
  return {'id':urn,'title':title,'artist':artist,'year':(pin or{}).get('year')or(known[2]if known else str(raw.get('release_year')or str(raw.get('release_date')or'')[:4])),'coverImg':sc.safe_url(raw.get('artwork_url')).replace('-large.','-t500x500.')or sc.safe_url((raw.get('tracks')or[{}])[0].get('artwork_url')),'url':sc.safe_url(raw.get('permalink_url'))or(pin or{}).get('url',''),'trackCount':int(raw.get('track_count')or len(raw.get('tracks')or[]))}
 def resolve_pin(sc,pin):
- if pin.get('urn'):return cached(('approved_release_v5',pin['urn']),lambda:load_approved_release(sc,pin))
+ if pin.get('urn'):
+  with LOCK:guard=APPROVED_LOCKS.setdefault(pin['urn'],threading.RLock());unavailable=CACHE.get(('approved_unavailable',pin['urn']))
+  with guard:
+   with LOCK:unavailable=CACHE.get(('approved_unavailable',pin['urn']))
+   if unavailable and unavailable[0]>time.time():raise sc.APIError(404,'album_unavailable_in_public_api')
+   try:return cached(('approved_release_v6',pin['urn']),lambda:load_approved_release(sc,pin))
+   except sc.APIError as error:
+    if error.code=='album_unavailable_in_public_api':
+     with LOCK:CACHE[('approved_unavailable',pin['urn'])]=(time.time()+21600,True)
+    raise
  return cached(pin['url'],lambda:sc.api('/resolve',{'url':pin['url']}))
 
 def track_key(title,artist=''):
@@ -129,7 +139,11 @@ def validate_release(sc,album,tracks,recover):
  return result
 def detail(sc,identity,recover=True):
  pin=next((p for p in PINS if p['url']==identity or p.get('urn')==identity),None)
- if pin:raw=resolve_pin(sc,pin)
+ if pin:
+  try:raw=resolve_pin(sc,pin)
+  except sc.APIError as error:
+   if pin in OG_PINS and error.code=='album_unavailable_in_public_api':return restore_approved_tracks(sc,pin)
+   raise
  else:
   if not re.fullmatch(r'soundcloud:playlists:\d+',identity):raise sc.APIError(400,'invalid_album')
   raw=cached(identity,lambda:sc.api('/playlists/'+quote(identity,safe=''),{'show_tracks':'true'}))
@@ -137,7 +151,11 @@ def detail(sc,identity,recover=True):
  if not pin:
   candidate=normal(sc,raw,EDITORIAL_IDS.get(identity))
   pin=next((p for p in OG_PINS if release_key(p)==release_key(candidate)),None)
-  if pin:raw=resolve_pin(sc,pin)
+  if pin:
+   try:raw=resolve_pin(sc,pin)
+   except sc.APIError as error:
+    if error.code=='album_unavailable_in_public_api':return restore_approved_tracks(sc,pin)
+    raise
  album=normal(sc,raw,pin or EDITORIAL_IDS.get(identity));items=raw.get('tracks')or[]
  if len(items)<int(raw.get('track_count')or 0):
   fresh=cached(album['id']+':full',lambda:sc.api('/playlists/'+quote(album['id'],safe=''),{'show_tracks':'true'}));items=fresh.get('tracks')or[]
@@ -385,6 +403,7 @@ def source_track_urn(track):
  return value if re.fullmatch(r'soundcloud:tracks:\d+',value)else''
 
 ALBUM_SOURCE_DIAGNOSTICS={}
+APPROVED_LOCKS={}
 
 def source_diagnostics():
  with LOCK:return {k:dict(v,attempts=list(v['attempts']))for k,v in ALBUM_SOURCE_DIAGNOSTICS.items()}
@@ -449,3 +468,75 @@ def load_approved_release(sc,pin):
  if any(not t.get('title')or 'access'not in t or 'streamable'not in t for t in tracks):raise sc.APIError(502,'album_track_metadata_incomplete')
  raw['tracks']=tracks
  return raw
+
+# Publisher-confirmed catalogue membership used when the public playlist API returns 404.
+REFERENCES.update({'OG Buda|FREERIO': {'artist': 'OG Buda', 'title': 'FREERIO', 'year': '2021', 'source': 'https://music.apple.com/us/album/freerio/1652721902?uo=4', 'tracks': [{'number': 1, 'title': 'Интро (feat. 163ONMYNECK)', 'artist': 'OG BUDA', 'duration': 117}, {'number': 2, 'title': 'Сиппин (feat. MAYOT)', 'artist': 'OG BUDA', 'duration': 142}, {'number': 3, 'title': 'hu3ta (VJLink) [feat. SODA LUV]', 'artist': 'OG BUDA', 'duration': 124}, {'number': 4, 'title': 'Старшие (feat. Polyana)', 'artist': 'OG BUDA', 'duration': 188}, {'number': 5, 'title': 'Даёт (feat. Scally Milano)', 'artist': 'OG BUDA', 'duration': 183}, {'number': 6, 'title': 'На кассе (feat. 163ONMYNECK)', 'artist': 'OG BUDA', 'duration': 147}, {'number': 7, 'title': 'САМП (feat. BUSHIDO ZHO)', 'artist': 'OG BUDA', 'duration': 140}, {'number': 8, 'title': 'Грусть', 'artist': 'OG BUDA', 'duration': 98}, {'number': 9, 'title': 'Дабстэп (feat. Scally Milano)', 'artist': 'OG BUDA', 'duration': 137}, {'number': 10, 'title': 'Сайфер (feat. Егор Крид, MAYOT & SODA LUV)', 'artist': 'OG BUDA', 'duration': 158}, {'number': 11, 'title': 'Дзагоев', 'artist': 'OG BUDA', 'duration': 121}, {'number': 12, 'title': 'Попки (feat. MAYOT)', 'artist': 'OG BUDA', 'duration': 101}, {'number': 13, 'title': 'Винрар (feat. 163ONMYNECK)', 'artist': 'OG BUDA', 'duration': 147}, {'number': 14, 'title': 'ГАНЬГ Аутро (feat. MAYOT, SEEMEE, Magnum Opus, Scally Milano, YUNGWAY & BUSHIDO ZHO)', 'artist': 'OG BUDA', 'duration': 106}, {'number': 15, 'title': 'Бонус Трэк (Грясссь) [feat. SODA LUV]', 'artist': 'OG BUDA', 'duration': 241}]}, 'OG Buda|FREERIO 3': {'artist': 'OG Buda', 'title': 'FREERIO 3', 'year': '2024', 'source': 'https://music.apple.com/us/album/freerio-3/1773299281?uo=4', 'tracks': [{'number': 1, 'title': 'На Рожке и На Мне', 'artist': 'OG BUDA', 'duration': 209}, {'number': 2, 'title': 'Все Ждут Дроп', 'artist': 'OG BUDA', 'duration': 109}, {'number': 3, 'title': 'Пинту в Ванну', 'artist': 'OG BUDA & 163ONMYNECK', 'duration': 158}, {'number': 4, 'title': 'Клонировали', 'artist': 'OG BUDA', 'duration': 125}, {'number': 5, 'title': 'Форэн Кисуля Флоу :3', 'artist': 'OG BUDA', 'duration': 136}, {'number': 6, 'title': 'Ботиночки', 'artist': 'OG BUDA & Voskresenskii', 'duration': 213}, {'number': 7, 'title': 'Мода Летит Пиздец', 'artist': 'OG BUDA & Basta', 'duration': 167}, {'number': 8, 'title': 'Бэйбитрон 3', 'artist': 'OG BUDA', 'duration': 145}, {'number': 9, 'title': 'Сайфер 2 (Могу Купить РЗТ)', 'artist': 'OG BUDA, unki, Toxi$ & SIDODGI DUBOSHIT', 'duration': 159}, {'number': 10, 'title': 'Умереть Хочешь?', 'artist': 'OG BUDA & Джон Гарик', 'duration': 121}, {'number': 11, 'title': 'Грусть 3', 'artist': 'OG BUDA & Slatt Savage', 'duration': 130}, {'number': 12, 'title': 'Плюсик в Чат (Бан)', 'artist': 'OG BUDA', 'duration': 144}, {'number': 13, 'title': 'Могу', 'artist': 'OG BUDA', 'duration': 149}, {'number': 14, 'title': 'Заедем в Азбуку', 'artist': 'OG BUDA', 'duration': 138}, {'number': 15, 'title': 'Дончич + Йокич', 'artist': 'OG BUDA & MAYOT', 'duration': 162}, {'number': 16, 'title': 'Не Охото Рэповать', 'artist': 'OG BUDA', 'duration': 130}, {'number': 17, 'title': 'Доггер', 'artist': 'OG BUDA, 4n Way & Basta', 'duration': 267}, {'number': 18, 'title': 'Порой Белый Хочет...', 'artist': 'OG BUDA', 'duration': 153}]}})
+
+
+def restore_approved_tracks(sc,pin):
+ with LOCK:guard=APPROVED_LOCKS.setdefault(pin['urn'],threading.RLock())
+ with guard:return cached(('approved_tracklist_v6',pin['urn']),lambda:find_approved_tracks(sc,pin))
+
+def find_approved_tracks(sc,pin):
+ from concurrent.futures import ThreadPoolExecutor
+ reference=next((r for r in REFERENCES.values()if key(r['artist'])==key(pin['artist'])and title_key(r['title'])==title_key(pin['title'])),None)
+ if not reference:raise sc.APIError(404,'album_reference_missing')
+ slots=reference['tracks'];artist=pin['artist'];errors=[]
+ def query(text,limit):
+  def lookup():
+   data=sc.api('/tracks',{'q':text,'access':'playable','limit':limit,'linked_partitioning':'true'})
+   result=[]
+   for raw in(data.get('collection',[])if isinstance(data,dict)else data):
+    if raw.get('access')!='playable'or not raw.get('streamable'):continue
+    try:result.append(sc.normalize_track(raw))
+    except sc.APIError:continue
+   return {'tracks':result,'_retry_soon':not result}
+  return cached(('approved_recordings_v6',text),lookup)['tracks']
+ def acceptable(track,slot):
+  title=str(track.get('title')or'')
+  if re.search(r'(?i)\b(?:remix|slowed|sped|nightcore|karaoke|instrumental|cover|remake|live)\b|ремикс|замедлен|ускорен|нейро',title):return False
+  credit=key(track.get('primaryArtist')or track.get('artist')or'')
+  if 'ogbuda'not in credit and 'огбуда'not in credit:return False
+  wanted={track_key(slot['title']),*[track_key(a)for a in slot.get('aliases',[])]}
+  if track_key(title,artist)not in wanted:return False
+  duration=float(track.get('duration')or 0)
+  return duration>0 and abs(duration-slot['duration'])<=max(5,slot['duration']*.03)
+ pool=query(artist+' '+pin['title'],200)
+ found={}
+ def best(rows,slot):
+  matches=[r for r in rows if acceptable(r,slot)]
+  return min(matches,key=lambda r:(not str(r.get('soundcloudUrl')or'').startswith('https://soundcloud.com/ogbuda/'),abs(float(r['duration'])-slot['duration'])))if matches else None
+ for slot in slots:
+  match=best(pool,slot)
+  if match:found[slot['number']]=match
+ def resolve(slot):
+  try:
+   names=[slot['title'],*slot.get('aliases',[])]
+   for name in names:
+    name=re.sub(r'\s*[\[(](?:feat\.?|ft\.?).*','',name,flags=re.I).strip()
+    match=best(query(artist+' '+name,30),slot)
+    if match:return slot,match,None
+   return slot,None,None
+  except sc.APIError as error:return slot,None,error
+ missing=[r for r in slots if r['number']not in found]
+ with ThreadPoolExecutor(max_workers=3)as executor:
+  for slot,track,error in executor.map(resolve,missing):
+   if error:errors.append(error)
+   if track:found[slot['number']]=track
+ if not found:
+  if errors:raise errors[0]
+  raise sc.APIError(404,'album_recordings_not_found')
+ tracks=[];used=set()
+ for slot in slots:
+  track=found.get(slot['number'])
+  if not track or track.get('soundcloudUrn')in used:continue
+  used.add(track['soundcloudUrn']);track=dict(track);track.update(album=pin['title'],collectionId=pin['urn'],releaseYear=reference['year']);tracks.append(track)
+ complete=len(tracks)==len(slots)
+ album=approved_card(sc,pin);album.update(year=reference['year'],trackCount=len(tracks),expectedTrackCount=len(slots),availableTrackCount=len(tracks),complete=complete,verifiedTracklist=True,missingTitles=[r['title']for r in slots if r['number']not in found],recordingLookup=True)
+ with LOCK:
+  diagnostic=ALBUM_SOURCE_DIAGNOSTICS.setdefault(pin['title'],{'urn':pin['urn'],'observed_at':int(time.time()),'attempts':[]})
+  diagnostic.update(recordings_found=len(tracks),recordings_expected=len(slots),recording_lookup=True)
+ return {'album':album,'tracks':tracks,'hasMore':False}
+
+# SoundCloud spells the second title differently on the pinned 2021 set.
+REFERENCES['OG Buda|FREERIO']['tracks'][1]['aliases']=['Спиттин (feat. MAYOT)']
