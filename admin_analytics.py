@@ -11,6 +11,7 @@ class Analytics:
    self.db.ensure()
    with self.db.connect()as c:
     for sql in [
+     'CREATE TABLE IF NOT EXISTS telefy_ad_links(source TEXT PRIMARY KEY,label TEXT NOT NULL,created_at BIGINT NOT NULL,admin_id BIGINT NOT NULL)',
      'CREATE TABLE IF NOT EXISTS telefy_analytics_meta(id INTEGER PRIMARY KEY,started_at BIGINT NOT NULL)',
      'CREATE TABLE IF NOT EXISTS telefy_acquisition(telegram_id BIGINT PRIMARY KEY,source TEXT NOT NULL,first_seen BIGINT NOT NULL,first_open BIGINT NOT NULL)',
      'CREATE TABLE IF NOT EXISTS telefy_analytics_daily(telegram_id BIGINT NOT NULL REFERENCES telefy_users(telegram_id) ON DELETE CASCADE,day TEXT NOT NULL,listened_ms BIGINT NOT NULL DEFAULT 0,opens INTEGER NOT NULL DEFAULT 0,likes INTEGER NOT NULL DEFAULT 0,playlists INTEGER NOT NULL DEFAULT 0,exports INTEGER NOT NULL DEFAULT 0,errors INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(telegram_id,day))',
@@ -96,18 +97,37 @@ def send_csv(uid,name,rows):
 def handle(update):
  import telefy_bot as bot,bot_reminders as rem,bot_posts as posts
  cb=update.get('callback_query')or{};msg=update.get('message')or{};user=cb.get('from')or msg.get('from')or{};chat=(cb.get('message')or msg).get('chat')or{};data=cb.get('data','');command=msg.get('text','').split(' ',1)[0]
- if not(data.startswith('analytics_')or command=='/analytics'):return False
+ pending=posts.store().input(user['id'])if msg and chat.get('type')=='private' and user.get('id')in rem.admins()else None
+ if not(data.startswith('analytics_')or command in('/analytics','/adlink')or pending and pending['kind']=='ad_link'):return False
  if chat.get('type')!='private'or not bot.valid_user(user)or user['id']not in rem.admins():return True
  uid=user['id']
  if cb:bot.api('answerCallbackQuery',callback_query_id=cb['id'])
  try:
+  if data=='analytics_link_new' or command=='/adlink':
+   posts.store().input(uid,'ad_link');posts.say(uid,'Напиши название размещения: например, Блико · пост 19 ноября. Для каждого размещения будет отдельная ссылка. /cancel — отменить.');return True
+  if pending and pending['kind']=='ad_link' and msg:
+   label=msg.get('text','').strip()
+   if label.startswith('/'):
+    posts.store().cancel_input(uid);posts.say(uid,'Создание ссылки отменено.');return True
+   if not 1<=len(label)<=80:posts.say(uid,'Отправь название текстом, от 1 до 80 символов.');return True
+   source='ad_'+secrets.token_hex(8);s=store()
+   with s.db.connect()as c:s.db.execute(c,'INSERT INTO telefy_ad_links VALUES(%s,%s,%s,%s)',(source,label,int(time.time()),uid))
+   posts.store().cancel_input(uid);link_card(uid,source);return True
+  if data.startswith('analytics_link_show:'):link_card(uid,data.split(':',1)[1]);return True
+  if data.startswith('analytics_links'):
+   page=int(data.split(':')[1])if ':'in data else 0;s=store()
+   with s.db.connect()as c:rows=s.db.execute(c,'SELECT * FROM telefy_ad_links ORDER BY created_at DESC,source LIMIT 11 OFFSET %s',(max(0,page)*10,)).fetchall()
+   buttons=[[posts.button('➕ Создать ссылку','analytics_link_new')]]+[[posts.button(r['label'],'analytics_link_show:'+r['source'])]for r in rows[:10]]
+   if len(rows)>10:buttons.append([posts.button('Далее →','analytics_links:'+str(page+1))])
+   if page>0:buttons.append([posts.button('← Назад','analytics_links:'+str(page-1))])
+   posts.say(uid,'📣 Рекламные ссылки. Выбери размещение для статистики.',buttons);return True
   reports=store().reports();since=datetime.fromtimestamp(reports['started'],TZ).strftime('%d.%m.%Y %H:%M')
   kind=data.removeprefix('analytics_csv_')
   if data.startswith('analytics_csv_')and kind in('days','cohorts','sources'):send_csv(uid,kind,reports[kind]);return True
   current=next((r for r in reports['days']if r['day_moscow']==day()),{})
   text=f'📈 Аналитика Telefy\n\nСбор с {since} МСК.\nСегодня: открывали {current.get("app_users",0)}, слушали ≥30 с — {current.get("listeners_30s",0)}.\nПрослушано: {current.get("minutes",0)} мин.\nОшибок плеера: {current.get("playback_errors",0)}.\n\nCSV: активность и когорты за 30 дней; источники — с начала сбора. D1/D7 — слушали ≥30 с в соответствующий календарный день МСК. Неполные дни: not_mature. Исторические данные не восстановлены.\n\nЛайки/плейлисты/выгрузки — действия пользователя, не подтверждённые результаты. Минуты — фактическое воспроизведение, включая Max/бету.'
   summary=reports['summary'];text+='\n\nЗа 7 календарных дней: '+str(summary['listeners_7d'])+' слушателей, '+str(summary['minutes_7d'])+' мин.\nD1: '+summary['D1']+'\nD7: '+summary['D7']
-  posts.say(uid,text,[[posts.button('📅 Активность CSV','analytics_csv_days')],[posts.button('↩️ Возвращаемость CSV','analytics_csv_cohorts')],[posts.button('📣 Источники CSV','analytics_csv_sources')]])
+  posts.say(uid,text,[[posts.button('🔗 Рекламные ссылки','analytics_links')],[posts.button('📅 Активность CSV','analytics_csv_days')],[posts.button('↩️ Возвращаемость CSV','analytics_csv_cohorts')],[posts.button('📣 Источники CSV','analytics_csv_sources')]])
  except Exception:posts.say(uid,'Аналитика временно недоступна. Повтори позже. Данные не удалены.')
  return True
 
@@ -127,3 +147,13 @@ def route(handler):
   body=json.loads(handler.rfile.read(n));store().event(user['telegram_id'],body.get('event'),body.get('event_id'));handler.reply(200,{'ok':True})
  except(ValueError,TypeError,AttributeError):handler.reply(400,{'error':'invalid_event'})
  except Exception:handler.reply(503,{'error':'analytics_unavailable'})
+
+
+def link_card(uid,source):
+ import bot_posts as posts,telefy_bot as bot
+ s=store()
+ with s.db.connect()as c:row=s.db.execute(c,'SELECT * FROM telefy_ad_links WHERE source=%s',(source,)).fetchone()
+ if not row:posts.say(uid,'Ссылка не найдена.');return
+ stats=next((r for r in s.reports()['sources']if r['source']==source),{})
+ text='🔗 '+row['label']+'\n\nВход через бота:\nhttps://t.me/'+bot.BOT_USERNAME+'?start='+source+'\n\nПрямо в приложение:\nhttps://t.me/'+bot.BOT_USERNAME+'?startapp='+source+'\n\nНовые пользователи: '+str(stats.get('attributed_users_since_start',0))+'\nОткрыли приложение: '+str(stats.get('ever_opened_app',0))+'\nСлушатели ≥30 с за 30 дней: '+str(stats.get('listeners_30s_last30d',0))+'\nПокупатели: '+str(stats.get('paying_users_since_start',0))+'\nОплачено звёзд: '+str(stats.get('paid_stars_since_start',0))+'\n\nУчитывается первый источник пользователя, а не каждый клик. Старые пользователи не приписываются новой рекламе.'
+ posts.say(uid,text,[[posts.button('Обновить','analytics_link_show:'+source)],[posts.button('Все ссылки','analytics_links')]])

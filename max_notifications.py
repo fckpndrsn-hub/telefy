@@ -9,6 +9,7 @@ class NotificationStore:
    if self.ready:return
    self.db.ensure()
    with self.db.connect()as c:
+    self.db.execute(c,"CREATE TABLE IF NOT EXISTS telefy_payment_alerts(charge_id TEXT NOT NULL,admin_id BIGINT NOT NULL,body TEXT NOT NULL,state TEXT NOT NULL,retry_at BIGINT NOT NULL,PRIMARY KEY(charge_id,admin_id))")
     self.db.execute(c,'CREATE TABLE IF NOT EXISTS telefy_max_media(id INTEGER PRIMARY KEY,file_id TEXT NOT NULL)')
     self.db.execute(c,'CREATE TABLE IF NOT EXISTS telefy_max_receipts(charge_id TEXT PRIMARY KEY,telegram_id BIGINT NOT NULL,expires_at BIGINT NOT NULL,file_id TEXT NOT NULL,state TEXT NOT NULL,retry_at BIGINT NOT NULL)')
    self.ready=True
@@ -20,6 +21,7 @@ class NotificationStore:
   return r['file_id']if r else''
  def queue(self,uid,charge,end):
   media=self.media()
+  queue_alerts(self,uid,charge)
   with self.db.connect()as c:self.db.execute(c,"INSERT INTO telefy_max_receipts VALUES(%s,%s,%s,%s,'pending',0) ON CONFLICT(charge_id) DO NOTHING",(charge,uid,end,media))
  def claim(self):
   self.ensure()
@@ -55,7 +57,7 @@ def run_one():
   job['file_id']=media['file_id']if media else'';gift_kind=media['kind']if media else None
  args={'chat_id':job['telegram_id'],'parse_mode':'HTML','reply_markup':{'inline_keyboard':[[{'text':'Открыть Telefy','style':'primary','web_app':{'url':bot.BASE+'/telefy.html'}}]]}}
  try:
-  if gift and job['file_id']:bot.api({'photo':'sendPhoto','video':'sendVideo','animation':'sendAnimation'}[gift_kind],**args,**{gift_kind:job['file_id']},caption=text)
+  if gift and job['file_id']:bot.api({'photo':'sendPhoto','video':'sendVideo','animation':'sendAnimation','mpeg4':'sendAnimation'}[gift_kind],**args,**{('animation'if gift_kind=='mpeg4'else gift_kind):job['file_id']},caption=text)
   elif job['file_id']:bot.api('sendPhoto',**args,photo=job['file_id'],caption=text)
   else:bot.api('sendMessage',**args,text=text)
   s.finish(job['charge_id'],'sent')
@@ -73,11 +75,42 @@ def start():
   # A previous process may have died after Telegram accepted a message.
   try:
    s=store()
-   with s.db.connect()as c:s.db.execute(c,"UPDATE telefy_max_receipts SET state='uncertain' WHERE state='sending'")
+   with s.db.connect()as c:
+    s.db.execute(c,"UPDATE telefy_max_receipts SET state='uncertain' WHERE state='sending'")
+    s.db.execute(c,"UPDATE telefy_payment_alerts SET state='uncertain' WHERE state='sending'")
   except Exception:pass
   while True:
    try:
-    if run_one():continue
+    worked=run_one()
+    if run_alert():worked=True
+    if worked:continue
    except Exception:pass
    time.sleep(2)
  threading.Thread(target=worker,name='max-receipts',daemon=True).start()
+
+def queue_alerts(s,uid,charge):
+ import bot_reminders as rem
+ with s.db.connect()as c:
+  order=s.db.execute(c,"SELECT * FROM telefy_star_orders WHERE charge_id=%s AND state='paid'",(charge,)).fetchone()
+  if not order:return
+  user=s.db.execute(c,'SELECT username FROM telefy_users WHERE telegram_id=%s',(uid,)).fetchone()
+  gift=s.db.execute(c,'SELECT order_id FROM telefy_max_gifts WHERE order_id=%s',(order['id'],)).fetchone()
+  stamp=datetime.fromtimestamp(order['paid_at'],timezone(timedelta(hours=3))).strftime('%d.%m.%Y %H:%M:%S МСК')
+  body='💳 Оплата Telefy\n\nПользователь: '+('@'+user['username']if user and user['username']else'без username')+'\nTelegram ID: '+str(uid)+'\nСумма: '+str(order['amount'])+' XTR (звёзд)\nПокупка: '+('Подарок Telefy Max'if gift else'Telefy Max')+' · 30 дней\nВремя: '+stamp+'\n\nID транзакции Telegram: '+charge+'\nНомер заказа: '+order['id']
+  for admin in rem.admins():s.db.execute(c,"INSERT INTO telefy_payment_alerts VALUES(%s,%s,%s,'pending',0) ON CONFLICT(charge_id,admin_id) DO NOTHING",(charge,admin,body))
+
+def run_alert():
+ import telefy_bot as bot
+ s=store()
+ with LOCK,s.db.connect()as c:
+  row=s.db.execute(c,"SELECT * FROM telefy_payment_alerts WHERE state='pending' AND retry_at<=%s LIMIT 1"+(' FOR UPDATE SKIP LOCKED'if s.db.url else''),(int(time.time()),)).fetchone()
+  if not row:return False
+  job=dict(row)
+  if s.db.execute(c,"UPDATE telefy_payment_alerts SET state='sending' WHERE charge_id=%s AND admin_id=%s AND state='pending'",(job['charge_id'],job['admin_id'])).rowcount!=1:return False
+ state='sent';retry=0
+ try:bot.api('sendMessage',chat_id=job['admin_id'],text=job['body'])
+ except bot.BotError as e:
+  state='pending'if e.definitive and e.status==429 else'failed'if e.definitive else'uncertain';retry=max(1,e.retry_after)if state=='pending'else 0
+ except Exception:state='uncertain'
+ with s.db.connect()as c:s.db.execute(c,'UPDATE telefy_payment_alerts SET state=%s,retry_at=%s WHERE charge_id=%s AND admin_id=%s',(state,int(time.time())+retry,job['charge_id'],job['admin_id']))
+ return True
