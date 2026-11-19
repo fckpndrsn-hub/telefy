@@ -11,6 +11,8 @@ class Analytics:
    self.db.ensure()
    with self.db.connect()as c:
     for sql in [
+     'CREATE TABLE IF NOT EXISTS telefy_live_sessions(telegram_id BIGINT NOT NULL REFERENCES telefy_users(telegram_id) ON DELETE CASCADE,session TEXT NOT NULL,seq BIGINT NOT NULL,last_seen BIGINT NOT NULL,visible INTEGER NOT NULL,playing INTEGER NOT NULL,title TEXT NOT NULL,artist TEXT NOT NULL,PRIMARY KEY(telegram_id,session))',
+     'CREATE INDEX IF NOT EXISTS telefy_live_seen ON telefy_live_sessions(last_seen)',
      'CREATE TABLE IF NOT EXISTS telefy_ad_links(source TEXT PRIMARY KEY,label TEXT NOT NULL,created_at BIGINT NOT NULL,admin_id BIGINT NOT NULL)',
      'CREATE TABLE IF NOT EXISTS telefy_analytics_meta(id INTEGER PRIMARY KEY,started_at BIGINT NOT NULL)',
      'CREATE TABLE IF NOT EXISTS telefy_acquisition(telegram_id BIGINT PRIMARY KEY,source TEXT NOT NULL,first_seen BIGINT NOT NULL,first_open BIGINT NOT NULL)',
@@ -46,6 +48,25 @@ class Analytics:
     self.db.execute(c,'INSERT INTO telefy_analytics_daily(telegram_id,day,'+column+') VALUES(%s,%s,1) ON CONFLICT(telegram_id,day) DO UPDATE SET '+column+'=telefy_analytics_daily.'+column+'+1',(uid,date))
    cutoff=day(now-180*86400)
    self.db.execute(c,'DELETE FROM telefy_analytics_events WHERE day<%s',(cutoff,));self.db.execute(c,'DELETE FROM telefy_analytics_daily WHERE day<%s',(cutoff,))
+ def presence(self,uid,body,now=None):
+  session=body.get('session');seq=body.get('seq')
+  if not re.fullmatch(r'[A-Za-z0-9_-]{16,64}',str(session))or type(seq)is not int or not 0<=seq<=2147483647:raise ValueError('invalid_presence')
+  if type(body.get('visible'))is not bool or type(body.get('playing'))is not bool:raise ValueError('invalid_presence')
+  self.ensure();now=int(time.time())if now is None else int(now)
+  clean=lambda x:re.sub(r'[\x00-\x1f\x7f]',' ',str(x or ''))[:160]
+  with self.db.connect()as c:
+   self.db.execute(c,'INSERT INTO telefy_live_sessions VALUES(%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT(telegram_id,session) DO UPDATE SET seq=excluded.seq,last_seen=excluded.last_seen,visible=excluded.visible,playing=excluded.playing,title=excluded.title,artist=excluded.artist WHERE telefy_live_sessions.seq<excluded.seq',(uid,session,seq,now,int(body['visible']),int(body['playing']),clean(body.get('title')),clean(body.get('artist'))))
+   self.db.execute(c,'DELETE FROM telefy_live_sessions WHERE last_seen<%s',(now-86400,))
+ def live(self,now=None):
+  self.ensure();now=int(time.time())if now is None else int(now)
+  with self.db.connect()as c:rows=self.db.execute(c,'SELECT s.*,u.username,u.first_name FROM telefy_live_sessions s JOIN telefy_users u ON u.telegram_id=s.telegram_id WHERE s.last_seen>=%s AND (s.visible=1 OR s.playing=1) ORDER BY s.playing DESC,s.last_seen DESC',(now-60,)).fetchall()
+  users={}
+  for r in rows:
+   uid=r['telegram_id']
+   if uid not in users:users[uid]=dict(r)
+   else:
+    users[uid]['visible']=max(users[uid]['visible'],r['visible']);users[uid]['playing']=max(users[uid]['playing'],r['playing'])
+  return list(users.values())
  def reports(self,now=None):
   self.ensure();now=int(time.time())if now is None else int(now);today=day(now);cutoff=day(now-29*86400)
   with self.db.connect()as c:
@@ -103,6 +124,8 @@ def handle(update):
  uid=user['id']
  if cb:bot.api('answerCallbackQuery',callback_query_id=cb['id'])
  try:
+  if data.startswith('analytics_live'):
+   show_live(uid,int(data.split(':')[1])if ':'in data else 0);return True
   if data=='analytics_link_new' or command=='/adlink':
    posts.store().input(uid,'ad_link');posts.say(uid,'Напиши название размещения: например, Блико · пост 19 ноября. Для каждого размещения будет отдельная ссылка. /cancel — отменить.');return True
   if pending and pending['kind']=='ad_link' and msg:
@@ -127,7 +150,7 @@ def handle(update):
   current=next((r for r in reports['days']if r['day_moscow']==day()),{})
   text=f'📈 Аналитика Telefy\n\nСбор с {since} МСК.\nСегодня: открывали {current.get("app_users",0)}, слушали ≥30 с — {current.get("listeners_30s",0)}.\nПрослушано: {current.get("minutes",0)} мин.\nОшибок плеера: {current.get("playback_errors",0)}.\n\nCSV: активность и когорты за 30 дней; источники — с начала сбора. D1/D7 — слушали ≥30 с в соответствующий календарный день МСК. Неполные дни: not_mature. Исторические данные не восстановлены.\n\nЛайки/плейлисты/выгрузки — действия пользователя, не подтверждённые результаты. Минуты — фактическое воспроизведение, включая Max/бету.'
   summary=reports['summary'];text+='\n\nЗа 7 календарных дней: '+str(summary['listeners_7d'])+' слушателей, '+str(summary['minutes_7d'])+' мин.\nD1: '+summary['D1']+'\nD7: '+summary['D7']
-  posts.say(uid,text,[[posts.button('🔗 Рекламные ссылки','analytics_links')],[posts.button('📅 Активность CSV','analytics_csv_days')],[posts.button('↩️ Возвращаемость CSV','analytics_csv_cohorts')],[posts.button('📣 Источники CSV','analytics_csv_sources')]])
+  posts.say(uid,text,[[posts.button('🟢 Сейчас в Telefy','analytics_live')],[posts.button('🔗 Рекламные ссылки','analytics_links')],[posts.button('📅 Активность CSV','analytics_csv_days')],[posts.button('↩️ Возвращаемость CSV','analytics_csv_cohorts')],[posts.button('📣 Источники CSV','analytics_csv_sources')]])
  except Exception:posts.say(uid,'Аналитика временно недоступна. Повтори позже. Данные не удалены.')
  return True
 
@@ -143,8 +166,11 @@ def route(handler):
   user=handler.bot_user()
   if not user:return
   n=int(handler.headers.get('Content-Length','0'))
-  if not 0<n<=512:raise ValueError()
-  body=json.loads(handler.rfile.read(n));store().event(user['telegram_id'],body.get('event'),body.get('event_id'));handler.reply(200,{'ok':True})
+  if not 0<n<=2048:raise ValueError()
+  body=json.loads(handler.rfile.read(n))
+  if body.get('event')=='presence':store().presence(user['telegram_id'],body)
+  else:store().event(user['telegram_id'],body.get('event'),body.get('event_id'))
+  handler.reply(200,{'ok':True})
  except(ValueError,TypeError,AttributeError):handler.reply(400,{'error':'invalid_event'})
  except Exception:handler.reply(503,{'error':'analytics_unavailable'})
 
@@ -157,3 +183,22 @@ def link_card(uid,source):
  stats=next((r for r in s.reports()['sources']if r['source']==source),{})
  text='🔗 '+row['label']+'\n\nВход через бота:\nhttps://t.me/'+bot.BOT_USERNAME+'?start='+source+'\n\nПрямо в приложение:\nhttps://t.me/'+bot.BOT_USERNAME+'?startapp='+source+'\n\nНовые пользователи: '+str(stats.get('attributed_users_since_start',0))+'\nОткрыли приложение: '+str(stats.get('ever_opened_app',0))+'\nСлушатели ≥30 с за 30 дней: '+str(stats.get('listeners_30s_last30d',0))+'\nПокупатели: '+str(stats.get('paying_users_since_start',0))+'\nОплачено звёзд: '+str(stats.get('paid_stars_since_start',0))+'\n\nУчитывается первый источник пользователя, а не каждый клик. Старые пользователи не приписываются новой рекламе.'
  posts.say(uid,text,[[posts.button('Обновить','analytics_link_show:'+source)],[posts.button('Все ссылки','analytics_links')]])
+
+
+def show_live(uid,page=0):
+ import bot_posts as posts
+ rows=store().live();page=max(0,min(page,max(0,(len(rows)-1)//10)));current=rows[page*10:page*10+10]
+ blocks=['🟢 Сейчас в Telefy\n\nВ приложении: '+str(sum(bool(r['visible'])for r in rows))+'\nСлушают: '+str(sum(bool(r['playing'])for r in rows))+'\n\nОбновление статуса примерно каждые 20 с. Без связи статус исчезает через 60 с. Слушатели в фоне учитываются отдельно.']
+ buttons=[]
+ for r in current:
+  name='@'+r['username']if r['username']else (r['first_name']or'Без имени')[:48]
+  status='🎧 Слушает'+(' · в приложении'if r['visible']else' · в фоне')if r['playing']else'🟢 В приложении'
+  blocks.append(name+' · ID '+str(r['telegram_id'])+'\n'+status+('\n'+r['title']+(' — '+r['artist']if r['artist']else'')if r['playing']and r['title']else''))
+  buttons.append([posts.button((name+' · '+('🎧'if r['playing']else'🟢'))[:55],'usr_card:'+str(r['telegram_id']))])
+ if not rows:blocks.append('Сейчас активных пользователей нет.')
+ nav=[]
+ if page:nav.append(posts.button('←','analytics_live:'+str(page-1)))
+ if (page+1)*10<len(rows):nav.append(posts.button('→','analytics_live:'+str(page+1)))
+ if nav:buttons.append(nav)
+ buttons.extend([[posts.button('Обновить','analytics_live:'+str(page))],[posts.button('К аналитике','analytics_menu')]])
+ posts.say(uid,'\n\n'.join(blocks),buttons)

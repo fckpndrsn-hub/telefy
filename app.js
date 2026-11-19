@@ -4645,15 +4645,39 @@ window.TelefyArtistNotices=(()=>{
  return {label,render};
 })();
 
-/* Small first-party events only; no track metadata or third-party analytics SDK. */
+/* First-party aggregate events and short-lived authenticated presence. */
 (()=>{
  let owner='',opened=false;
+ const audio=document.getElementById('telefy-audio');let liveSession=crypto.randomUUID().replaceAll('-',''),liveSeq=0,liveOwner='',lastPosition=0,lastProgress=0,liveTimer=0,waiting=true;
+
  function event(name){if(!window.TelefyProfile?.user?.telegram_id)return;const body=JSON.stringify({event:name,event_id:crypto.randomUUID()});fetch('/api/me/analytics',{method:'POST',headers:{'Content-Type':'application/json'},body,keepalive:true}).catch(()=>{});}
- function start(){const id=String(window.TelefyProfile?.user?.telegram_id||'');if(owner!==id){owner=id;opened=false;}if(id&&!opened){opened=true;event('app_open');}}
+ function start(){const id=String(window.TelefyProfile?.user?.telegram_id||'');if(owner!==id){owner=id;opened=false;}if(id&&!opened){opened=true;event('app_open');schedulePresence();}}
  window.addEventListener('telefy:profile-ready',start);if(window.TelefyProfile?.user)start();
  document.getElementById('telefy-audio')?.addEventListener('error',()=>event('playback_error'));
  const like=toggleLike;toggleLike=function(id,...args){const before=getTrack(id)?.liked;const result=like(id,...args);if(!before&&getTrack(id)?.liked)event('like');return result;};
  document.getElementById('btn-confirm-create-playlist')?.addEventListener('click',()=>event('playlist_create'));
+ function presence(leaving=false){
+  const id=String(window.TelefyProfile?.user?.telegram_id||'');if(!id)return;
+  if(liveOwner!==id){liveOwner=id;liveSession=crypto.randomUUID().replaceAll('-','');liveSeq=0;}
+  const visible=!leaving&&document.visibilityState==='visible'&&window.Telegram?.WebApp?.isActive!==false;
+  const playing=!leaving&&!!audio&&!waiting&&!audio.paused&&!audio.ended&&!audio.seeking&&audio.readyState>=3&&lastProgress>0&&Date.now()-lastProgress<15000;
+  const track=playing?getTrack(state.currentTrackId):null;
+  const body=JSON.stringify({event:'presence',session:liveSession,seq:++liveSeq,visible,playing,title:String(track?.title||'').slice(0,160),artist:String(track?.artist||'').slice(0,160)});
+  if(leaving&&navigator.sendBeacon){navigator.sendBeacon('/api/me/analytics',new Blob([body],{type:'application/json'}));return;}
+  fetch('/api/me/analytics',{method:'POST',headers:{'Content-Type':'application/json'},body,keepalive:true}).catch(()=>{});
+ }
+ function schedulePresence(){clearTimeout(liveTimer);liveTimer=setTimeout(()=>presence(),300);}
+ if(audio){
+  audio.addEventListener('timeupdate',()=>{const position=audio.currentTime;if(!audio.seeking&&!waiting&&!audio.paused&&position>lastPosition+.02){const first=!lastProgress;lastProgress=Date.now();if(first)schedulePresence();}lastPosition=position;});
+  audio.addEventListener('playing',()=>{waiting=false;lastPosition=audio.currentTime;schedulePresence();});
+  for(const name of ['pause','ended','waiting','seeking','emptied','error'])audio.addEventListener(name,()=>{waiting=true;lastProgress=0;schedulePresence();});
+  audio.addEventListener('seeked',()=>{waiting=audio.paused||audio.readyState<3;lastPosition=audio.currentTime;schedulePresence();});
+ }
+ setInterval(()=>{if(document.visibilityState==='visible'||audio&&!audio.paused)presence();},20000);
+ document.addEventListener('visibilitychange',schedulePresence);
+ window.addEventListener('pagehide',()=>{clearTimeout(liveTimer);presence(true);});
+ window.addEventListener('pageshow',schedulePresence);
+ try{window.Telegram?.WebApp?.onEvent?.('activated',schedulePresence);window.Telegram?.WebApp?.onEvent?.('deactivated',schedulePresence);}catch(_){}
  window.TelefyAnalytics={event};
 })();
 

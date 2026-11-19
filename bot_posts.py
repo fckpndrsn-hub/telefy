@@ -200,7 +200,7 @@ def say(uid,text,rows=None):
 def button(text,data):return {'text':text,'callback_data':data}
 
 def panel(uid):
- say(uid,'Управление Telefy',[[button('📈 Аналитика и CSV','analytics_menu')],[button('🎁 Подарок: текст и медиа','gift_settings')],[button('🧪 Режим бета: '+('ВКЛ'if __import__('max_grants').store().mode()['beta']else'ВЫКЛ'),'maxgrant_beta')],[button('👥 Пользователи','usr_menu')],[button('⭐ История платежей','usr_payments:0')],[button('🎟 Выдать Telefy Max','maxgrant_start')],[button('⭐ Стоимость Max','maxgrant_price')],[button('🖼 Картинка после оплаты','maxgrant_media')],[button('📊 Сводка пользователей','ops_stats')],[button('🛠 Управление Mini App','ops_menu')],[button('📣 Новый пост','post_new')],[button('🗂 Мои посты','post_list')],[button('✏️ Приветствие и напоминания','post_templates')],[button('🎛 Кнопки бота','btn_menu')]])
+ say(uid,'Управление Telefy',[[button('🟢 Сейчас в Telefy','analytics_live')],[button('📈 Аналитика и CSV','analytics_menu')],[button('🎁 Подарок: текст и медиа','gift_settings')],[button('🧪 Режим бета: '+('ВКЛ'if __import__('max_grants').store().mode()['beta']else'ВЫКЛ'),'maxgrant_beta')],[button('👥 Пользователи','usr_menu')],[button('⭐ История платежей','usr_payments:0')],[button('🎟 Выдать Telefy Max','maxgrant_start')],[button('⭐ Стоимость Max','maxgrant_price')],[button('🖼 Картинка после оплаты','maxgrant_media')],[button('📊 Сводка пользователей','ops_stats')],[button('🛠 Управление Mini App','ops_menu')],[button('📣 Новый пост','post_new')],[button('🗂 Мои посты','post_list')],[button('✏️ Приветствие и напоминания','post_templates')],[button('🎛 Кнопки бота','btn_menu')]])
 
 def draft(uid,pid):
  p=store().post(uid,pid)
