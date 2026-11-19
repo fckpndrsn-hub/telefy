@@ -4,13 +4,15 @@ from pathlib import Path
 from urllib.parse import quote
 LOCK=threading.RLock();CACHE={};BROWSE_LOCK=threading.Lock();BROWSE={}
 PINS=[{'url':'https://soundcloud.com/members-only-forever/sets/12-ep','title':'12+ (EP)','artist':'i61 & stereoRYZE','year':'2017','keys':'i61 stereoRYZE 12+ 12 ep голыедети мне очень весело мононоке санандреас'}, {'url':'https://soundcloud.com/pharaohdd/sets/red-um-dullboy-ep','title':'REDЯUM (DULLBOY EP)','artist':'PHARAOH','year':'2019','keys':'pharaoh фара redяum redrum redum dullboy никакой любви фул клип enfants rich убийца узы моба'}]
+OG_PINS=[{'url':'https://soundcloud.com/ogbuda/sets/freerio-2','title':'FREERIO','artist':'OG Buda','year':'2021','keys':'freerio фририо OG Buda буда'},{'url':'https://soundcloud.com/ogbuda/sets/freerio-3-2','title':'FREERIO 3','artist':'OG Buda','year':'2023','keys':'freerio 3 фририо OG Buda буда'},{'url':'https://soundcloud.com/ogbuda/sets/gbqqtyuwtqzv','title':'ОПГ СИТИ','artist':'OG Buda','year':'2019','keys':'опг сити opg city OG Buda буда'}]
+PINS+=OG_PINS
 STARTER=[('PHARAOH','Фосфор','2016'),('PHARAOH','Pink Phloyd','2017'),('PHARAOH','PHUNERAL','2018'),('PHARAOH','Правило','2020'),('Boulevard Depo','RAPP2','2018'),('Boulevard Depo','OLD BLOOD','2020'),('ЛСП','Magic City','2015'),('ЛСП','Трагик Сити','2017'),('Big Baby Tape','Dragonborn','2018'),('Big Baby Tape','VARSKVA','2023'),('KIZARU','Karmageddon','2019'),('KIZARU','Born To Trap','2020'),('OG Buda','ОПГ СИТИ','2019'),('FRIENDLY THUG 52 NGG','Cristoforo Colombo','2023'),('Kai Angel & 9mice','HEAVY METAL','2023'),('MORGENSHTERN','Легендарная пыль','2020')]
 ARTIST_PROFILES={'pharaoh':'https://soundcloud.com/deaddynastyph','ogbuda':'https://soundcloud.com/ogbuda'}
 AUTHOR_RELEASES={'pinkphloyd':'https://soundcloud.com/deaddynastyph/sets/pink-phloyd','phuneral':'https://soundcloud.com/deaddynastyph/sets/phuneral','правило':'https://soundcloud.com/deaddynastyph/sets/pravilo','milliondollardepression':'https://soundcloud.com/deaddynastyph/sets/million-dollar-depression'}
 def key(value):return re.sub(r'[^\w]','',str(value).casefold().replace('ё','е'))
 
 EDITORIAL=[{'artist':'PHARAOH & i61','title':'RAGE MODE','year':'2015','aliases':['Rage Mode (Rare Action)']},{'artist':'Whole Lotta Swag','title':'First Day In Therapy','year':'2026','aliases':[]},{'artist':'Kai Angel','title':'damage','year':'2025','aliases':[]},{'artist':'Kai Angel','title':'Shh...','year':'2026','aliases':['Shh…']},{'artist':'Kai Angel','title':'Shh!','year':'2026','aliases':[]}]
-EDITORIAL += [{'artist':'OG Buda','title':title,'year':year,'aliases':[]}for title,year in [('FREERIO','2021'),('FREERIO 2','2022'),('FREERIO 3','2023'),('ОПГ СИТИ','2019')]]
+EDITORIAL += [{'artist':'OG Buda','title':title,'year':year,'aliases':[]}for title,year in [('FREERIO 2','2022')]]
 EDITORIAL_IDS={}
 def title_key(value):
  value=str(value).strip().casefold().replace('…','...')
@@ -82,6 +84,8 @@ def track_key(title,artist=''):
  return key(title)
 
 def validate_release(sc,album,tracks,recover):
+ # Exact user-approved original SoundCloud sets define their own membership/order.
+ if any(p['url']==album.get('url')for p in OG_PINS):return tracks
  reference=next((r for r in REFERENCES.values()if key(r['artist'])==key(album['artist'])and title_key(r['title'])==title_key(album['title'])),None)
  if not reference:
   if any(p['url']==album.get('url')for p in PINS):return tracks
@@ -127,6 +131,10 @@ def detail(sc,identity,recover=True):
   if not re.fullmatch(r'soundcloud:playlists:\d+',identity):raise sc.APIError(400,'invalid_album')
   raw=cached(identity,lambda:sc.api('/playlists/'+quote(identity,safe=''),{'show_tracks':'true'}))
   pin=next((p for p in PINS if p['url']==raw.get('permalink_url')),None)
+ if not pin:
+  candidate=normal(sc,raw,EDITORIAL_IDS.get(identity))
+  pin=next((p for p in OG_PINS if release_key(p)==release_key(candidate)),None)
+  if pin:raw=resolve_pin(sc,pin)
  album=normal(sc,raw,pin or EDITORIAL_IDS.get(identity));items=raw.get('tracks')or[]
  if len(items)<int(raw.get('track_count')or 0):
   fresh=cached(album['id']+':full',lambda:sc.api('/playlists/'+quote(album['id'],safe=''),{'show_tracks':'true'}));items=fresh.get('tracks')or[]
@@ -151,7 +159,7 @@ def detail(sc,identity,recover=True):
 def starter(sc,page):
  albums=[];start=page*2
  for artist,title,year in STARTER[start:start+2]:
-  authoritative=AUTHOR_RELEASES.get(key(title))if key(artist)=='pharaoh'else None
+  authoritative=next((p['url']for p in OG_PINS if key(p['title'])==key(title)),None)if key(artist)=='ogbuda'else AUTHOR_RELEASES.get(key(title))if key(artist)=='pharaoh'else None
   if authoritative:
    try:
     raw=cached(authoritative,lambda:sc.api('/resolve',{'url':authoritative}));identity=normal(sc,raw)['id'];data=cached(('validated_album',identity),lambda:detail(sc,identity,False));album=dict(data['album']);album.update(title=title,artist=artist,year=year);albums.append(album)
@@ -292,7 +300,9 @@ def search(sc,query,offset=0,kind='albums'):
   return official_title_search(sc,'OG Buda',query,offset)
  editorial=editorial_search(sc,query)if offset==0 else []
  if key(api_query)in ARTIST_PROFILES:
-  data=profile_releases(sc,api_query,offset);data['albums']=dedupe(data['albums']+[a for a in editorial if release_key(a)not in{release_key(b)for b in data['albums']}]);return data
+  data=profile_releases(sc,api_query,offset)
+  if key(api_query)=='ogbuda':data['albums']=prefer_og_pins(sc,data['albums'],all_pins=offset==0)
+  data['albums']=dedupe(data['albums']+[a for a in editorial if release_key(a)not in{release_key(b)for b in data['albums']}]);return data
  items.extend(editorial)
  for pin in PINS:
   if offset==0 and(not query or query.casefold()in pin['keys'].casefold()):items.append(normal(sc,resolve_pin(sc,pin),pin))
@@ -330,6 +340,10 @@ REFERENCES.update({'Whole Lotta Swag|First Day In Therapy': {'artist': 'Whole Lo
 
 
 def official_title_search(sc,artist,query,offset=0):
+ q=key(query).replace('фририо','freerio').replace('opgcity','опгсити')
+ if any(q in key(p['title'])for p in OG_PINS):
+  matches=prefer_og_pins(sc,[],query=q)
+  return {'albums':matches[offset:offset+20],'tracks':[],'hasMore':offset+20<len(matches),'nextOffset':offset+20}
  def collect():
   albums=[];cursor=0
   for _ in range(10):
@@ -337,8 +351,16 @@ def official_title_search(sc,artist,query,offset=0):
    if not page['hasMore']:break
    cursor=page['nextOffset']
   return dedupe(albums)
- albums=cached(('official_release_index_v1',key(artist)),collect)
+ albums=cached(('official_release_index_v2',key(artist)),collect)
  q=key(query).replace('фририо','freerio').replace('opgcity','опгсити')
  matches=[a for a in albums if q in key(a['title'])]
+ matches=prefer_og_pins(sc,matches,query=q)
  if offset==0:matches=dedupe(matches+[a for a in editorial_search(sc,query)if release_key(a)not in{release_key(b)for b in matches}])
  return {'albums':matches[offset:offset+20],'tracks':[],'hasMore':offset+20<len(matches),'nextOffset':offset+20}
+
+
+def prefer_og_pins(sc,albums,all_pins=False,query=''):
+ selected=[p for p in OG_PINS if all_pins or query and query in key(p['title'])or any(release_key(a)==release_key(p)for a in albums)]
+ pinned=[normal(sc,resolve_pin(sc,p),p)for p in selected]
+ keys={release_key(p)for p in selected}
+ return pinned+[a for a in albums if release_key(a)not in keys]
