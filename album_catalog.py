@@ -1,10 +1,11 @@
 """SoundCloud albums/EPs, with two explicitly selected editorial releases."""
 import re,time,threading,json
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote,urlsplit,parse_qs
 LOCK=threading.RLock();CACHE={};BROWSE_LOCK=threading.Lock();BROWSE={}
 PINS=[{'url':'https://soundcloud.com/members-only-forever/sets/12-ep','title':'12+ (EP)','artist':'i61 & stereoRYZE','year':'2017','keys':'i61 stereoRYZE 12+ 12 ep голыедети мне очень весело мононоке санандреас'}, {'url':'https://soundcloud.com/pharaohdd/sets/red-um-dullboy-ep','title':'REDЯUM (DULLBOY EP)','artist':'PHARAOH','year':'2019','keys':'pharaoh фара redяum redrum redum dullboy никакой любви фул клип enfants rich убийца узы моба'}]
 OG_PINS=[{'url':'https://soundcloud.com/ogbuda/sets/freerio-2','title':'FREERIO','artist':'OG Buda','year':'2021','keys':'freerio фририо OG Buda буда'},{'url':'https://soundcloud.com/ogbuda/sets/freerio-3-2','title':'FREERIO 3','artist':'OG Buda','year':'2023','keys':'freerio 3 фририо OG Buda буда'},{'url':'https://soundcloud.com/ogbuda/sets/gbqqtyuwtqzv','title':'ОПГ СИТИ','artist':'OG Buda','year':'2019','keys':'опг сити opg city OG Buda буда'}]
+for pin,urn,cover in zip(OG_PINS,['soundcloud:playlists:1269973384','soundcloud:playlists:1957256741','soundcloud:playlists:1269973471'],['https://i1.sndcdn.com/artworks-41f11c63-3045-43b3-97f3-aad957dc862c-0-t500x500.jpg','https://i1.sndcdn.com/artworks-00ed4585-c6b7-4a28-a2a7-df3b451779bb-0-t500x500.jpg','https://i1.sndcdn.com/artworks-f57b83e0-0da1-4f1c-8d5b-44c767258cc4-0-t500x500.jpg']):pin.update(urn=urn,coverImg=cover)
 PINS+=OG_PINS
 STARTER=[('PHARAOH','Фосфор','2016'),('PHARAOH','Pink Phloyd','2017'),('PHARAOH','PHUNERAL','2018'),('PHARAOH','Правило','2020'),('Boulevard Depo','RAPP2','2018'),('Boulevard Depo','OLD BLOOD','2020'),('ЛСП','Magic City','2015'),('ЛСП','Трагик Сити','2017'),('Big Baby Tape','Dragonborn','2018'),('Big Baby Tape','VARSKVA','2023'),('KIZARU','Karmageddon','2019'),('KIZARU','Born To Trap','2020'),('OG Buda','ОПГ СИТИ','2019'),('FRIENDLY THUG 52 NGG','Cristoforo Colombo','2023'),('Kai Angel & 9mice','HEAVY METAL','2023'),('MORGENSHTERN','Легендарная пыль','2020')]
 ARTIST_PROFILES={'pharaoh':'https://soundcloud.com/deaddynastyph','ogbuda':'https://soundcloud.com/ogbuda'}
@@ -75,7 +76,9 @@ def normal(sc,raw,pin=None):
   if re.match(r'^'+re.escape(candidate)+r'\s*[-–—:]\s*',title,re.I):artist=candidate;break
  title=clean_title(title,artist);known=next((s for s in STARTER if key(s[0])==key(artist)and key(s[1])==key(title)),None)
  return {'id':urn,'title':title,'artist':artist,'year':(pin or{}).get('year')or(known[2]if known else str(raw.get('release_year')or str(raw.get('release_date')or'')[:4])),'coverImg':sc.safe_url(raw.get('artwork_url')).replace('-large.','-t500x500.')or sc.safe_url((raw.get('tracks')or[{}])[0].get('artwork_url')),'url':sc.safe_url(raw.get('permalink_url'))or(pin or{}).get('url',''),'trackCount':int(raw.get('track_count')or len(raw.get('tracks')or[]))}
-def resolve_pin(sc,pin):return cached(pin['url'],lambda:sc.api('/resolve',{'url':pin['url']}))
+def resolve_pin(sc,pin):
+ if pin.get('urn'):return cached(('approved_release_v3',pin['urn']),lambda:load_approved_release(sc,pin))
+ return cached(pin['url'],lambda:sc.api('/resolve',{'url':pin['url']}))
 
 def track_key(title,artist=''):
  title=re.sub(r'\s*[\[(](?:feat\.?|ft\.?|prod\.?|produced|bonus|explicit|official).*','',title,flags=re.I)
@@ -125,7 +128,7 @@ def validate_release(sc,album,tracks,recover):
  album.update(expectedTrackCount=len(slots),availableTrackCount=len(result),complete=len(result)==len(slots),missingTitles=[r['title']for r in slots if r['number']not in bytitle],verifiedTracklist=True)
  return result
 def detail(sc,identity,recover=True):
- pin=next((p for p in PINS if p['url']==identity),None)
+ pin=next((p for p in PINS if p['url']==identity or p.get('urn')==identity),None)
  if pin:raw=resolve_pin(sc,pin)
  else:
   if not re.fullmatch(r'soundcloud:playlists:\d+',identity):raise sc.APIError(400,'invalid_album')
@@ -373,4 +376,43 @@ def approved_card(sc,pin):
  # Listing a selected release must not depend on resolving every other release.
  with LOCK:entry=CACHE.get(pin['url'])
  if entry and entry[0]>time.time():return normal(sc,entry[1],pin)
- return {'id':pin['url'],'url':pin['url'],'artist':pin['artist'],'title':pin['title'],'year':pin['year'],'trackCount':0,'coverImg':''}
+ return {'id':pin.get('urn')or pin['url'],'url':pin['url'],'artist':pin['artist'],'title':pin['title'],'year':pin['year'],'trackCount':0,'coverImg':pin.get('coverImg','')}
+
+
+def source_track_urn(track):
+ value=str(track.get('urn')or track.get('id')or'')
+ if value.isdigit():value='soundcloud:tracks:'+value
+ return value if re.fullmatch(r'soundcloud:tracks:\d+',value)else''
+
+def load_approved_release(sc,pin):
+ urn=pin['urn'];path='/playlists/'+quote(urn,safe='')
+ raw=dict(sc.api(path,{'show_tracks':'true'}))
+ actual=str(raw.get('urn')or ('soundcloud:playlists:'+str(raw['id'])if raw.get('id')else urn))
+ if actual!=urn:raise sc.APIError(502,'album_identity_mismatch')
+ raw.update(urn=urn,permalink_url=pin['url'],artwork_url=raw.get('artwork_url')or pin['coverImg'])
+ tracks=raw.get('tracks')or[];expected=int(raw.get('track_count')or len(tracks))
+ # Newer API responses can contain only URNs, or a partial tracks array.
+ if len(tracks)<expected:
+  route=path+'/tracks';params={'limit':200,'linked_partitioning':'true'};pages=[];seen=set()
+  for _ in range(10):
+   page=sc.api(route,params);pages.extend(page.get('collection',[])if isinstance(page,dict)else page)
+   link=page.get('next_href')if isinstance(page,dict)else None
+   if not link:break
+   parsed=urlsplit(link)
+   if parsed.scheme!='https'or parsed.netloc!='api.soundcloud.com'or parsed.path not in(route,route.replace('%3A',':'))or link in seen:raise sc.APIError(502,'album_invalid_cursor')
+   seen.add(link);params={k:v[0]for k,v in parse_qs(parsed.query).items()if k in('cursor','offset','limit','linked_partitioning')}
+  else:raise sc.APIError(502,'album_pagination_incomplete')
+  tracks=pages
+ if len(tracks)<expected:raise sc.APIError(502,'album_tracks_incomplete')
+ missing=[source_track_urn(t)for t in tracks if not t.get('title')or 'access'not in t or 'streamable'not in t]
+ missing=list(dict.fromkeys(missing))
+ if ''in missing:raise sc.APIError(502,'album_invalid_track_identity')
+ full={}
+ for start in range(0,len(missing),50):
+  urns=missing[start:start+50]
+  data=sc.api('/tracks',{'urns':','.join(urns),'limit':50})
+  for t in(data.get('collection',[])if isinstance(data,dict)else data):full[source_track_urn(t)]=t
+ tracks=[full.get(source_track_urn(t),t)for t in tracks]
+ if any(not t.get('title')or 'access'not in t or 'streamable'not in t for t in tracks):raise sc.APIError(502,'album_track_metadata_incomplete')
+ raw['tracks']=tracks
+ return raw
