@@ -298,6 +298,9 @@ def search(sc,query,offset=0,kind='albums'):
   return artist_search(sc,query,offset)
  if key(query).startswith(('freerio','фририо','опгсити','opgcity')):
   return official_title_search(sc,'OG Buda',query,offset)
+ if key(api_query)=='ogbuda':
+  if offset==0:return {'albums':[approved_card(sc,p)for p in OG_PINS],'tracks':[],'hasMore':True,'nextOffset':1}
+  data=profile_releases(sc,'OG Buda',offset-1);data['albums']=prefer_og_pins(sc,data['albums']);data['nextOffset']+=1;return data
  editorial=editorial_search(sc,query)if offset==0 else []
  if key(api_query)in ARTIST_PROFILES:
   data=profile_releases(sc,api_query,offset)
@@ -361,6 +364,13 @@ def official_title_search(sc,artist,query,offset=0):
 
 def prefer_og_pins(sc,albums,all_pins=False,query=''):
  selected=[p for p in OG_PINS if all_pins or query and query in key(p['title'])or any(release_key(a)==release_key(p)for a in albums)]
- pinned=[normal(sc,resolve_pin(sc,p),p)for p in selected]
+ pinned=[approved_card(sc,p)for p in selected]
  keys={release_key(p)for p in selected}
  return pinned+[a for a in albums if release_key(a)not in keys]
+
+
+def approved_card(sc,pin):
+ # Listing a selected release must not depend on resolving every other release.
+ with LOCK:entry=CACHE.get(pin['url'])
+ if entry and entry[0]>time.time():return normal(sc,entry[1],pin)
+ return {'id':pin['url'],'url':pin['url'],'artist':pin['artist'],'title':pin['title'],'year':pin['year'],'trackCount':0,'coverImg':''}
