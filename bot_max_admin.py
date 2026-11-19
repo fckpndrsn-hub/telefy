@@ -4,6 +4,8 @@ from datetime import datetime,timezone,timedelta
 import max_grants
 def date(value):return datetime.fromtimestamp(value,timezone(timedelta(hours=3))).strftime('%d.%m.%Y %H:%M МСК')
 def handle(update):
+ import promo_admin
+ if promo_admin.handle(update):return True
  import max_gifts
  if max_gifts.admin(update):return True
  import bot_users

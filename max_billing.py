@@ -1,5 +1,6 @@
 """Telegram Stars only. Entitlement follows authenticated successful_payment updates."""
 import json,time,secrets,threading,re
+from promo_codes import PromoStore
 from urllib.parse import urlsplit
 from http.cookies import SimpleCookie
 from user_database import UserDatabase
@@ -20,7 +21,7 @@ class BillingError(Exception):
  def __init__(self,status,code):self.status,self.code=status,code
 
 class MaxStore:
- def __init__(self,db=None):self.db=db or UserDatabase();self.lock=threading.RLock();self.ready=False;self.grants=GrantStore(self.db)
+ def __init__(self,db=None):self.db=db or UserDatabase();self.lock=threading.RLock();self.ready=False;self.grants=GrantStore(self.db);self.promos=PromoStore(self.db)
  def ensure(self):
   with self.lock:
    if self.ready:return
@@ -32,9 +33,11 @@ class MaxStore:
     if self.db.url:self.db.execute(c,'ALTER TABLE telefy_star_orders ADD COLUMN IF NOT EXISTS payer_username TEXT')
     elif 'payer_username'not in [r['name']for r in self.db.execute(c,'PRAGMA table_info(telefy_star_orders)').fetchall()]:self.db.execute(c,'ALTER TABLE telefy_star_orders ADD COLUMN payer_username TEXT')
     self.db.execute(c,'UPDATE telefy_star_orders SET payer_username=(SELECT username FROM telefy_users WHERE telegram_id=telefy_star_orders.telegram_id) WHERE payer_username IS NULL')
+    if self.db.url:self.db.execute(c,'ALTER TABLE telefy_star_orders ADD COLUMN IF NOT EXISTS promo_id TEXT')
+    elif 'promo_id'not in [r['name']for r in self.db.execute(c,'PRAGMA table_info(telefy_star_orders)').fetchall()]:self.db.execute(c,'ALTER TABLE telefy_star_orders ADD COLUMN promo_id TEXT')
    import max_gifts
    max_gifts.ensure(self)
-   self.grants.ensure()
+   self.grants.ensure();self.promos.ensure()
    self.ready=True
  def order(self,oid):
   self.ensure()
@@ -46,7 +49,8 @@ class MaxStore:
   import telefy_bot as bot
   self.ensure()
   if self.grants.mode()['beta']:raise BillingError(409,'payments_disabled_beta')
-  amount=self.grants.price()['amount']
+  amount=self.grants.price()['amount'];discount=None if gift else self.promos.quote(uid,amount)
+  if discount:amount=discount['amount']
   if (100 if expected is None else expected)!=amount:raise BillingError(409,'price_changed')
   with self.lock,self.db.connect()as c:
    if self.db.url:self.db.execute(c,'SELECT telegram_id FROM telefy_users WHERE telegram_id=%s FOR UPDATE',(uid,))
@@ -56,12 +60,14 @@ class MaxStore:
     if n>=10:raise BillingError(429,'too_many_invoices')
     oid=secrets.token_hex(24)
     self.db.execute(c,'INSERT INTO telefy_star_orders(id,telegram_id,request_key,created_at,state,amount,payer_username) VALUES(%s,%s,%s,%s,%s,%s,(SELECT username FROM telefy_users WHERE telegram_id=%s))',(oid,uid,key,int(time.time()),'created',amount,uid))
+    if discount:self.db.execute(c,'UPDATE telefy_star_orders SET promo_id=%s WHERE id=%s',(discount['promo_id'],oid))
     if gift:
      import max_gifts
      max_gifts.create(self,c,oid,gift_message)
    else:
     import max_gifts
     if bool(max_gifts.by_order(self,row['id']))!=gift:raise BillingError(409,'invoice_kind_mismatch')
+    if row['amount']!=amount:raise BillingError(409,'price_changed')
     oid=row['id'];amount=row['amount']
     if row['state']!='created':raise BillingError(409,'invoice_already_used')
     if row['invoice_url']:return {'url':row['invoice_url'],'order_id':oid}
@@ -80,6 +86,7 @@ class MaxStore:
    if row['state']=='approved':return row['checkout_id']==q.get('id')
    if self.grants.mode()['beta']:return False
    if row['state']!='created':return False
+   if row['promo_id']and not self.promos.reserve(c,uid,row['id'],row['promo_id']):return False
    self.db.execute(c,'UPDATE telefy_star_orders SET state=%s,checkout_id=%s WHERE id=%s',('approved',q['id'],row['id']))
   return True
  def apply(self,message,refund=False):
@@ -99,6 +106,7 @@ class MaxStore:
    used=self.db.execute(c,'SELECT id FROM telefy_star_orders WHERE charge_id=%s',(charge,)).fetchone()
    if used:return False
    self.db.execute(c,'UPDATE telefy_star_orders SET state=%s,charge_id=%s,paid_at=%s WHERE id=%s',('paid',charge,int(time.time()),row['id']))
+   if row['promo_id']:self.promos.paid(c,row['id'])
   return True
  def status(self,uid,now=None,ignore_beta=False):
   self.ensure();now=int(time.time())if now is None else int(now)
@@ -110,7 +118,10 @@ class MaxStore:
   end=0
   for at,duration in sorted([(row['paid_at'],PERIOD)for row in rows]+self.grants.events(uid)):end=max(end,at)+duration
   if not ignore_beta and self.grants.mode()['beta']:return {'active':True,'telegram_id':uid,'beta':True,'expires_at':None,'account_expires_at':end or None,'server_time':now,'amount':0,'regular_amount':self.grants.price()['amount'],'currency':'XTR','recurring':False,'period':'beta','payments_configured':False}
-  return {'active':end>now,'telegram_id':uid,'paid_periods':len(rows),'beta':False,'expires_at':end or None,'server_time':now,'amount':self.grants.price()['amount'],'currency':'XTR','recurring':False,'period':'30_days','payments_configured':configured()}
+  result={'active':end>now,'telegram_id':uid,'paid_periods':len(rows),'beta':False,'expires_at':end or None,'server_time':now,'amount':self.grants.price()['amount'],'currency':'XTR','recurring':False,'period':'30_days','payments_configured':configured()}
+  discount=self.promos.quote(uid,result['amount'])
+  if discount:result.update(amount=discount['amount'],regular_amount=discount['regular_amount'],discount_percent=discount['percent'],promo_code=discount['code'])
+  return result
 
 STORE=MaxStore()
 def handle_precheckout(update):
@@ -151,6 +162,8 @@ class MaxBillingMixin:
   except Exception:raise BillingError(503,'database_unavailable')
  def do_GET(self):
   path=urlsplit(self.path).path
+  import promo_codes
+  if promo_codes.route(self,path):return
   import max_gifts
   if max_gifts.route(self,path):return
   if path in('/max-checkout.html','/max-beta.html'):self.reply(410,{'error':'stars_only'});return
@@ -172,6 +185,8 @@ class MaxBillingMixin:
   return super().do_GET()
  def do_POST(self):
   path=urlsplit(self.path).path
+  import promo_codes
+  if promo_codes.route(self,path):return
   import max_gifts
   if max_gifts.route(self,path):return
   if path in('/api/max/checkout-link','/api/billing/orders','/api/billing/webhook'):self.reply(410,{'error':'stars_only'});return

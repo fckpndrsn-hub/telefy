@@ -4490,18 +4490,41 @@ window.TelefyOrderedQueue=(()=>{
   try{playTrack(id,list.label,{orderedSource:list.kind});}finally{selecting=false;sync();}
  }
  function start(ids,id,label,kind){
-  const valid=[...new Set(ids)].filter(id=>tracks.some(t=>t.id===id));const index=valid.indexOf(id);if(index<0)return;
+  const valid=(kind==='search'?[id]:[...new Set(ids)]).filter(id=>tracks.some(t=>t.id===id));const index=valid.indexOf(id);if(index<0)return;
   window.TelefyFirstRun?.cancel();state.activeMood='all';state.playbackContext=kind;
   list={ids:valid,index,label,kind};select(index);renderMoodChips();
  }
+ function continueFlow(){
+  const finished=state.currentTrackId,previousIds=new Set(list?.ids||[]);list=null;
+  state.playbackContext=null;state.queueIds=[];state.activeMood='all';
+  if(typeof applyStreamMode==='function')applyStreamMode('all',false);
+  state.sourceLabel=state.lang==='en'?'My Flow':'Мой поток';
+  let candidates=typeof getMyVibeTracksPool==='function'?getMyVibeTracksPool():tracks;
+  candidates=candidates.filter(t=>t.id!==finished&&!t.disliked&&!previousIds.has(t.id));
+  if(!candidates.length)candidates=tracks.filter(t=>t.id!==finished&&!t.disliked&&!previousIds.has(t.id)&&(!window.TelefyPromotionExcluded||!window.TelefyPromotionExcluded(t))&&(!window.TelefyRapCandidate||window.TelefyRapCandidate(t)));
+  if(typeof interleaveByArtist==='function')candidates=interleaveByArtist(candidates);
+  if(candidates.length){state.queueIds=candidates.slice(1,41).map(t=>t.id);playTrack(candidates[0].id,state.sourceLabel);}
+  else{state.queueIds=[];state.isPlaying=false;syncRealAudio();renderPlayerUI();}
+  if(typeof silentlyRefillFlowQueue==='function'&&state.queueIds.length<8)silentlyRefillFlowQueue(!candidates.length);
+  renderMoodChips();
+ }
  const previousPlay=playTrack;playTrack=function(id,label,...args){if(!selecting)list=null;return previousPlay(id,label,...args);};
  const next=playNext;playNext=function(ended=false){
-  if(!list)return next(ended);
+  if(!list){
+   if(ended&&!isRepeat){
+    const recs=window.TelefyRecommendations?.active?.();
+    const flow=typeof isFlowStreamActive==='function'&&isFlowStreamActive();
+    const vibe=typeof isMyVibeStreamActive==='function'&&isMyVibeStreamActive();
+    if(!recs&&!flow&&!vibe&&state.sourceLabel&&(!state.queueIds?.length||state.playbackContext==='search'))return continueFlow();
+   }
+   return next(ended);
+  }
   if(ended&&isRepeat){select(list.index);return;}
+  if(list.kind==='search'){continueFlow();return;}
   let index=list.index+1;while(index<list.ids.length&&!tracks.some(t=>t.id===list.ids[index]))index++;
   if(typeof isShuffle!=='undefined'&&isShuffle&&index<list.ids.length){const pick=index+Math.floor(Math.random()*(list.ids.length-index));[list.ids[index],list.ids[pick]]=[list.ids[pick],list.ids[index]];}
   if(index<list.ids.length){select(index);return;}
-  state.queueIds=[];state.isPlaying=false;syncRealAudio();renderPlayerUI();
+  continueFlow();
  };
  const prev=playPrev;playPrev=function(){if(!list)return prev();if(list.index>0)select(list.index-1);else select(0);};
  return {start,snapshot(){return list?{ids:list.ids.slice(),index:list.index,label:list.label,kind:list.kind}:null;},restore(ids,id,label,kind){const index=ids.indexOf(id);if(index<0)return;list={ids:ids.slice(),index,label,kind};sync();},clear(){list=null;},get active(){return Boolean(list);},get upcoming(){return list?list.ids.slice(list.index+1):[];}};
@@ -4697,8 +4720,13 @@ window.TelefyAlbums=(()=>{
  function releaseRows(items){return '<div class="release-row-list">'+items.map((a,i)=>`<button class="release-row" data-release="${i}"><div class="release-row-art">${a.coverImg?`<img src="${esc(a.coverImg)}" alt="">`:'<span class="tg-ico">&#xF0BF;</span>'}</div><span class="release-row-meta"><span class="release-row-title"><strong>${esc(a.title)}</strong><span class="release-type">Альбом</span></span><span class="release-row-subtitle">${esc(a.artist)}${a.year?' · '+esc(a.year):''}</span></span><span class="release-row-chevron">›</span></button>`).join('')+'</div>';}
  function bindCards(box,items){box.querySelectorAll('.release-art img,.release-row-art img').forEach(img=>img.onerror=()=>img.remove());box.querySelectorAll('[data-release]').forEach(b=>b.onclick=()=>open(items[Number(b.dataset.release)]));}
  function loadingRows(kind){return window.TelefySkeleton.html(kind);}
+ function searchEmpty(message){
+  const empty=document.createElement('div');empty.className='native-search-empty';
+  const q=state.searchQuery.trim();empty.textContent=message||(q?`${t('searchEmpty')} «${q}»`:(state.lang==='en'?'Find a track, artist or album':'Найди трек, исполнителя или альбом'));
+  return empty;
+ }
  function renderExtra(){
-  const box=document.getElementById('search-results-list');if(!box)return;const type=state.searchFilter;box.classList.toggle('release-result-cards',type==='albums'||type==='all');
+  const box=document.getElementById('search-results-list');if(!box)return;const type=state.searchFilter;box.classList.toggle('release-result-cards',type!=='tracks'||box.classList.contains('search-is-empty'));
   const previous=box.querySelector(':scope > .all-tracks-group');if(previous){previous.replaceWith(...previous.childNodes);}box.querySelector(':scope > .all-tracks-heading')?.remove();
   box.querySelector('.release-search-extra')?.remove();
   document.getElementById('search-scroll-sentinel').hidden=['artists','albums'].includes(type);
@@ -4708,17 +4736,24 @@ window.TelefyAlbums=(()=>{
   else box.prepend(host);
   if(type==='albums'){
    if(results.length){host.innerHTML=(type==='all'?'<h3 class="release-heading">Альбомы</h3>':'')+releaseRows(type==='all'?results.slice(0,4):results);bindCards(host,results);}
-   else if(type==='albums'&&busy)host.innerHTML=loadingRows('albums');else if(type==='albums')host.textContent=error?(error==='soundcloud_rate_limited'?'SoundCloud временно ограничил запросы. Попробуй позже.':'Не удалось загрузить альбомы. Код: '+error+'. Повтори загрузку.'):nextAlbums!==null?'В этой порции релизов нет. Загрузи следующую.':'Альбомы не найдены';
+   else if(type==='albums'&&busy)host.innerHTML=loadingRows('albums');else if(type==='albums')host.append(searchEmpty(error?(error==='soundcloud_rate_limited'?'SoundCloud временно ограничил запросы. Попробуй позже.':'Не удалось загрузить альбомы. Повтори загрузку.'):null));
   }
   if(type==='albums'&&error){const retry=document.createElement('button');retry.className='release-load-more';retry.textContent='Повторить загрузку';retry.onclick=()=>{cache.delete(query);query='';search();};host.append(retry);}
   if(type==='artists'||type==='all'){
    if(artists.length){const list=document.createElement('div');list.className='artist-search-list';list.innerHTML=(type==='all'?'<h3 class="release-heading">Артисты</h3>':'')+artists.map((a,i)=>`<button data-found-artist="${i}"><span class="artist-search-avatar"><span>${esc(Array.from(a.name||'?')[0])}</span>${(a.coverImg||getArtistAvatarUrl(a.name))?`<img src="${esc(a.coverImg||getArtistAvatarUrl(a.name))}" alt="">`:''}</span><span>${esc(a.name)}</span><span class="artist-search-chevron">›</span></button>`).join('');list.querySelectorAll('img').forEach(img=>img.onerror=()=>img.remove());list.querySelectorAll('[data-found-artist]').forEach(b=>b.onclick=()=>openArtistCard(artists[Number(b.dataset.foundArtist)].name));host.append(list);}
-   else if(type==='artists'&&busy)host.innerHTML=loadingRows('artists');else if(type==='artists')host.textContent=error?'Не удалось загрузить артистов.':'Артисты не найдены';
+   else if(type==='artists'&&busy)host.innerHTML=loadingRows('artists');else if(type==='artists')host.append(searchEmpty(error?'Не удалось загрузить артистов. Повтори загрузку.':null));
   }
-  if(type==='all'){const rows=[...box.children].filter(n=>n!==host);if(rows.length){const heading=document.createElement('h3');heading.className='release-heading all-tracks-heading';heading.textContent='Треки';const group=document.createElement('div');group.className='tg-card all-tracks-group';group.append(...rows);box.append(heading,group);}box._searchRows=[];box.classList.add('search-was-empty');}
+  if(type==='all'){
+   const rows=[...box.children].filter(n=>n!==host),hasTracks=rows.some(n=>n.matches('.track-play-trigger')||n.querySelector('.track-play-trigger'));
+   if(hasTracks){const heading=document.createElement('h3');heading.className='release-heading all-tracks-heading';heading.textContent='Треки';const group=document.createElement('div');group.className='tg-card all-tracks-group';group.append(...rows);box.append(heading,group);}
+   else if(artists.length){rows.forEach(n=>n.remove());}
+   else if(busy||state.isSearchParsing){rows.forEach(n=>n.remove());host.innerHTML=loadingRows('tracks');}
+   else if(!state.catalogError){rows.forEach(n=>n.remove());host.append(searchEmpty(error?'Не удалось загрузить артистов. Повтори загрузку.':null));}
+   box._searchRows=[];box.classList.add('search-was-empty');
+  }
   if(['artists','albums'].includes(type)){
    document.getElementById('search-scroll-sentinel').hidden=true;
-   if((type==='albums'?nextAlbums:nextArtists)!==null){const more=document.createElement('button');more.className='release-load-more';if(busy){more.innerHTML='<span class="catalog-spinner" aria-label="Загрузка"></span>';}else more.textContent='Загрузить ещё';more.disabled=busy;more.onclick=()=>loadMore(type);host.append(more);}
+   if((type==='albums'?nextAlbums:nextArtists)!==null){const more=document.createElement('button');more.className='release-load-more';if(busy){more.innerHTML='<span class="catalog-spinner" aria-label="Загрузка"></span>';}else more.textContent=state.lang==='en'?'Show more':'Показать ещё';more.disabled=busy;more.onclick=()=>loadMore(type);host.append(more);}
   }
  }
  async function loadMore(kind){if(busy)return;busy=true;const rev=revision,offset=kind==='albums'?nextAlbums:nextArtists;renderExtra();try{const data=await request('telefy:'+kind+':'+state.searchQuery.trim(),offset);if(rev!==revision)return;if(kind==='albums'){results=uniqueAlbums([...results,...(data.albums||[])]);nextAlbums=data.hasMore?data.nextOffset:null;}else{artists=[...new Map([...artists,...(data.artists||[])].map(a=>[a.id,a])).values()];nextArtists=data.hasMore?data.nextOffset:null;}}catch(error){starterMode=false;if(error.message==='album_catalog_cursor_expired'&&kind==='albums'){nextAlbums=0;cache.delete(query);showToast('Каталог обновился. Нажми «Загрузить ещё» для продолжения.');}else showToast('Не удалось загрузить следующую страницу. Попробуй ещё раз.');}finally{if(rev===revision){busy=false;renderExtra();continueStarter();}}}

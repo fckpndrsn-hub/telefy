@@ -31,6 +31,8 @@ COPY max_gifts.py ./
 COPY gift-client.js gift-logo.svg gift-animation.json lottie.min.js ./web/assets/
 COPY admin_analytics.py ./
 COPY album_catalog.py ./
+COPY promo_codes.py promo_admin.py ./
+COPY promo-client.js promo-3d.js promo-icon.svg promo-ticket.svg ./web/assets/
 ENV PYTHONUNBUFFERED=1 TELEFY_PRIVATE_DIR=/tmp/telefy-private
 USER 10001
 EXPOSE 10000
