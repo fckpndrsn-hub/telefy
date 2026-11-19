@@ -77,7 +77,7 @@ def normal(sc,raw,pin=None):
  title=clean_title(title,artist);known=next((s for s in STARTER if key(s[0])==key(artist)and key(s[1])==key(title)),None)
  return {'id':urn,'title':title,'artist':artist,'year':(pin or{}).get('year')or(known[2]if known else str(raw.get('release_year')or str(raw.get('release_date')or'')[:4])),'coverImg':sc.safe_url(raw.get('artwork_url')).replace('-large.','-t500x500.')or sc.safe_url((raw.get('tracks')or[{}])[0].get('artwork_url')),'url':sc.safe_url(raw.get('permalink_url'))or(pin or{}).get('url',''),'trackCount':int(raw.get('track_count')or len(raw.get('tracks')or[]))}
 def resolve_pin(sc,pin):
- if pin.get('urn'):return cached(('approved_release_v3',pin['urn']),lambda:load_approved_release(sc,pin))
+ if pin.get('urn'):return cached(('approved_release_v5',pin['urn']),lambda:load_approved_release(sc,pin))
  return cached(pin['url'],lambda:sc.api('/resolve',{'url':pin['url']}))
 
 def track_key(title,artist=''):
@@ -384,23 +384,56 @@ def source_track_urn(track):
  if value.isdigit():value='soundcloud:tracks:'+value
  return value if re.fullmatch(r'soundcloud:tracks:\d+',value)else''
 
+ALBUM_SOURCE_DIAGNOSTICS={}
+
+def source_diagnostics():
+ with LOCK:return {k:dict(v,attempts=list(v['attempts']))for k,v in ALBUM_SOURCE_DIAGNOSTICS.items()}
+
 def load_approved_release(sc,pin):
- urn=pin['urn'];path='/playlists/'+quote(urn,safe='')
- raw=dict(sc.api(path,{'show_tracks':'true'}))
- actual=str(raw.get('urn')or ('soundcloud:playlists:'+str(raw['id'])if raw.get('id')else urn))
+ urn=pin['urn'];number=urn.rsplit(':',1)[1];paths=list(dict.fromkeys(['/playlists/'+urn,'/playlists/'+number,'/playlists/'+quote(urn,safe='')]))
+ attempts=[]
+ def request(path,params):
+  try:
+   value=sc.api(path,params);attempts.append({'path':path,'status':200});return value
+  except sc.APIError as error:
+   attempts.append({'path':path,'status':error.status,'code':error.code});raise
+  finally:
+   with LOCK:ALBUM_SOURCE_DIAGNOSTICS[pin['title']]={'urn':urn,'observed_at':int(time.time()),'attempts':list(attempts)}
+ raw=None
+ # These are equivalent identifiers of the exact pinned resource, never a search.
+ for path in paths:
+  try:raw=request(path,{'show_tracks':'true'});break
+  except sc.APIError as error:
+   if error.status!=404:raise
+ if raw is None:
+  try:raw=request('/resolve',{'url':pin['url']})
+  except sc.APIError as error:
+   if error.status!=404:raise
+ # Some APIs expose the source's tracks while omitting its playlist metadata.
+ if raw is None:raw={'urn':urn,'title':pin['title'],'tracks':[]}
+ if not isinstance(raw,dict):raise sc.APIError(502,'album_invalid_metadata_response')
+ raw=dict(raw)
+ actual=str(raw.get('urn')or raw.get('id')or urn)
+ if actual.isdigit():actual='soundcloud:playlists:'+actual
  if actual!=urn:raise sc.APIError(502,'album_identity_mismatch')
  raw.update(urn=urn,permalink_url=pin['url'],artwork_url=raw.get('artwork_url')or pin['coverImg'])
  tracks=raw.get('tracks')or[];expected=int(raw.get('track_count')or len(tracks))
- # Newer API responses can contain only URNs, or a partial tracks array.
- if len(tracks)<expected:
-  route=path+'/tracks';params={'limit':200,'linked_partitioning':'true'};pages=[];seen=set()
+ if not tracks or len(tracks)<expected:
+  page=None;route=None
+  for candidate in paths:
+   try:page=request(candidate+'/tracks',{'linked_partitioning':'true'});route=candidate+'/tracks';break
+   except sc.APIError as error:
+    if error.status!=404:raise
+  if page is None:raise sc.APIError(404,'album_unavailable_in_public_api')
+  pages=[];seen=set()
   for _ in range(10):
-   page=sc.api(route,params);pages.extend(page.get('collection',[])if isinstance(page,dict)else page)
+   pages.extend(page.get('collection',[])if isinstance(page,dict)else page)
    link=page.get('next_href')if isinstance(page,dict)else None
    if not link:break
    parsed=urlsplit(link)
-   if parsed.scheme!='https'or parsed.netloc!='api.soundcloud.com'or parsed.path not in(route,route.replace('%3A',':'))or link in seen:raise sc.APIError(502,'album_invalid_cursor')
+   if parsed.scheme!='https'or parsed.netloc!='api.soundcloud.com'or parsed.path not in(route,route.replace('%3A',':'),route.replace(':','%3A'))or link in seen:raise sc.APIError(502,'album_invalid_cursor')
    seen.add(link);params={k:v[0]for k,v in parse_qs(parsed.query).items()if k in('cursor','offset','limit','linked_partitioning')}
+   page=request(route,params)
   else:raise sc.APIError(502,'album_pagination_incomplete')
   tracks=pages
  if len(tracks)<expected:raise sc.APIError(502,'album_tracks_incomplete')
@@ -410,7 +443,7 @@ def load_approved_release(sc,pin):
  full={}
  for start in range(0,len(missing),50):
   urns=missing[start:start+50]
-  data=sc.api('/tracks',{'urns':','.join(urns),'limit':50})
+  data=request('/tracks',{'urns':','.join(urns),'limit':50})
   for t in(data.get('collection',[])if isinstance(data,dict)else data):full[source_track_urn(t)]=t
  tracks=[full.get(source_track_urn(t),t)for t in tracks]
  if any(not t.get('title')or 'access'not in t or 'streamable'not in t for t in tracks):raise sc.APIError(502,'album_track_metadata_incomplete')
