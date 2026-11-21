@@ -35,7 +35,8 @@
  }
  const render=renderMaxBetaView;renderMaxBetaView=function(...args){const r=render(...args);paint();return r;};
  const translate=applyTranslations;applyTranslations=function(...args){const r=translate(...args);paint();return r;};
- async function refresh(){if(loading)return loading;const owner=user();loading=(async()=>{try{const r=await fetch('/api/max/status',{cache:'no-store'});if(!r.ok){if(r.status===401){verified=null;account='';}throw Error('status');}const data=await r.json();if(user()!==owner)return;if(typeof data.active!=='boolean'||!Number.isFinite(data.server_time)||(data.active&&data.beta!==true&&!Number.isFinite(data.expires_at))||(data.telegram_id!==undefined&&String(data.telegram_id)!==owner))throw Error('invalid_status');verified=data;account=owner;clockAt=data.server_time;synced=performance.now();if(beta()&&sheet)close();renderAll();}catch(_){if(!active())verified=null;paint();}finally{loading=null;if(user()&&user()!==owner)refresh();}})();return loading;}
+ async function statusRequest(){for(let n=0;n<2;n++){try{const r=await fetch('/api/max/status',{cache:'no-store',signal:AbortSignal.timeout(8000)});if(r.ok)return r;const e=Object.assign(Error('status'),{status:r.status});if(r.status<500)e.terminal=true;throw e;}catch(e){if(e.terminal||n===1)throw e;await new Promise(resolve=>setTimeout(resolve,700));}}}
+ async function refresh(){if(loading)return loading;const owner=user();loading=(async()=>{try{const r=await statusRequest();if(!r.ok){if(r.status===401){verified=null;account='';}throw Error('status');}const data=await r.json();if(user()!==owner)return;if(typeof data.active!=='boolean'||!Number.isFinite(data.server_time)||(data.active&&data.beta!==true&&!Number.isFinite(data.expires_at))||(data.telegram_id!==undefined&&String(data.telegram_id)!==owner))throw Error('invalid_status');verified=data;account=owner;clockAt=data.server_time;synced=performance.now();if(beta()&&sheet)close();renderAll();}catch(error){if(error.status===401||error.status===403||account!==owner||performance.now()-synced>300000){verified=null;account='';}paint();}finally{loading=null;if(user()&&user()!==owner)refresh();}})();return loading;}
  function bindDismiss(root,dismiss){
   const panel=root.querySelector('.max-stars-panel'),grip=panel.querySelector('.telefy-sheet-grip');let drag=null,suppressClick=0;
   grip.onclick=()=>{if(performance.now()>suppressClick)dismiss();};
@@ -92,7 +93,7 @@
   openSheetModal(sheet);
  }
  window.TelefyMax={refresh,purchase,get active(){return active();},get beta(){return beta();}};
- window.addEventListener('telefy:profile-ready',refresh);document.addEventListener('visibilitychange',()=>{if(!document.hidden&&user())refresh();});
+ window.addEventListener('online',refresh);window.addEventListener('telefy:profile-ready',refresh);document.addEventListener('visibilitychange',()=>{if(!document.hidden&&user())refresh();});
  setInterval(()=>{if(active()){hadMax=true;return;}if(hadMax){hadMax=false;closeLibraryModal();closeCreatePlaylistModal();if(USER_PLAYLISTS.some(p=>p.id===state.activeCollectionId))closeCollectionModal();if(state.searchFilter==='liked')state.searchFilter='all';renderAll();}},1000);
  setInterval(paintRemaining,60000);
  if(user())refresh();paint();

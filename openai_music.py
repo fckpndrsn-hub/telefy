@@ -3,7 +3,7 @@ import os,json,time,hashlib,threading,re
 from urllib.request import Request,urlopen
 from urllib.error import HTTPError
 
-LOCK=threading.Lock();CALL_LOCK=threading.Lock();RETRY_AT=0
+LOCK=threading.Lock();CALL_LOCK=threading.BoundedSemaphore(2);RETRY_AT=0
 STATUS={'state':'idle'}
 def configured():return bool(os.environ.get('OPENAI_API_KEY','').strip())and os.environ.get('TELEFY_AI_ENABLED','true').strip().lower()not in('0','false','off')
 def model():return os.environ.get('OPENAI_MODEL','gpt-5.6-terra').strip()
@@ -26,10 +26,10 @@ def metadata(track):
 
 def generate(kind,payload):
  if not configured():return None
- key=hashlib.sha256(json.dumps(['openai-v1',model(),kind,payload],sort_keys=True,ensure_ascii=False).encode()).hexdigest();d=db()
+ key=hashlib.sha256(json.dumps(['openai-description-v2'if kind=='description'else'openai-v1',model(),kind,payload],sort_keys=True,ensure_ascii=False).encode()).hexdigest();d=db()
  with d.connect()as c:r=d.execute(c,'SELECT payload FROM telefy_ai_cache WHERE key=%s AND expires_at>%s',(key,int(time.time()))).fetchone()
  if r:return json.loads(r['payload'])
- if time.time()<RETRY_AT or not CALL_LOCK.acquire(blocking=False):return None
+ if time.time()<RETRY_AT or not CALL_LOCK.acquire(timeout=4):return None
  try:return _generate(kind,payload)
  finally:CALL_LOCK.release()
 
@@ -38,7 +38,7 @@ def _generate(kind,payload):
  if not configured():return None
  name=model()
  if not re.fullmatch(r'[a-zA-Z0-9_.-]{1,100}',name):return None
- key=hashlib.sha256(json.dumps(['openai-v1',name,kind,payload],sort_keys=True,ensure_ascii=False).encode()).hexdigest();d=db();now=int(time.time())
+ key=hashlib.sha256(json.dumps(['openai-description-v2'if kind=='description'else'openai-v1',name,kind,payload],sort_keys=True,ensure_ascii=False).encode()).hexdigest();d=db();now=int(time.time())
  with d.connect()as c:r=d.execute(c,'SELECT payload FROM telefy_ai_cache WHERE key=%s AND expires_at>%s',(key,now)).fetchone()
  if r:return json.loads(r['payload'])
  # Reserve requests transactionally before network access, including failed calls.
@@ -96,7 +96,12 @@ def _generate(kind,payload):
  except Exception:
   STATUS['state']='unavailable';RETRY_AT=time.time()+30;return None
 
-def description(track,lang):return generate('description',{'track':metadata(track),'language':'English'if lang=='en'else'Russian'})or{'description':''}
+def description(track,lang):
+ result=generate('description',{'track':metadata(track),'language':'English'if lang=='en'else'Russian'})
+ if result and result.get('description'):return result
+ state=status()['state'];retry=configured()and state in ('idle','ready','unavailable')
+ return {'description':'','retry_after':3 if retry else 0,'state':state}
+
 
 def rank(uid,candidates,context='vibe'):
  import profile_server

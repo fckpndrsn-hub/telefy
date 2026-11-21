@@ -12,20 +12,29 @@
   if(owner!==uid()){reset();return;}
   if(budget&&audible&&!audio.seeking){total+=dt;if(!budget.unlimited){pending+=dt;if(remaining()<=0)stop();}}
  }
+ function verifiedBudget(){return budget&&owner===uid()&&performance.now()-lastSuccess<120000&&budget.server_time+(performance.now()-lastSuccess)/1000<budget.resets_at&&(!budget.unlimited||budget.access_expires_at==null||budget.server_time+(performance.now()-lastSuccess)/1000<budget.access_expires_at);}
+ async function usageRequest(body){
+  for(let n=0;n<2;n++){
+   try{const r=await fetch('/api/me/usage',{method:'POST',headers:{'Content-Type':'application/json'},body,signal:AbortSignal.timeout(8000)});
+    if(r.status===401||r.status===403){budget=null;throw Object.assign(Error('login'),{terminal:true});}
+    if(!r.ok){if(r.status<500)throw Object.assign(Error('usage'),{terminal:true});throw Error('usage');}return await r.json();
+   }catch(e){if(e.terminal||n===1)throw e;await new Promise(resolve=>setTimeout(resolve,700));}
+  }
+ }
  async function report(){
   reset();if(!owner)return false;if(inflight)return inflight;
   const version=generation,sent=total,unreported=pending;lastReport=performance.now();
   inflight=(async()=>{try{
-   const response=await fetch('/api/me/usage',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session,total_ms:Math.floor(sent)}),signal:AbortSignal.timeout(10000)});
-   if(!response.ok)throw Error('usage');const data=await response.json();if(version!==generation)return false;
+   const data=await usageRequest(JSON.stringify({session,total_ms:Math.floor(sent)}));if(version!==generation)return false;
+   if(typeof data.unlimited!=='boolean'||!Number.isFinite(data.remaining_ms)||data.remaining_ms<0||!Number.isFinite(data.server_time)||!Number.isFinite(data.resets_at))throw Error('invalid_usage');
    lastSuccess=performance.now();budget=data;pending=Math.max(0,pending-unreported);blocked=!data.unlimited&&remaining()<=0;
    if(!blocked)announced=false;else if(!audio.paused)stop();
    return true;
   }catch(_){return false;}finally{inflight=null;}})();return inflight;
  }
  async function allowed(){
-  measure();const ok=await report();
-  if(!ok){state.isPlaying=false;audio.pause();renderPlayerUI();showToast('Не удалось проверить дневной лимит. Проверь подключение.');return false;}
+  measure();const ok=verifiedBudget()&&performance.now()-lastSuccess<10000?true:await report();
+  if(!ok&&!verifiedBudget()){state.isPlaying=false;audio.pause();renderPlayerUI();showToast('Не удалось проверить дневной лимит. Проверь подключение.');return false;}
   if(blocked){announced=true;stop(false);showLimit();return false;}return true;
  }
  const sync=syncRealAudio;let attempt=0;
@@ -35,9 +44,10 @@
  for(const event of ['pause','waiting','seeking','ended'])audio.addEventListener(event,()=>{measure();audible=false;report();});
  audio.addEventListener('seeked',()=>{audible=!audio.paused&&!audio.ended&&audio.readyState>=3;last=performance.now();});
  audio.addEventListener('timeupdate',measure);
- setInterval(()=>{measure();if(owner&&(performance.now()-lastReport>10000)&&(!audio.paused||!budget||Date.now()/1000>=budget.resets_at))report();if(!audio.paused&&performance.now()-lastSuccess>20000){audio.pause();state.isPlaying=false;renderPlayerUI();}},500);
+ setInterval(()=>{measure();if(owner&&(performance.now()-lastReport>10000)&&(!audio.paused||!budget||Date.now()/1000>=budget.resets_at))report();if(!audio.paused&&!verifiedBudget()){audio.pause();state.isPlaying=false;renderPlayerUI();}},500);
  document.addEventListener('visibilitychange',()=>{measure();report();});
  window.addEventListener('pagehide',()=>{measure();if(owner)navigator.sendBeacon('/api/me/usage',new Blob([JSON.stringify({session,total_ms:Math.floor(total)})],{type:'application/json'}));});
+ window.addEventListener('online',()=>report());
  window.addEventListener('telefy:profile-ready',()=>{reset();report();});
  window.TelefyUsage={report,allowed,showLimit,get remainingMs(){return remaining();}};
  if(uid())report();

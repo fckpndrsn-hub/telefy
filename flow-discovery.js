@@ -2,6 +2,7 @@
 (()=>{
  const view=document.getElementById('view-flow'),art=document.getElementById('flow-discovery-art'),title=document.getElementById('flow-discovery-title'),artist=document.getElementById('flow-discovery-artist'),note=document.getElementById('flow-discovery-description');
  const left=document.getElementById('flow-cover-prev'),right=document.getElementById('flow-cover-next'),play=document.getElementById('flow-cover-play');
+ play.innerHTML='<span class="tg-ico flow-glyph flow-glyph-play" aria-hidden="true">&#xF148;</span><span class="tg-ico flow-glyph flow-glyph-pause" aria-hidden="true">&#xF14F;</span>';
  let key='',token=0,provider=null,drag=null,direction=1;const cache=new Map(),inflight=new Map();
  function upcoming(){return [...new Set(getUpcomingPlaybackIds())].filter(id=>id!==state.currentTrackId&&tracks.some(t=>t.id===id));}
  function cover(el,t){const url=/^https:\/\//.test(t?.coverImg||'')?t.coverImg:'';el.style.backgroundImage=url?'url('+JSON.stringify(url)+')':'';el.classList.toggle('no-cover',!url);}
@@ -11,7 +12,7 @@
  async function render(){
   const track=getTrack(state.currentTrackId),en=state.lang==='en';
   document.getElementById('flow-stream-name').textContent=en?'My flow':'Мой поток';document.getElementById('flow-stream-subtitle').textContent=en?'Everything that fits your music taste':'Всё, что похоже на твой музыкальный вкус';
-  view.classList.toggle('is-playing',Boolean(state.isPlaying));play.setAttribute('aria-label',en?(state.isPlaying?'Pause':'Play'):(state.isPlaying?'Пауза':'Слушать'));play.innerHTML=state.isPlaying?'<svg viewBox="0 0 24 24"><path d="M6 4h4v16H6zm8 0h4v16h-4z"/></svg>':'<svg viewBox="0 0 24 24"><path d="m8 4 12 8-12 8z"/></svg>';
+  view.classList.toggle('is-playing',Boolean(state.isPlaying));play.setAttribute('aria-label',en?(state.isPlaying?'Pause':'Play'):(state.isPlaying?'Пауза':'Слушать'));play.classList.toggle('is-playing',Boolean(state.isPlaying));
   play.disabled=!track?.id;left.disabled=!track?.id;
   const ids=upcoming();cover(right,tracks.find(t=>t.id===ids[0]));right.disabled=!ids.length;
   const h=playbackHistory.entries.slice(0,playbackHistory.index);const last=h.map(x=>typeof x==='object'?x.id:x).filter(id=>id!==track?.id).pop();cover(left,tracks.find(t=>t.id===last));
@@ -32,6 +33,19 @@
  const beforeFlow=renderFlowView;renderFlowView=function(...args){const r=beforeFlow(...args);render();return r;};
  play.onclick=()=>{personal();togglePlay();triggerHaptic('light');};left.onclick=previous;right.onclick=next;
  let suppressClickUntil=0;const scene=document.getElementById('flow-cover-scene');scene.addEventListener('click',e=>{if(Date.now()<suppressClickUntil){e.preventDefault();e.stopImmediatePropagation();}},true);scene.addEventListener('pointerdown',e=>{drag={x:e.clientX,y:e.clientY,id:e.pointerId};});scene.addEventListener('pointermove',e=>{if(!drag||drag.id!==e.pointerId)return;const dx=e.clientX-drag.x,dy=e.clientY-drag.y;if(Math.abs(dx)>12&&Math.abs(dx)>Math.abs(dy)*1.5){art.style.transform=`translateX(${Math.max(-65,Math.min(65,dx*.35))}px) rotate(${dx*.025}deg)`;}});scene.addEventListener('pointerup',e=>{art.style.transform='';if(!drag||drag.id!==e.pointerId)return;const dx=e.clientX-drag.x,dy=e.clientY-drag.y;drag=null;if(Math.abs(dx)>45&&Math.abs(dx)>Math.abs(dy)*1.5){e.preventDefault();suppressClickUntil=Date.now()+400;if(dx<0)next();else previous();}});scene.addEventListener('pointercancel',()=>{drag=null;art.style.transform='';});
- fetch('/api/ai/status',{cache:'no-store'}).then(r=>r.json()).then(s=>{if(s.configured)window.TelefyFlowDescriptions.setProvider(async track=>{const r=await fetch('/api/ai/description',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:track.id,soundcloudUrn:track.soundcloudUrn,title:track.title,artist:track.artist,album:track.album,genre:track.genre,lang:track.language}),signal:AbortSignal.timeout(20000)});if(!r.ok)throw Error('description');return(await r.json()).description;});}).catch(()=>{});
+ window.TelefyFlowDescriptions.setProvider(async track=>{
+  for(let attempt=0;attempt<3;attempt++){
+   if(state.currentTrackId!==track.id||state.activeTab!=='flow')return '';
+   let retry=false;
+   try{const r=await fetch('/api/ai/description',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:track.id,soundcloudUrn:track.soundcloudUrn,title:track.title,artist:track.artist,album:track.album,genre:track.genre,tag_list:track.tag_list,lang:track.language}),signal:AbortSignal.timeout(28000)});
+    if(r.ok){const data=await r.json();if(data.description?.trim())return data.description;retry=Boolean(data.retry_after);}
+    else retry=r.status>=500||r.status===429;
+   }catch(_){retry=true;}
+   if(!retry||attempt===2)return '';
+   await new Promise(resolve=>setTimeout(resolve,1500*(attempt+1)));
+  }return '';
+ });
+ window.addEventListener('telefy:profile-ready',()=>{key='';render();});
+
  render();
 })();

@@ -30,7 +30,7 @@ class UsageStore:
   now=time.time()if now is None else now;day,start,reset=day_window(now);stamp=int(now*1000)
   self.ensure()
   import max_billing
-  unlimited=max_billing.STORE.status(uid,now=int(now))['active']
+  entitlement=max_billing.STORE.status(uid,now=int(now));unlimited=entitlement['active']
   with LOCK,self.db.connect()as c:
    # Serialize different devices as well as duplicate requests on PostgreSQL.
    if self.db.url:self.db.execute(c,'SELECT telegram_id FROM telefy_users WHERE telegram_id=%s FOR UPDATE',(uid,))
@@ -52,7 +52,7 @@ class UsageStore:
      self.db.execute(c,'INSERT INTO telefy_playback_sessions VALUES(%s,%s,%s,%s,%s) ON CONFLICT(telegram_id,id) DO UPDATE SET day=excluded.day,reported_ms=excluded.reported_ms,updated_ms=excluded.updated_ms',(uid,session,day,total,stamp))
     self.db.execute(c,'UPDATE telefy_daily_usage SET listened_ms=%s WHERE telegram_id=%s AND day=%s',(used,uid,day))
     self.db.execute(c,'DELETE FROM telefy_playback_sessions WHERE telegram_id=%s AND updated_ms<%s',(uid,stamp-3*86400000))
-  return {'day':day,'resets_at':reset,'server_time':now,'unlimited':unlimited,'listened_ms':used,'remaining_ms':max(0,LISTEN_MS-used),'limit_ms':LISTEN_MS,'export_limit':EXPORTS}
+  return {'day':day,'resets_at':reset,'server_time':now,'unlimited':unlimited,'access_expires_at':entitlement.get('expires_at'),'listened_ms':used,'remaining_ms':max(0,LISTEN_MS-used),'limit_ms':LISTEN_MS,'export_limit':EXPORTS}
 
 def store():
  import profile_server
