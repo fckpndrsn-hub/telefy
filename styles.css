@@ -1326,3 +1326,5 @@ body.theme-light #collection-modal>.release-ambient-panel:before,body.theme-ligh
 #view-flow #flow-cover-play:active{transform:translate(-50%,-50%) scale(.96)}
 #view-flow #flow-cover-prev:active{transform:translateX(-12%) rotateY(32deg) scale(.85)}
 #view-flow #flow-cover-next:active{transform:translateX(12%) rotateY(-32deg) scale(.85)}
+
+.all-tracks-heading{font-family:'SF Pro Rounded',ui-rounded,'SF Pro Display',-apple-system,sans-serif;font-weight:800;font-size:22px;line-height:28px}

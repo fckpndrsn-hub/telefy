@@ -131,6 +131,8 @@ def run_one():
   if not bot.subscribed(job['telegram_id']):raise ValueError('subscription_required')
   cached=s.cached(job['urn'])
   if cached:
+   import content_policy
+   if content_policy.blocked(cached):raise ValueError('content_blocked')
    track={'title':cached['title'],'artist':cached['artist'],'duration':cached['duration']};s.finish(job,'sending');sending=True
    try:result=bot.api('sendAudio',chat_id=job['telegram_id'],audio=cached['file_id'],title=track['title'],performer=track['artist'],caption=CAPTION,parse_mode='HTML',reply_markup=markup())
    except bot.BotError as error:

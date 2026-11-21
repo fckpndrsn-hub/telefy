@@ -163,6 +163,7 @@
             location.replace('/');return;
           }
           const messages = {
+            content_blocked:'Этот трек недоступен',
             soundcloud_not_configured:'Подключи ключи через страницу настройки SoundCloud',
             matching_track_not_found:'Подходящая запись не найдена. Попробуй найти её через поиск',
             soundcloud_auth_failed:'Не удалось подтвердить доступ к музыкальному сервису',

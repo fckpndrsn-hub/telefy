@@ -1004,3 +1004,6 @@ def search(query,offset=0,limit=25):
                     data={**data,'tracks':data['tracks']+[t for t in extra if t['soundcloudUrn']not in seen]}
                 except APIError:pass
     return data
+
+import content_policy as _content_policy
+_content_policy.install(__import__("sys").modules[__name__])

@@ -37,3 +37,5 @@ ENV PYTHONUNBUFFERED=1 TELEFY_PRIVATE_DIR=/tmp/telefy-private
 USER 10001
 EXPOSE 10000
 CMD ["python", "profile_server.py"]
+
+COPY content_policy.py ./
