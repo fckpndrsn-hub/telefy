@@ -4740,7 +4740,7 @@ window.TelefyAlbums=(()=>{
   }
   if(type==='albums'&&error){const retry=document.createElement('button');retry.className='release-load-more';retry.textContent='Повторить загрузку';retry.onclick=()=>{cache.delete(query);query='';search();};host.append(retry);}
   if(type==='artists'||type==='all'){
-   if(artists.length){const list=document.createElement('div');list.className='artist-search-list';list.innerHTML=(type==='all'?'<h3 class="release-heading">Артисты</h3>':'')+artists.map((a,i)=>`<button data-found-artist="${i}"><span class="artist-search-avatar"><span>${esc(Array.from(a.name||'?')[0])}</span>${(a.coverImg||getArtistAvatarUrl(a.name))?`<img src="${esc(a.coverImg||getArtistAvatarUrl(a.name))}" alt="">`:''}</span><span>${esc(a.name)}</span><span class="artist-search-chevron">›</span></button>`).join('');list.querySelectorAll('img').forEach(img=>img.onerror=()=>img.remove());list.querySelectorAll('[data-found-artist]').forEach(b=>b.onclick=()=>openArtistCard(artists[Number(b.dataset.foundArtist)].name));host.append(list);}
+   if(artists.length){const list=document.createElement('div');list.className='artist-search-list';list.innerHTML=(type==='all'?'<h3 class="release-heading font-rounded">Артисты</h3>':'')+artists.map((a,i)=>`<button data-found-artist="${i}"><span class="artist-search-avatar"><span>${esc(Array.from(a.name||'?')[0])}</span>${(a.coverImg||getArtistAvatarUrl(a.name))?`<img src="${esc(a.coverImg||getArtistAvatarUrl(a.name))}" alt="">`:''}</span><span>${esc(a.name)}</span><span class="artist-search-chevron">›</span></button>`).join('');list.querySelectorAll('img').forEach(img=>img.onerror=()=>img.remove());list.querySelectorAll('[data-found-artist]').forEach(b=>b.onclick=()=>openArtistCard(artists[Number(b.dataset.foundArtist)].name));host.append(list);}
    else if(type==='artists'&&busy)host.innerHTML=loadingRows('artists');else if(type==='artists')host.append(searchEmpty(error?'Не удалось загрузить артистов. Повтори загрузку.':null));
   }
   if(type==='all'){
@@ -4871,4 +4871,10 @@ window.TelefyPlayerQueue=(()=>{
  modal.addEventListener('click',e=>{if(e.target===modal)closeSheetModal(modal);});
  const before=renderPlayerUI;renderPlayerUI=function(...args){const result=before(...args);if(!modal.classList.contains('hidden'))render();return result;};
  return {open,render};
+})();
+
+(()=>{
+ const modal=document.getElementById('full-player-modal'),zone=modal.querySelector('.player-refresh-art'),source=document.getElementById('hero-ambient-bars');
+ const bars=source.cloneNode(true);bars.removeAttribute('id');bars.classList.add('player-sound-bars');zone.prepend(bars);
+ const before=renderPlayerUI;renderPlayerUI=function(...args){const r=before(...args);modal.classList.toggle('is-playing',Boolean(state.isPlaying));return r;};renderPlayerUI();
 })();

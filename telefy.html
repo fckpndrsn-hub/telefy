@@ -8,7 +8,7 @@
 
     <!-- Embedded SF Pro fonts: Latin and Cyrillic, no external font requests. -->
 
-  <link rel="stylesheet" href="assets/styles.css?v=525607c5f048">
+  <link rel="stylesheet" href="assets/styles.css?v=a571c567640b">
   <link rel="stylesheet" href="assets/max-logo.css?v=64a86089965c">
                                             <meta name="telefy-build" content="telegram-ui-20261114-2">
 </head>
@@ -136,12 +136,11 @@
       <section id="view-flow" class="hidden px-4 pt-3 space-y-4">
         
         <header class="flow-header">
-          <h1 id="flow-stream-name" class="font-rounded">Мой поток</h1>
+          <h1 id="flow-stream-name" class="font-rounded">Мой поток</h1><p id="flow-stream-subtitle">Всё, что похоже на твой музыкальный вкус</p>
         </header>
 
         <article id="flow-discovery" class="flow-discovery" aria-label="Трек в потоке">
-          <div id="flow-discovery-backdrop" class="flow-discovery-backdrop" aria-hidden="true"></div>
-          <div class="flow-discovery-tint" aria-hidden="true"></div>
+          <div id="flow-cover-scene"><div id="flow-discovery-backdrop" aria-hidden="true"></div><button id="flow-cover-prev" class="flow-side-cover prev" aria-label="Предыдущий трек"></button><div id="flow-discovery-art" aria-hidden="true"></div><button id="flow-cover-next" class="flow-side-cover next" aria-label="Следующий трек"></button><button id="flow-cover-play" aria-label="Слушать"></button></div>
           <div class="flow-discovery-copy">
             <span id="flow-description-source" class="flow-discovery-eyebrow">В твоём потоке</span>
             <h2 id="flow-discovery-title" class="font-rounded">—</h2>
@@ -149,7 +148,7 @@
             <p id="flow-discovery-description"></p>
             <button id="flow-discovery-next" type="button"><span id="flow-discovery-next-label">Дальше</span><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg></button>
           </div>
-          <div id="flow-discovery-art" class="flow-discovery-art" aria-hidden="true"></div>
+
         </article>
 
         <!-- 3. Clean & Obvious Swipeable Stream Mode Pill -->
@@ -169,7 +168,7 @@
 
         <!-- 4. Clean 3-Track Upcoming List -->
         <div class="space-y-2">
-          <h3 data-i18n="upNext" class="font-rounded text-[15px] text-muted px-0.5">Дальше</h3>
+          <h3 data-i18n="upNext" class="font-rounded flow-next-heading">Далее</h3>
           <div id="flow-queue-list" class="tg-card">
             <!-- Rendered by JS -->
           </div>
@@ -1048,12 +1047,12 @@
   <script src="assets/telegram-layout.js?v=f870b09273a9" defer></script>
   <script src="assets/music-policy.js?v=88d9187f01f3" defer></script>
   <script src="assets/first-run.js?v=e4a199c6e358" defer></script>
-  <script src="assets/app.js?v=eb939f608e1b" defer></script>
+  <script src="assets/app.js?v=d40d41004c1d" defer></script>
   <script src="assets/player-controls.js?v=38f1a02f2bce" defer></script>
   <script src="assets/max-logo.js?v=7c9b6dd5da8f" defer></script>
-  <script src="assets/flow-discovery.js?v=11fe864b8be3" defer></script>
+  <script src="assets/flow-discovery.js?v=e8daa14b2398" defer></script>
   <script src="assets/vendor/hls.light.min.js?v=482cccb3a224" defer></script>
-  <script src="assets/audio-player.js?v=836796cd503b" defer></script>
+  <script src="assets/audio-player.js?v=898e73aa11b1" defer></script>
   <audio id="telefy-audio" preload="none"></audio>
 <script src="assets/freshmen.js?v=770a2edbf46c" defer></script>
 <script src="assets/personal-vibe.js?v=20243185e3c6" defer></script>

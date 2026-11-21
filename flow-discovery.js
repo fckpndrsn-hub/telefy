@@ -1,122 +1,37 @@
-/* telefy-flow-ai-v3: bounded waiting, copied after legacy web assets. */
-(() => {
-  const card = document.getElementById('flow-discovery');
-  const backdrop = document.getElementById('flow-discovery-backdrop');
-  const art = document.getElementById('flow-discovery-art');
-  const title = document.getElementById('flow-discovery-title');
-  const description = document.getElementById('flow-discovery-description');
-  const artist = document.getElementById('flow-discovery-artist');
-  const source = document.getElementById('flow-description-source');
-  const palettes = new Map(), descriptions = new Map();
-  let key = '', generation = 0, provider = null, animation = null;
-  function setLight(light) { card.classList.toggle('cover-is-light', light); }
-  function sampleCover(url, token) {
-    setLight(false); // Safe dark scrim while a cover is loading or CORS is unavailable.
-    if (!url) return;
-    if (palettes.has(url)) { setLight(palettes.get(url)); return; }
-    const image = new Image();
-    image.crossOrigin = 'anonymous';
-    image.onload = () => {
-      try {
-        const canvas = document.createElement('canvas'); canvas.width = canvas.height = 16;
-        const ctx = canvas.getContext('2d', { willReadFrequently:true });
-        ctx.drawImage(image, 0, 0, 16, 16);
-        const pixels = ctx.getImageData(0, 0, 16, 16).data;
-        let luminance = 0;
-        for (let i=0;i<pixels.length;i+=4) luminance += .2126*pixels[i]+.7152*pixels[i+1]+.0722*pixels[i+2];
-        const light = luminance / 256 > 155;
-        palettes.set(url, light);
-        if (token === generation) setLight(light);
-      } catch (_) { /* Keep the contrast-safe dark treatment. */ }
-    };
-    image.src = url;
-  }
-  async function render() {
-    const track = getTrack(state.currentTrackId);
-    if (!track) return;
-    const nextButton=document.getElementById('flow-discovery-next');
-    nextButton.disabled=!track.id;
-    if (!track.id) {
-      if(state.isCatalogParsing)title.innerHTML=window.TelefySkeleton.html('note',1);else title.textContent=state.lang==='en'?'Catalog unavailable':'Каталог недоступен';
-      artist.textContent=''; source.textContent=state.lang==='en'?'Your stream':'Мой поток';
-      description.textContent=state.isCatalogParsing ? '' : getCatalogErrorText();
-      backdrop.style.backgroundImage=art.style.backgroundImage='none'; art.classList.add('no-cover');
-      return;
-    }
-    const nextKey = JSON.stringify([track.id, track.title, track.artist, track.album, track.coverImg, state.lang, state.activeTab]);
-    if (key === nextKey) return;
-    const changedTrack = Boolean(key); key = nextKey;
-    const token = ++generation, english = state.lang === 'en';
-    title.textContent = track.title;
-    artist.textContent = track.artist;
-    description.textContent = english ? `A short note about “${track.title}” will appear here.` : `Короткая заметка о «${track.title}» скоро появится здесь.`;
-    source.textContent = english ? 'In your stream' : 'В твоём потоке';
-    document.getElementById('flow-discovery-next-label').textContent = english ? 'Next' : 'Дальше';
-    const url = /^https:\/\//.test(track.coverImg || '') ? track.coverImg : '';
-    backdrop.style.backgroundImage = art.style.backgroundImage = url ? `url(${JSON.stringify(url)})` : 'none';
-    art.classList.toggle('no-cover', !url);
-    sampleCover(url, token);
-    animation?.cancel();
-    if (changedTrack && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      animation = card.animate([{opacity:.65},{opacity:1}],{duration:220,easing:'ease-out'});
-    }
-    if (!provider || state.activeTab !== 'flow') return;
-    description.innerHTML=window.TelefySkeleton.html('note',3);
-    try {
-      const cacheKey = `${track.id}:${state.lang}`;
-      let text = descriptions.get(cacheKey);
-      if (!text) {
-        let timer;
-        try {
-          text = await Promise.race([
-            provider({ id:track.id, soundcloudUrn:track.soundcloudUrn, title:track.title, artist:track.artist, album:track.album, genre:track.genre, tag_list:track.tag_list, language:state.lang }),
-            new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('Description timeout')),30000);})
-          ]);
-        } finally { clearTimeout(timer); }
-        if (typeof text !== 'string' || !text.trim()) throw new Error('Empty description');
-        text = text.trim().slice(0, 260); descriptions.set(cacheKey,text);
-      }
-      if (token !== generation) return;
-      description.textContent = text;
-      source.textContent = 'Telefy AI';
-    } catch (_) {
-      if (token === generation) description.textContent = english ? 'Description is temporarily unavailable.' : 'Описание пока недоступно.';
-    }
-  }
-  window.TelefyFlowDescriptions = {
-    setProvider(fn) { provider = typeof fn === 'function' ? fn : null; descriptions.clear(); key=''; render(); }
-  };
-  const originalRender = renderPlayerUI;
-  renderPlayerUI = function() { originalRender(); render(); };
-  const originalSwitchTab = switchTab;
-  switchTab = function(tab) { originalSwitchTab(tab); if (tab === 'flow') render(); };
-  async function connectAI() {
-    try {
-      const status = await fetch('/api/ai/status', { cache:'no-store' }).then(r => r.json());
-      if (!status.configured) return;
-      window.TelefyFlowDescriptions.setProvider(async track => {
-        const response = await fetch('/api/ai/description', {
-          method:'POST', headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({...track,lang:state.lang}), signal:AbortSignal.timeout(30000)
-        });
-        if (!response.ok) throw new Error('Description unavailable');
-        return (await response.json()).description;
-      });
-    } catch (_) { /* Standalone HTML still works without the optional AI server. */ }
-  }
-  const next = () => { triggerHaptic('light'); playNext(); };
-  document.getElementById('flow-discovery-next').addEventListener('click', next);
-  let start = null;
-  card.addEventListener('pointerdown', e => {
-    if (e.target.closest('button')) return;
-    start = { x:e.clientX, y:e.clientY, id:e.pointerId };
-  });
-  card.addEventListener('pointerup', e => {
-    if (!start || start.id !== e.pointerId) return;
-    const dx = e.clientX-start.x, dy = e.clientY-start.y; start=null;
-    if (dx < -45 && Math.abs(dx) > Math.abs(dy)*1.5) next();
-  });
-  card.addEventListener('pointercancel', () => { start=null; });
-  render();
-  connectAI();
+/* Personal stream: actual queue, cover carousel and bounded AI notes. */
+(()=>{
+ const view=document.getElementById('view-flow'),art=document.getElementById('flow-discovery-art'),title=document.getElementById('flow-discovery-title'),artist=document.getElementById('flow-discovery-artist'),note=document.getElementById('flow-discovery-description');
+ const left=document.getElementById('flow-cover-prev'),right=document.getElementById('flow-cover-next'),play=document.getElementById('flow-cover-play');
+ let key='',token=0,provider=null,drag=null,direction=1;const cache=new Map(),inflight=new Map();
+ function upcoming(){return [...new Set(getUpcomingPlaybackIds())].filter(id=>id!==state.currentTrackId&&tracks.some(t=>t.id===id));}
+ function cover(el,t){const url=/^https:\/\//.test(t?.coverImg||'')?t.coverImg:'';el.style.backgroundImage=url?'url('+JSON.stringify(url)+')':'';el.classList.toggle('no-cover',!url);}
+ function personal(){if(state.activeMood!=='all'||state.playbackContext||window.TelefyOrderedQueue?.snapshot())applyStreamMode('all',false);}
+ function next(){direction=1;personal();triggerHaptic('light');playNext();}
+ function previous(){direction=-1;personal();triggerHaptic('light');playPrev();}
+ async function render(){
+  const track=getTrack(state.currentTrackId),en=state.lang==='en';
+  document.getElementById('flow-stream-name').textContent=en?'My flow':'Мой поток';document.getElementById('flow-stream-subtitle').textContent=en?'Everything that fits your music taste':'Всё, что похоже на твой музыкальный вкус';
+  view.classList.toggle('is-playing',Boolean(state.isPlaying));play.setAttribute('aria-label',en?(state.isPlaying?'Pause':'Play'):(state.isPlaying?'Пауза':'Слушать'));play.innerHTML=state.isPlaying?'<svg viewBox="0 0 24 24"><path d="M6 4h4v16H6zm8 0h4v16h-4z"/></svg>':'<svg viewBox="0 0 24 24"><path d="m8 4 12 8-12 8z"/></svg>';
+  play.disabled=!track?.id;left.disabled=!track?.id;
+  const ids=upcoming();cover(right,tracks.find(t=>t.id===ids[0]));right.disabled=!ids.length;
+  const h=playbackHistory.entries.slice(0,playbackHistory.index);const last=h.map(x=>typeof x==='object'?x.id:x).filter(id=>id!==track?.id).pop();cover(left,tracks.find(t=>t.id===last));
+  if(!track?.id){key='';token++;cover(art,null);cover(document.getElementById('flow-discovery-backdrop'),null);title.textContent=en?'Your music will appear here':'Здесь появится твоя музыка';artist.textContent='';note.textContent='';return;}
+  const nextKey=JSON.stringify([track.id,track.coverImg,track.title,track.artist,state.lang,state.activeTab]);if(key===nextKey)return;key=nextKey;const generation=++token;
+  if(!matchMedia('(prefers-reduced-motion: reduce)').matches)art.animate([{opacity:.35,transform:`translateX(${direction*36}px) rotate(${direction*5}deg) scale(.97)`},{opacity:1,transform:'translateX(0) scale(1)'}],{duration:320,easing:'cubic-bezier(.22,1,.36,1)'});
+  title.textContent=track.title;artist.textContent=track.artist;cover(art,track);cover(document.getElementById('flow-discovery-backdrop'),track);
+  note.classList.remove('has-note');note.textContent='';
+  if(state.activeTab!=='flow'||!provider)return;
+  const cacheKey=track.id+':'+state.lang;
+  try{let text=cache.get(cacheKey);if(!text){let job=inflight.get(cacheKey);if(!job){job=Promise.resolve().then(()=>provider({...track,language:state.lang}));inflight.set(cacheKey,job);}try{text=await job;}finally{if(inflight.get(cacheKey)===job)inflight.delete(cacheKey);}if(typeof text!=='string'||!text.trim())return;text=text.trim().slice(0,320);cache.set(cacheKey,text);if(cache.size>100)cache.delete(cache.keys().next().value);}
+   if(generation!==token)return;note.textContent='Telefy AI: '+text;requestAnimationFrame(()=>note.classList.add('has-note'));
+  }catch(_){/* No invented description or permanent loading label. */}
+ }
+ window.TelefyFlowDescriptions={setProvider(fn){provider=typeof fn==='function'?fn:null;key='';render();}};
+ const before=renderPlayerUI;renderPlayerUI=function(...args){const r=before(...args);render();return r;};
+ const oldSwitch=switchTab;switchTab=function(tab,...args){const r=oldSwitch(tab,...args);if(tab==='flow'){personal();render();}return r;};
+ const beforeFlow=renderFlowView;renderFlowView=function(...args){const r=beforeFlow(...args);render();return r;};
+ play.onclick=()=>{personal();togglePlay();triggerHaptic('light');};left.onclick=previous;right.onclick=next;
+ let suppressClickUntil=0;const scene=document.getElementById('flow-cover-scene');scene.addEventListener('click',e=>{if(Date.now()<suppressClickUntil){e.preventDefault();e.stopImmediatePropagation();}},true);scene.addEventListener('pointerdown',e=>{drag={x:e.clientX,y:e.clientY,id:e.pointerId};});scene.addEventListener('pointermove',e=>{if(!drag||drag.id!==e.pointerId)return;const dx=e.clientX-drag.x,dy=e.clientY-drag.y;if(Math.abs(dx)>12&&Math.abs(dx)>Math.abs(dy)*1.5){art.style.transform=`translateX(${Math.max(-65,Math.min(65,dx*.35))}px) rotate(${dx*.025}deg)`;}});scene.addEventListener('pointerup',e=>{art.style.transform='';if(!drag||drag.id!==e.pointerId)return;const dx=e.clientX-drag.x,dy=e.clientY-drag.y;drag=null;if(Math.abs(dx)>45&&Math.abs(dx)>Math.abs(dy)*1.5){e.preventDefault();suppressClickUntil=Date.now()+400;if(dx<0)next();else previous();}});scene.addEventListener('pointercancel',()=>{drag=null;art.style.transform='';});
+ fetch('/api/ai/status',{cache:'no-store'}).then(r=>r.json()).then(s=>{if(s.configured)window.TelefyFlowDescriptions.setProvider(async track=>{const r=await fetch('/api/ai/description',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:track.id,soundcloudUrn:track.soundcloudUrn,title:track.title,artist:track.artist,album:track.album,genre:track.genre,lang:track.language}),signal:AbortSignal.timeout(20000)});if(!r.ok)throw Error('description');return(await r.json()).description;});}).catch(()=>{});
+ render();
 })();

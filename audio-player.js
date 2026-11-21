@@ -8,6 +8,43 @@
   let hls = null, streamController = null;
   let sourceReady = false, switchingSource = false;
   let pausePoint = null, resumePoint = null;
+/* A bounded playback buffer, with recovery tied to the current track and play intent. */
+  audio.preload='auto';
+  let networkTimer=null,networkTrack=null,networkAttempts=0,networkReload=false,networkRestart=false;
+  function clearNetworkRecovery(reset=true){
+    clearTimeout(networkTimer);networkTimer=null;
+    if(reset){networkTrack=null;networkAttempts=0;networkReload=false;networkRestart=false;}
+  }
+  function recoverNetwork(reload=false,immediate=false,restart=false){
+    if(!enabled||!state.isPlaying||!activeId||activeId!==state.currentTrackId)return;
+    if(networkTrack!==activeId){clearNetworkRecovery();networkTrack=activeId;}
+    networkReload=networkReload||reload;networkRestart=networkRestart||restart;
+    if(networkTimer&&!immediate)return;
+    clearTimeout(networkTimer);
+    const id=activeId,version=request;
+    networkTimer=setTimeout(async()=>{
+      networkTimer=null;
+      if(!enabled||!state.isPlaying||id!==activeId||id!==state.currentTrackId||version!==request){clearNetworkRecovery();return;}
+      if(window.navigator?.onLine===false){recoverNetwork(networkReload);return;}
+      if(++networkAttempts>8){clearNetworkRecovery();fail('Сеть не восстановилась. Нажми ▶, чтобы продолжить с того же места.');return;}
+      if(networkReload){
+        pausePoint={id,time:Math.max(0,audio.currentTime||state.progressSec||0)};
+        sourceReady=false;networkReload=false;
+        // Re-resolve expired signed URLs without changing the queue or position.
+        await syncRealAudio(false);return;
+      }
+      if(hls&&(networkRestart||hls.loadingEnabled===false)){networkRestart=false;hls.startLoad(audio.currentTime);}
+      if(audio.paused){try{await audio.play();}catch(error){if(error.name==='NotAllowedError'){clearNetworkRecovery();fail('Нажми ▶, чтобы продолжить воспроизведение');return;}}}
+      recoverNetwork(false);
+    },immediate?0:Math.min(30000,1500*2**networkAttempts));
+  }
+  window.addEventListener('online',()=>{if(networkTrack)recoverNetwork(networkReload,true);},{signal:events.signal});
+  audio.addEventListener('waiting',()=>recoverNetwork(),{signal:events.signal});
+  audio.addEventListener('stalled',()=>recoverNetwork(),{signal:events.signal});
+  audio.addEventListener('playing',()=>clearNetworkRecovery(),{signal:events.signal});
+  audio.addEventListener('ended',()=>clearNetworkRecovery(),{signal:events.signal});
+  audio.addEventListener('error',()=>{if(sourceReady&&audio.error?.code===2)recoverNetwork(true);},{signal:events.signal});
+
   function prepareSource(url, signal, requestId) {
     return new Promise((resolve,reject) => {
       let settled=false, timer=null, engine=null;
@@ -31,12 +68,13 @@
       if(signal.aborted){abort();return;}
       // Prefer the explicit MSE adapter over a browser's unreliable HLS "maybe".
       if(window.Hls?.isSupported()) {
-        engine=new Hls({enableWorker:true,lowLatencyMode:false,maxBufferLength:30,backBufferLength:30});
+        engine=new Hls({enableWorker:true,lowLatencyMode:false,maxBufferLength:300,maxMaxBufferLength:600,maxBufferSize:32*1024*1024,backBufferLength:30});
         hls=engine;
         let recovered=false;
         engine.on(Hls.Events.ERROR,(_,error)=>{
           if(engine!==hls || !enabled || !error.fatal)return;
           if(error.type===Hls.ErrorTypes.MEDIA_ERROR && !recovered){recovered=true;engine.recoverMediaError();return;}
+          if(settled && error.type===Hls.ErrorTypes.NETWORK_ERROR){recoverNetwork(error.response?.code===401||error.response?.code===403,false,true);return;}
           const status=error.response?.code;
           const message=`Не удалось загрузить поток (${error.details || 'HLS'}${status ? ', HTTP '+status : ''})`;
           if(!settled)finish(new Error(message));
@@ -77,7 +115,7 @@
     progressFrame = requestAnimationFrame(frame);
   }
   const duration = () => Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : (getTrack(state.currentTrackId)?.duration || 180);
-  function fail(message) { state.isPlaying = false; audio.pause(); renderAll(); showToast(message); }
+  function fail(message) { clearNetworkRecovery(); state.isPlaying = false; audio.pause(); renderAll(); showToast(message); }
   updateProgressUI = function() {
     const track = getTrack(state.currentTrackId);
     if (enabled && activeId === track.id) {
@@ -90,6 +128,7 @@
     const currentRequest = ++request;
     if (!enabled) return original.sync(reset);
     if (!state.isPlaying) {
+      clearNetworkRecovery();
       if (!audio.paused && sourceReady && activeId === state.currentTrackId) {
         pausePoint={id:activeId,time:audio.currentTime};
       }
@@ -98,6 +137,7 @@
     }
     const track = getTrack(state.currentTrackId);
     if (!track?.id) { fail('Дождись загрузки каталога'); return; }
+    if(reset||networkTrack&&networkTrack!==track.id)clearNetworkRecovery();
     if(reset || (pausePoint && pausePoint.id!==track.id)){pausePoint=null;resumePoint=null;}
     const restoreAt=pausePoint?.id===track.id ? pausePoint.time : (window.TelefyLastPlayback?.consumePosition(track) ?? null);
     try {
@@ -157,6 +197,7 @@
       if (currentRequest !== request || error.name === 'AbortError') return;
       switchingSource=false;
       if(!sourceReady){activeId=null;if(hls){hls.destroy();hls=null;}}
+      if(networkTrack===track.id && error.name!=='NotAllowedError'){activeId=track.id;recoverNetwork(true);return;}
       fail(error.name === 'NotAllowedError' ? 'Нажми ▶ ещё раз для запуска звука' : (error.message || 'Не удалось загрузить аудио'));
     }
   };
@@ -166,7 +207,7 @@
   on('pause', () => {
     stopProgressFrames();
     // Source replacement also emits pause; it must not cancel a new track load.
-    if (enabled && sourceReady && !switchingSource && activeId === state.currentTrackId && audio.paused && !audio.ended) {
+    if (enabled && sourceReady && !switchingSource && activeId === state.currentTrackId && audio.paused && !audio.ended && audio.error?.code!==2) {
       pausePoint={id:activeId,time:audio.currentTime}; resumePoint=null;
       state.isPlaying=false; renderPlayerUI();
     }
@@ -317,6 +358,7 @@
     if(pausePoint?.id===activeId)pausePoint.time=0;
     audio.currentTime=0;state.progressSec=0;updateProgressUI();syncMediaPosition();return true;
   }, disable() {
+    clearNetworkRecovery();
     releaseMediaSession();
     enabled = false; scrubbing = false; scrubTarget = null; scrubPointer = null;
     pausePoint=null;resumePoint=null;
