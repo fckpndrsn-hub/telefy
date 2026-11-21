@@ -11,7 +11,7 @@
  function previous(){direction=-1;personal();triggerHaptic('light');playPrev();}
  async function render(){
   const track=getTrack(state.currentTrackId),en=state.lang==='en';
-  document.getElementById('flow-stream-name').textContent=en?'My flow':'Мой поток';document.getElementById('flow-stream-subtitle').textContent=en?'Everything that fits your music taste':'Всё, что похоже на твой музыкальный вкус';
+  document.getElementById('flow-stream-name').textContent=en?'My flow':'Мой поток';document.getElementById('flow-stream-subtitle').textContent=en?'Be different. Stay in the flow with Telefy!':'Будь разным, будь в потоке вместе с Telefy!';
   view.classList.toggle('is-playing',Boolean(state.isPlaying));play.setAttribute('aria-label',en?(state.isPlaying?'Pause':'Play'):(state.isPlaying?'Пауза':'Слушать'));play.classList.toggle('is-playing',Boolean(state.isPlaying));
   play.disabled=!track?.id;left.disabled=!track?.id;
   const ids=upcoming();cover(right,tracks.find(t=>t.id===ids[0]));right.disabled=!ids.length;
