@@ -3,19 +3,22 @@
  const view=document.getElementById('view-flow'),art=document.getElementById('flow-discovery-art'),title=document.getElementById('flow-discovery-title'),artist=document.getElementById('flow-discovery-artist'),note=document.getElementById('flow-discovery-description');
  const left=document.getElementById('flow-cover-prev'),right=document.getElementById('flow-cover-next'),play=document.getElementById('flow-cover-play');
  play.innerHTML='<span class="tg-ico flow-glyph flow-glyph-play" aria-hidden="true">&#xF148;</span><span class="tg-ico flow-glyph flow-glyph-pause" aria-hidden="true">&#xF14F;</span>';
- let key='',token=0,provider=null,drag=null,direction=1;const cache=new Map(),inflight=new Map();
+ let key='',token=0,provider=null,drag=null,direction=1,leftPreviewId=null,leftFromQueue=false;const cache=new Map(),inflight=new Map();
  function upcoming(){return [...new Set(getUpcomingPlaybackIds())].filter(id=>id!==state.currentTrackId&&tracks.some(t=>t.id===id));}
  function cover(el,t){const url=/^https:\/\//.test(t?.coverImg||'')?t.coverImg:'';el.style.backgroundImage=url?'url('+JSON.stringify(url)+')':'';el.classList.toggle('no-cover',!url);}
  function personal(){if(state.activeMood!=='all'||state.playbackContext||window.TelefyOrderedQueue?.snapshot())applyStreamMode('all',false);}
  function next(){direction=1;personal();triggerHaptic('light');playNext();}
- function previous(){direction=-1;personal();triggerHaptic('light');playPrev();}
+ function previous(){direction=-1;personal();triggerHaptic('light');if(leftFromQueue&&leftPreviewId){const id=leftPreviewId;state.queueIds=upcoming().filter(nextId=>nextId!==id);playTrack(id,state.sourceLabel);return;}playPrev();}
  async function render(){
   const track=getTrack(state.currentTrackId),en=state.lang==='en';
   document.getElementById('flow-stream-name').textContent=en?'My flow':'Мой поток';document.getElementById('flow-stream-subtitle').textContent=en?'Be different. Stay in the flow with Telefy!':'Будь разным, будь в потоке вместе с Telefy!';
   view.classList.toggle('is-playing',Boolean(state.isPlaying));play.setAttribute('aria-label',en?(state.isPlaying?'Pause':'Play'):(state.isPlaying?'Пауза':'Слушать'));play.classList.toggle('is-playing',Boolean(state.isPlaying));
   play.disabled=!track?.id;left.disabled=!track?.id;
   const ids=upcoming();cover(right,tracks.find(t=>t.id===ids[0]));right.disabled=!ids.length;
-  const h=playbackHistory.entries.slice(0,playbackHistory.index);const last=h.map(x=>typeof x==='object'?x.id:x).filter(id=>id!==track?.id).pop();cover(left,tracks.find(t=>t.id===last));
+  const h=playbackHistory.entries.slice(0,Math.max(0,playbackHistory.index));const last=h.map(x=>typeof x==='object'?x.id:x).filter(id=>id!==track?.id&&tracks.some(t=>t.id===id&&!window.telefySongBlocked?.(t))).pop();
+  leftFromQueue=!last;leftPreviewId=last||ids[1]||ids[0]||null;cover(left,tracks.find(t=>t.id===leftPreviewId)||track);left.disabled=!leftPreviewId;
+  if(!ids.length&&track?.id)cover(right,track);
+
   if(!track?.id){key='';token++;cover(art,null);cover(document.getElementById('flow-discovery-backdrop'),null);title.textContent=en?'Your music will appear here':'Здесь появится твоя музыка';artist.textContent='';note.textContent='';return;}
   const nextKey=JSON.stringify([track.id,track.coverImg,track.title,track.artist,state.lang,state.activeTab]);if(key===nextKey)return;key=nextKey;const generation=++token;
   if(!matchMedia('(prefers-reduced-motion: reduce)').matches)art.animate([{opacity:.35,transform:`translateX(${direction*36}px) rotate(${direction*5}deg) scale(.97)`},{opacity:1,transform:'translateX(0) scale(1)'}],{duration:320,easing:'cubic-bezier(.22,1,.36,1)'});

@@ -1328,3 +1328,8 @@ body.theme-light #collection-modal>.release-ambient-panel:before,body.theme-ligh
 #view-flow #flow-cover-next:active{transform:translateX(12%) rotateY(-32deg) scale(.85)}
 
 .all-tracks-heading{font-family:'SF Pro Rounded',ui-rounded,'SF Pro Display',-apple-system,sans-serif;font-weight:800;font-size:22px;line-height:28px}
+
+/* Circular carousel artwork, matching the home disc and full player. */
+#view-flow #flow-discovery-art{border-radius:50%;corner-shape:round}
+#view-flow .flow-side-cover{width:196px;height:196px;aspect-ratio:1;border-radius:50%;corner-shape:round}
+@media(max-width:360px){#view-flow .flow-side-cover{width:174px;height:174px}}
