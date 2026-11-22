@@ -14,6 +14,7 @@
  }
  function paintRemaining(){const row=document.querySelector('[data-i18n="maxRowExpireDate"]');if(row)row.textContent=remainingLabel();}
  function paint(){
+  window.TelefyThemes?.refreshAccess();
   document.documentElement.dataset.maxMode=beta()?'beta':'paid';const yes=active(),english=state.lang==='en',free=beta();
   const known=verified&&account===user();
   const date=yes&&!free?new Date(verified.expires_at*1000).toLocaleDateString(english?'en-GB':'ru-RU'):'';

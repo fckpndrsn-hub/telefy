@@ -1,0 +1,61 @@
+/* Theme palettes only: brand images, artwork and liked hearts keep their colours. */
+(()=>{
+ const palettes=[{"id": "default", "name": "Стандартная", "english": "Default", "accent": "#2aabee", "accent2": "#7c63ff", "bg": "#f3f3f7", "card": "#ffffff", "raised": "#e9e9ee", "ink": "#17212b", "muted": "#737d88", "onAccent": "#ffffff", "accentText": "#2aabee", "light": {"accent": "#2aabee", "accent2": "#7c63ff", "bg": "#f3f3f7", "card": "#ffffff", "raised": "#e9e9ee", "ink": "#17212b", "muted": "#737d88", "onAccent": "#ffffff", "accentText": "#087eaf"}, "dark": {"accent": "#2aabee", "accent2": "#7c63ff", "bg": "#0e1621", "card": "#17212b", "raised": "#232e3c", "ink": "#ffffff", "muted": "#7f91a4", "onAccent": "#ffffff", "accentText": "#2aabee"}}, {"id": "green-day", "name": "Green Day", "accent": "#1db954", "accent2": "#86f6ad", "bg": "#121212", "card": "#1e1e1e", "raised": "#2c2c2c", "ink": "#f5f5f5", "muted": "#aaaaaa", "onAccent": "#07180d", "accentText": "#1db954", "light": {"accent": "#1db954", "accent2": "#84e9a8", "bg": "#f4f4f4", "card": "#ffffff", "raised": "#e7e7e7", "ink": "#171717", "muted": "#686868", "onAccent": "#07180d", "accentText": "#087b35"}}, {"id": "orange-vibe", "name": "Orange Vibe", "accent": "#ff5900", "accent2": "#ff8a24", "bg": "#121212", "card": "#1e1e1e", "raised": "#2c2c2c", "ink": "#f5f5f5", "muted": "#aaaaaa", "onAccent": "#211006", "accentText": "#ff7126", "light": {"accent": "#ff5900", "accent2": "#ff8a24", "bg": "#f5f5f5", "card": "#ffffff", "raised": "#e7e7e7", "ink": "#171717", "muted": "#686868", "onAccent": "#211006", "accentText": "#b33d00"}}, {"id": "vice-city", "name": "Vice-City", "accent": "#ff70cf", "accent2": "#56e9ef", "bg": "#0e0b14", "card": "#19141f", "raised": "#251c31", "ink": "#fff4ff", "muted": "#c1abcd", "onAccent": "#28112b", "accentText": "#ff70cf", "light": {"accent": "#eb62c1", "accent2": "#4ed4de", "bg": "#f7f3fa", "card": "#ffffff", "raised": "#ece5f2", "ink": "#24192f", "muted": "#76637f", "onAccent": "#28112b", "accentText": "#a0257c"}}, {"id": "noir-music", "name": "Noir Music", "accent": "#eceef2", "accent2": "#87909b", "bg": "#101113", "card": "#1e2024", "raised": "#30343a", "ink": "#f5f5f6", "muted": "#a5a9b0", "onAccent": "#17191c", "accentText": "#eceef2", "light": {"accent": "#30343b", "accent2": "#565d68", "bg": "#f4f4f4", "card": "#ffffff", "raised": "#e4e5e7", "ink": "#161719", "muted": "#696d73", "onAccent": "#ffffff", "accentText": "#30343b"}}, {"id": "red-energy", "name": "Red Energy", "accent": "#ff294b", "accent2": "#ff294b", "bg": "#111111", "card": "#1e1e1e", "raised": "#2c2c2c", "ink": "#f5f5f5", "muted": "#aaaaaa", "onAccent": "#210008", "accentText": "#ff405e", "light": {"accent": "#ed2344", "accent2": "#b81634", "bg": "#f5f5f5", "card": "#ffffff", "raised": "#e7e7e7", "ink": "#171717", "muted": "#686868", "onAccent": "#ffffff", "accentText": "#c31736"}}],known=new Map(palettes.map(p=>[p.id,p]));let saved='default',owner='',sheet=null,draft=null,saving=false,version=0,effective='default';
+ const originalBrand=document.querySelector('header img');const brandSource=originalBrand?.getAttribute('src')||'';let brandedKey='';
+ function variant(p){return state.theme==='light'?{...p,...p.light}:p.dark?{...p,...p.dark}:p;}
+ function brand(p){if(!originalBrand)return;const k=p.id+':'+state.theme;if(k===brandedKey)return;brandedKey=k;if(p.id==='default'){originalBrand.setAttribute('src',brandSource);return;}try{let svg=atob(brandSource.split(',')[1]).replace(/fill="#299EED"/gi,'fill="'+p.accent+'"').replace(/fill="white"/gi,'fill="'+p.onAccent+'"');if(p.id==='vice-city'){svg=svg.replace(/<svg([^>]*)>/,'<svg$1><defs><linearGradient id="telefy-header-gradient" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="'+p.accent+'"/><stop offset="100%" stop-color="'+p.accent2+'"/></linearGradient></defs>').replace('fill="'+p.accent+'"','fill="url(#telefy-header-gradient)"');}originalBrand.setAttribute('src','data:image/svg+xml;base64,'+btoa(svg));}catch(_){originalBrand.setAttribute('src',brandSource);}}
+ const uid=()=>String(window.TelefyProfile?.user?.telegram_id||'');const en=()=>state.lang==='en';
+  function bindThemeDismiss(root,dismiss){
+  const panel=root.querySelector('.themes-panel'),grip=panel.querySelector('.telefy-sheet-grip');let drag=null,suppressClick=0;
+  grip.onclick=()=>{if(performance.now()>suppressClick)dismiss();};
+  root.onclick=e=>{if(e.target===root&&performance.now()>suppressClick)dismiss();};
+  const settle=()=>{panel.style.transition='transform .28s cubic-bezier(.22,1,.36,1)';panel.style.transform='translateY(0)';setTimeout(()=>{if(panel.isConnected&&!root._dismissMotion)panel.style.transition='';},300);};
+  panel.addEventListener('pointerdown',e=>{
+   if(!e.isPrimary||e.button!==0||root._dismissMotion||drag||e.target.closest('.theme-choice,input,a,select,textarea')||(e.target.closest('button')&&!grip.contains(e.target)))return;
+   if(!e.target.closest('.telefy-sheet-grip,.themes-heading,h2,.themes-access'))return;
+   drag={id:e.pointerId,x:e.clientX,y:e.clientY,dy:0,at:performance.now(),moved:false,onGrip:grip.contains(e.target)};panel.setPointerCapture(e.pointerId);
+  });
+  panel.addEventListener('pointermove',e=>{
+   if(!drag||drag.id!==e.pointerId)return;
+   const dx=e.clientX-drag.x,dy=e.clientY-drag.y;
+   if(!drag.moved&&Math.abs(dx)>12&&Math.abs(dx)>Math.abs(dy)){finish(e,true);return;}
+   if(dy>6||drag.moved){e.preventDefault();drag.moved=true;drag.dy=Math.max(0,dy);panel.style.animation='none';panel.style.transition='none';panel.style.transform=`translateY(${drag.dy}px)`;}
+  });
+  const finish=(e,cancelled=false)=>{
+   if(!drag||drag.id!==e.pointerId)return;const g=drag;drag=null;
+   if(panel.hasPointerCapture(e.pointerId))panel.releasePointerCapture(e.pointerId);
+   if(!g.moved){if(!cancelled&&g.onGrip)dismiss();return;}suppressClick=performance.now()+400;
+   const speed=g.dy/Math.max(1,performance.now()-g.at);
+   if(!cancelled&&(g.dy>80||(g.dy>28&&speed>.55)))dismiss();else settle();
+  };
+  panel.addEventListener('pointerup',e=>finish(e));panel.addEventListener('pointercancel',e=>finish(e,true));panel.addEventListener('lostpointercapture',e=>finish(e,true));
+ }
+
+ function apply(id){const p=variant(known.get(id)||known.get('default'));effective=p.id;brand(p);
+  if(p.id==='default'){delete document.body.dataset.telefyTheme;return;}
+  if(document.body.dataset.telefyTheme!==p.id)document.body.dataset.telefyTheme=p.id;
+ }
+ function refreshAccess(){if(draft&&draft!=='default'&&!window.TelefyMax?.active){draft='default';apply('default');if(sheet)draw();}else if(!draft)apply(window.TelefyMax?.active?saved:'default');}
+ function cancel(){if(saving)return;if(!sheet)return;const root=sheet;sheet=null;draft=null;refreshAccess();closeSheetModal(root,()=>root.remove());}
+ function draw(){if(!sheet)return;const grid=sheet.querySelector('.themes-grid');grid.innerHTML=palettes.map(base=>{const p=variant(base);return '<button type="button" role="radio" aria-checked="'+(draft===p.id)+'" data-theme-choice="'+p.id+'" class="theme-choice"><span class="theme-mini" style="--sample-bg:'+p.bg+';--sample-card:'+p.card+';--sample-accent:'+p.accent+';--sample-other:'+p.accent2+'"><span class="theme-mini-top"></span><span class="theme-mini-disc"></span><span class="theme-mini-lines"></span><span class="theme-mini-nav"></span><span class="theme-choice-check" aria-hidden="true">✓</span></span><span class="theme-choice-name">'+(en()?(p.english||p.name):p.name)+'</span></button>';}).join('');
+  grid.querySelectorAll('[data-theme-choice]').forEach(b=>b.onclick=()=>{if(saving)return;if(b.dataset.themeChoice!=='default'&&!window.TelefyMax?.active){window.TelefyMax?.purchase();return;}draft=b.dataset.themeChoice;apply(draft);draw();triggerHaptic('selection');});
+ }
+ async function open(){if(sheet)return;draft=effective;const root=document.createElement('div');sheet=root;root.id='themes-modal';root.className='tg-sheet-modal themes-modal hidden fixed inset-0 flex items-end justify-center';root.innerHTML='<section class="col-sheet-panel themes-panel" role="dialog" aria-modal="true" aria-labelledby="themes-title"><button class="telefy-sheet-grip" aria-label="Закрыть"></button><header class="themes-heading"><h2 id="themes-title" class="font-rounded">'+(en()?'App themes':'Темы приложения')+'</h2><p>'+(en()?'Your Telefy, your mood.':'Твой Telefy — твоё настроение.')+'</p></header><div class="themes-grid" role="radiogroup" aria-label="Темы"></div><p class="themes-access">'+(en()?'Custom themes are included in Telefy Max.':'Авторские темы входят в Telefy Max.')+'</p><p class="themes-error" role="status"></p><button class="themes-apply font-rounded">'+(en()?'Apply theme':'Применить тему')+'</button></section>';document.body.append(root);bindThemeDismiss(root,cancel);draw();openSheetModal(root);
+  root.querySelector('.themes-apply').onclick=async()=>{if(saving)return;const account=uid(),selected=draft;version++;root.querySelector('.themes-error').textContent='';saving=true;const button=root.querySelector('.themes-apply');button.disabled=true;try{
+   const r=await fetch('/api/me/appearance',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({theme:selected}),signal:AbortSignal.timeout(12000)});const d=await r.json();if(account!==uid())return;
+   if(!r.ok){if(d.error==='max_required')throw Error(en()?'An active Telefy Max subscription is required.':'Нужен активный Telefy Max.');throw Error(en()?'Could not save the theme. Try again.':'Не удалось сохранить тему. Попробуй ещё раз.');}
+   if(d.theme!==selected)throw Error('Не удалось подтвердить тему');version++;saved=selected;try{localStorage.setItem('telefy_app_theme:'+account,saved);}catch(_){}
+   if(selected==='default'){profileBgCustom=false;try{localStorage.removeItem('telefy_profile_bg_mode');}catch(_){}applyProfileGradient(state.theme==='light'?'white':'slate');}
+   saving=false;cancel();
+  }catch(e){if(sheet===root)root.querySelector('.themes-error').textContent=e.message;}finally{saving=false;button.disabled=false;}}
+ }
+ async function load(){const account=uid();if(!account){owner='';saved='default';draft=null;apply('default');return;}if(owner!==account){owner=account;saved='default';draft=null;if(sheet){const root=sheet;sheet=null;root.remove();}apply('default');try{const raw=localStorage.getItem('telefy_app_theme:'+account),cached=raw==='yellow-vibe'?'orange-vibe':raw;if(known.has(cached))saved=cached;}catch(_){}refreshAccess();}const n=++version;
+  try{const r=await fetch('/api/me/appearance',{cache:'no-store',signal:AbortSignal.timeout(12000)});if(!r.ok)return;const d=await r.json();if(n!==version||uid()!==account)return;if(known.has(d.theme)){saved=d.theme;refreshAccess();}}catch(_){}
+ }
+ const btn=document.createElement('button');btn.id='btn-app-themes';btn.type='button';btn.className='profile-themes-button';btn.textContent=en()?'Themes':'Темы';btn.onclick=open;document.getElementById('tg-profile-header').append(btn);
+ document.addEventListener('keydown',e=>{if(sheet&&e.key==='Escape')cancel();});
+ const oldTheme=setTheme;setTheme=function(...args){const r=oldTheme(...args);apply(draft|| (window.TelefyMax?.active?saved:'default'));if(sheet)draw();return r;};
+ const translate=applyTranslations;applyTranslations=function(...args){const r=translate(...args);btn.textContent=en()?'Themes':'Темы';return r;};
+ window.TelefyThemes={open,refreshAccess,get selected(){return saved;},get effective(){return effective;}};
+ window.addEventListener('telefy:profile-ready',load);window.addEventListener('online',load);if(uid())load();
+})();

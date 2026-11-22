@@ -162,6 +162,8 @@ class MaxBillingMixin:
   except Exception:raise BillingError(503,'database_unavailable')
  def do_GET(self):
   path=urlsplit(self.path).path
+  import appearance
+  if appearance.route(self,path):return
   import promo_codes
   if promo_codes.route(self,path):return
   import max_gifts
@@ -185,6 +187,8 @@ class MaxBillingMixin:
   return super().do_GET()
  def do_POST(self):
   path=urlsplit(self.path).path
+  import appearance
+  if appearance.route(self,path):return
   import promo_codes
   if promo_codes.route(self,path):return
   import max_gifts

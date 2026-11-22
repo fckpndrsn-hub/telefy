@@ -39,3 +39,8 @@ EXPOSE 10000
 CMD ["python", "profile_server.py"]
 
 COPY content_policy.py ./
+
+COPY appearance.py ./
+COPY themes-client.js ./web/assets/
+
+COPY waveform.js ./web/assets/

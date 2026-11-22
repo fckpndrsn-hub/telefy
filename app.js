@@ -1577,7 +1577,7 @@ try {
       }
       const fullSlider = document.getElementById('full-seek-slider');
       fullSlider.value = pct;
-      fullSlider.style.background = `linear-gradient(to right, #2AABEE ${pct}%, var(--bg-elevated) ${pct}%)`;
+      fullSlider.style.background = `linear-gradient(to right, var(--player-seek-color, #2AABEE) ${pct}%, var(--bg-elevated) ${pct}%)`;
       fullSlider.style.borderRadius = '999px';
       fullSlider.style.height = '4px';
       document.getElementById('full-time-current').textContent = formatTime(state.progressSec);
@@ -4876,6 +4876,29 @@ window.TelefyPlayerQueue=(()=>{
  return {open,render};
 })();
 
+/* Button feedback stays separate from playback and queue handlers. */
+(() => {
+ const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+ const buttons = document.querySelectorAll('.player-refresh-transport > button');
+ for (const button of buttons) {
+  let animation;
+  button.addEventListener('click', () => {
+   if (button.disabled || button.getAttribute('aria-disabled') === 'true') return;
+   // Previous/next and shuffle already provide feedback in their core handlers.
+   if (button.id === 'full-play-btn' || button.id === 'btn-full-queue') triggerHaptic('light');
+   animation?.cancel();
+   if (reduced.matches) return;
+   animation = button.animate([
+    { transform: 'scale(.91)' },
+    { transform: 'scale(1.035)', offset: .6 },
+    { transform: 'scale(1)' }
+   ], { duration: 240, easing: 'cubic-bezier(.2,.7,.3,1)' });
+  });
+  button.addEventListener('pointerdown', () => animation?.cancel());
+  reduced.addEventListener('change', () => { if (reduced.matches) animation?.cancel(); });
+ }
+})();
+
 (()=>{
  const modal=document.getElementById('full-player-modal'),zone=modal.querySelector('.player-refresh-art'),source=document.getElementById('hero-ambient-bars');
  const bars=source.cloneNode(true);bars.removeAttribute('id');bars.classList.add('player-sound-bars');zone.prepend(bars);
@@ -4889,4 +4912,9 @@ window.TelefyPlayerQueue=(()=>{
  const before=openArtistCard;openArtistCard=function(name,...args){if(window.TelefyContentPolicy.text(name)){showToast('Исполнитель недоступен');return;}return before(name,...args);};
  const upcoming=getUpcomingPlaybackIds;getUpcomingPlaybackIds=function(...args){return upcoming(...args).filter(id=>!window.TelefyContentPolicy.blocked(tracks.find(t=>t.id===id)));};
  const sync=syncRealAudio;syncRealAudio=function(...args){if(state.isPlaying&&window.TelefyContentPolicy.blocked(getTrack(state.currentTrackId))){state.isPlaying=false;document.getElementById('telefy-audio').pause();renderPlayerUI();showToast('Этот трек недоступен');return;}return sync(...args);};
+})();
+
+(()=>{
+ function translateNotice(){const en=state.lang==='en';document.querySelector('[data-content-notice="age-start"]').textContent=en?'Telefy may contain content unsuitable for minors. Such content is marked with':'В Telefy может встречаться контент, не предназначенный для несовершеннолетних. Такие материалы отмечены значком';document.querySelector('[data-content-notice="health"]').textContent=en?'Illegal use of narcotic drugs, psychotropic substances and their analogues is harmful to health. Their illegal trafficking is prohibited and entails liability established by law.':'Незаконное потребление наркотических средств, психотропных веществ и их аналогов причиняет вред здоровью. Их незаконный оборот запрещён и влечёт установленную законодательством ответственность.';}
+ const before=applyTranslations;applyTranslations=function(...args){const r=before(...args);translateNotice();return r;};translateNotice();
 })();
