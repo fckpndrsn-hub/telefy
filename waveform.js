@@ -32,7 +32,18 @@
  }
  function live(){return !audio.paused&&!audio.ended&&!document.hidden;}
  function visible(n){const full=document.getElementById('full-player-modal');return n.visible&&(n.anchor.id==='full-cover'||full.classList.contains('hidden'));}
- function measure(n){const a=n.anchor.getBoundingClientRect(),p=n.parent.getBoundingClientRect();if(!a.width||!p.width)return;const size=Math.min(a.width*(n.anchor.id==='btn-hero-play'?1.48:2.1),window.innerWidth-24,480),dpr=Math.min(devicePixelRatio||1,1.5);n.w=size;n.h=size;n.dpr=dpr;n.radius=a.width*.5;n.el.style.width=size+'px';n.el.style.height=size+'px';n.el.style.left=(a.left-p.left+a.width/2)+'px';n.el.style.top=(a.top-p.top+a.height/2)+'px';}
+ function measure(n){
+  const a=n.anchor.getBoundingClientRect(),p=n.parent.getBoundingClientRect();if(!a.width||!p.width)return;
+  const desktopFull=n.anchor.id==='full-cover'&&(innerWidth>=768||matchMedia('(hover: hover) and (pointer: fine)').matches);
+  const factor=n.anchor.id==='btn-hero-play'?1.48:desktopFull?1.35:2.1;
+  let size=Math.min(a.width*factor,innerWidth-24,480);
+  if(desktopFull){
+   const cx=a.left+a.width/2,cy=a.top+a.height/2;
+   const room=2*Math.max(0,Math.min(cx-p.left,p.right-cx,cy-p.top,p.bottom-cy)-6);
+   size=Math.min(size,Math.max(a.width,room));
+  }
+  n.el.style.width=size+'px';n.el.style.height=size+'px';n.el.style.left=(a.left-p.left+a.width/2)+'px';n.el.style.top=(a.top-p.top+a.height/2)+'px';
+ }
  // The base motion is a native CSS animation, independent of Web Audio and JS frame timing.
  function tick(now){raf=0;if(!live()||motion.matches||!source)return;if(now-last>=50){sample();last=now;for(const n of nodes)if(visible(n))n.el.style.setProperty('--audio-energy',String(energy));}if(nodes.some(visible))raf=requestAnimationFrame(tick);}
  function refresh(){
