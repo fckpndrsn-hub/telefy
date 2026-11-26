@@ -1416,3 +1416,20 @@ body.theme-light[data-telefy-theme="red-energy"]{--theme-accent:#ed2344;--theme-
 .telefy-wave.is-active .telefy-wave-layer{animation-play-state:running}
 @keyframes telefy-layer-drift{0%{border-radius:47% 53% 49% 51% / 52% 46% 54% 48%;transform:rotate(0deg) scale(.98)}25%{border-radius:54% 46% 53% 47% / 46% 53% 47% 54%;transform:rotate(90deg) scale(1.015)}50%{border-radius:49% 51% 46% 54% / 55% 48% 52% 45%;transform:rotate(180deg) scale(.99)}75%{border-radius:45% 55% 52% 48% / 49% 54% 46% 51%;transform:rotate(270deg) scale(1.02)}100%{border-radius:47% 53% 49% 51% / 52% 46% 54% 48%;transform:rotate(360deg) scale(.98)}}
 @media(prefers-reduced-motion:reduce){.telefy-wave-layer{animation:none;will-change:auto}}
+
+#home-mood-chips,#view-flow{display:none!important}
+nav:has(#tab-active-lens){grid-template-columns:repeat(3,minmax(0,1fr))!important;border:0!important}
+#tab-active-lens{width:calc((100% - 20px)/3)!important;transform:translateX(0)!important}
+nav:has([data-tab="search"].active-glass) #tab-active-lens{transform:translateX(calc(100% + 4px))!important}
+nav:has([data-tab="mytelefy"].active-glass) #tab-active-lens{transform:translateX(calc(200% + 8px))!important}
+/* Remove decorative strokes; keyboard focus remains visible for accessibility. */
+#app-shell,#app-shell :where(button,input,textarea,select,.tg-card,.squircle-card,.liquid-glass,.col-sheet-panel,.native-search-filter,.max-stars-group>div),.tg-sheet-modal :where(button,input,textarea,.col-sheet-panel,.max-stars-group>div),.max-stars-panel,.max-stars-scene{border-color:transparent!important;outline:none}
+.tg-sheet-modal .col-sheet-panel,.tg-sheet-modal .tg-card{border:0!important}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--theme-accent,#2aabee)!important;outline-offset:3px}
+#hero-swipe-zone>svg circle:first-child{stroke:transparent}
+#mini-player #mini-player-card{border:0!important;box-shadow:0 5px 18px #00000014!important;background:color-mix(in srgb,var(--bg-card,#17212b) 76%,transparent)!important;backdrop-filter:blur(18px) saturate(115%);-webkit-backdrop-filter:blur(18px) saturate(115%)}
+body[data-telefy-theme] .max-stars-panel{--stars-bg:var(--theme-bg);--stars-card:var(--theme-card);--stars-text:var(--theme-ink);--stars-muted:var(--theme-muted)}
+.max-stars-panel .max-stars-scene{background:var(--stars-bg,#0e1621)!important}
+body:is([data-telefy-theme="green-day"],[data-telefy-theme="orange-vibe"],[data-telefy-theme="red-energy"],[data-telefy-theme="vice-city"]) #max-stars-sheet .max-stars-pay{color:#fff!important}
+body:not(.theme-light) .max-stars-scene .max-stars-pattern{opacity:.14;filter:brightness(2)}
+#app-shell :where(.liquid-glass,.squircle-card,.tg-card,button),.tg-sheet-modal :where(.col-sheet-panel,button){box-shadow:none!important}

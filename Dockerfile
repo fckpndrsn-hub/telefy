@@ -44,3 +44,5 @@ COPY appearance.py ./
 COPY themes-client.js ./web/assets/
 
 COPY waveform.js ./web/assets/
+
+COPY stream-cache.js ./web/assets/

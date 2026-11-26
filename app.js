@@ -1128,7 +1128,7 @@ try {
     function switchTab(tab) {
       const prevTab = state.activeTab;
       state.activeTab = tab;
-      const order = ['home', 'flow', 'search', 'mytelefy','favorites'];
+      const order = ['home', 'search', 'mytelefy','favorites'];
       if (prevTab !== tab) {
         order.forEach(t => {
           const sec = document.getElementById(`view-${t}`);
@@ -4569,28 +4569,28 @@ window.TelefyTrendContinuation={prepare:async()=>[],activate:()=>false};
 /* Browser playback memory contains metadata, never temporary stream URLs. */
 window.TelefyLastPlayback=(()=>{
  const prefix='telefy_last_playback_v1:',audio=document.getElementById('telefy-audio');
- let restored=false,ready=false,position=null,lastSave=0;
+ let restoredOwner=null,ready=false,position=null,lastSave=0,selected=false;
  const owner=()=>String(window.TelefyProfile?.user?.telegram_id||'');
  const fields=['soundcloudUrn','soundcloudUrl','title','artist','primaryArtist','album','duration','coverImg','cover','mood','modes','genre','classificationVersion','editorialPinned','curatedTrend','trendsEligible','editorialYear','releaseDate'];
  const metadata=track=>Object.fromEntries(fields.filter(k=>track[k]!==undefined).map(k=>[k,track[k]]));
  function save(force=false){
-  if(!ready||!owner()||window.TelefyFirstRun?.pending)return;
+  if(!ready||restoredOwner!==owner()||!owner()||window.TelefyFirstRun?.pending)return;
   if(!force&&Date.now()-lastSave<5000)return;
   const track=tracks.find(t=>t.id===state.currentTrackId);if(!track?.soundcloudUrn)return;
   const ordered=window.TelefyOrderedQueue?.snapshot?.();
   const ids=ordered?.ids||[track.id,...(state.queueIds||[])];
   const items=[track,...ids.map(id=>tracks.find(t=>t.id===id))].filter(Boolean);
   const unique=[...new Map(items.filter(t=>t.soundcloudUrn).map(t=>[t.soundcloudUrn,t])).values()].slice(0,300);
-  const data={version:1,track:track.soundcloudUrn,tracks:unique.map(metadata),position:Math.max(0,Number(state.progressSec)||0),
+  const data={version:1,track:track.soundcloudUrn,tracks:unique.map(metadata),position:Math.max(0,Number(audio.dataset?.telefyTrack===track.soundcloudUrn?audio.currentTime:state.progressSec)||0),
    label:state.sourceLabel,context:state.playbackContext||null,mood:state.activeMood,
    queue:ids.map(id=>tracks.find(t=>t.id===id)?.soundcloudUrn).filter(Boolean),ordered:ordered?{kind:ordered.kind,label:ordered.label}:null};
   try{localStorage.setItem(prefix+owner(),JSON.stringify(data));lastSave=Date.now();}catch(_){}
  }
  async function restore(){
-  if(restored)return false;restored=true;
   await window.TelefyProfileReady;
-  ready=true;
-  if(!owner()||!window.TelefyFirstRun?.pending)return false;
+  if(!owner()||restoredOwner===owner())return false;
+  restoredOwner=owner();ready=true;
+  if(selected||state.isPlaying)return false;
   try{
    const data=JSON.parse(localStorage.getItem(prefix+owner())||'null');
    if(data?.version!==1||!Array.isArray(data.tracks)||!data.tracks.some(t=>t.soundcloudUrn===data.track))return false;
@@ -4615,8 +4615,9 @@ window.TelefyLastPlayback=(()=>{
  for(const event of ['playing','pause','seeked'])audio.addEventListener(event,()=>save(true));
  audio.addEventListener('timeupdate',()=>save());
  window.addEventListener('pagehide',()=>save(true));
+ window.addEventListener('telefy:profile-ready',()=>restore());
  document.addEventListener('visibilitychange',()=>{if(document.hidden)save(true);});
- const previous=playTrack;playTrack=function(...args){position=null;const result=previous(...args);save(true);return result;};
+ const previous=playTrack;playTrack=function(...args){selected=true;position=null;const result=previous(...args);save(true);return result;};
  return {restore,save,consumePosition(track){if(position?.urn!==track.soundcloudUrn)return null;const time=position.time;position=null;return time;}};
 })();
 
@@ -4917,4 +4918,12 @@ window.TelefyPlayerQueue=(()=>{
 (()=>{
  function translateNotice(){const en=state.lang==='en';document.querySelector('[data-content-notice="age-start"]').textContent=en?'Telefy may contain content unsuitable for minors. Such content is marked with':'В Telefy может встречаться контент, не предназначенный для несовершеннолетних. Такие материалы отмечены значком';document.querySelector('[data-content-notice="health"]').textContent=en?'Illegal use of narcotic drugs, psychotropic substances and their analogues is harmful to health. Their illegal trafficking is prohibited and entails liability established by law.':'Незаконное потребление наркотических средств, психотропных веществ и их аналогов причиняет вред здоровью. Их незаконный оборот запрещён и влечёт установленную законодательством ответственность.';}
  const before=applyTranslations;applyTranslations=function(...args){const r=before(...args);translateNotice();return r;};translateNotice();
+})();
+
+/* Keep the personal recommendation queue while retiring its separate screen. */
+(()=>{
+ function lens(){const active=document.querySelector('nav .nav-tab.active-glass'),el=document.getElementById('tab-active-lens');if(active&&el){el.style.width=active.offsetWidth+'px';el.style.transform=`translateX(${active.offsetLeft-el.offsetLeft}px)`;}}
+ const before=switchTab;switchTab=function(tab,...args){const result=before(tab==='flow'?'home':tab,...args);lens();return result;};
+ if(state.activeTab==='flow')switchTab('home');
+ window.addEventListener('resize',lens);requestAnimationFrame(lens);
 })();

@@ -68,7 +68,7 @@
       if(signal.aborted){abort();return;}
       // Prefer the explicit MSE adapter over a browser's unreliable HLS "maybe".
       if(window.Hls?.isSupported()) {
-        engine=new Hls({enableWorker:true,lowLatencyMode:false,maxBufferLength:300,maxMaxBufferLength:600,maxBufferSize:32*1024*1024,backBufferLength:30});
+        engine=new Hls({enableWorker:true,lowLatencyMode:false,maxBufferLength:600,maxMaxBufferLength:900,maxBufferSize:64*1024*1024,fLoader:window.TelefyAudioCache?.loader(Hls,getTrack(state.currentTrackId)?.soundcloudUrn),backBufferLength:30});
         hls=engine;
         let recovered=false;
         engine.on(Hls.Events.ERROR,(_,error)=>{
@@ -185,6 +185,7 @@
         track.uploader=data.track.uploader; track.uploaderUrl=data.track.uploaderUrl;
         activeId=track.id;
         await prepareSource(data.url,streamController.signal,currentRequest);
+        audio.dataset.telefyTrack=track.soundcloudUrn;
 
       }
       if (currentRequest !== request) return;
@@ -232,7 +233,7 @@
     }
   });
   on('ended', () => { if (!scrubbing && activeId === state.currentTrackId) playNext(true); });
-  on('error', () => { if (sourceReady && audio.getAttribute('src') && activeId === state.currentTrackId) { fail('Не удалось загрузить аудио'); activeId=null;sourceReady=false; } });
+  on('error', () => { if(audio.error?.code===2){recoverNetwork(true);return;} if (sourceReady && audio.getAttribute('src') && activeId === state.currentTrackId) { fail('Не удалось загрузить аудио'); activeId=null;sourceReady=false; } });
   seekSlider.addEventListener('pointerdown', event => {
     if (!enabled || activeId !== state.currentTrackId || !event.isPrimary || event.button !== 0) return;
     scrubbing = true; scrubTarget = null; scrubPointer = event.pointerId;
