@@ -70,7 +70,7 @@
   const keys=e=>{if(e.key==='Escape')dismiss();if(e.key==='Tab'){e.preventDefault();const buttons=[...root.querySelectorAll('button')],i=buttons.indexOf(document.activeElement);buttons[(i+(e.shiftKey?-1:1)+buttons.length)%buttons.length].focus();}};
   root.querySelector('.promo-success-close').onclick=dismiss;root.querySelector('.promo-success-continue').onclick=()=>{dismiss();if(percent)setTimeout(()=>window.TelefyMax?.purchase(),230);};root.onclick=e=>{if(e.target===root)dismiss();};document.addEventListener('keydown',keys);root.querySelector('.promo-success-continue').focus();
  }
- function entry(label,location){const b=document.createElement('button');b.type='button';b.className='promo-entry promo-entry-'+location;b.innerHTML='<span class="promo-entry-icon"><img src="assets/promo-icon.svg" alt=""></span><span></span><span class="promo-entry-chevron" aria-hidden="true">›</span>';b.children[1].textContent=label;b.onclick=show;return b;}
+ function entry(label,location){const b=document.createElement('button');b.type='button';b.className='promo-entry promo-entry-'+location;b.innerHTML='<span class="promo-entry-icon"><img src="assets/promo-icon.svg" alt=""></span><span class="profile-action-label"></span><svg class="profile-action-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m9 6 6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';b.children[1].textContent=label;b.onclick=show;return b;}
  let queued=false;
  function install(){
   queued=false;

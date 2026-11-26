@@ -1382,6 +1382,14 @@ body.theme-light[data-telefy-theme="green-day"] #qa-flow>span:first-child,body.t
 body:is([data-telefy-theme="orange-vibe"],[data-telefy-theme="red-energy"],[data-telefy-theme="green-day"],[data-telefy-theme="vice-city"]) .max-hero-gradient{color:#fff!important}
 body:is([data-telefy-theme="orange-vibe"],[data-telefy-theme="red-energy"],[data-telefy-theme="green-day"],[data-telefy-theme="vice-city"]) .max-hero-gradient [class*="text-white"],body:is([data-telefy-theme="orange-vibe"],[data-telefy-theme="red-energy"],[data-telefy-theme="green-day"],[data-telefy-theme="vice-city"]) .max-hero-gradient .max-beta-price{color:#fff!important}
 body:is([data-telefy-theme="orange-vibe"],[data-telefy-theme="red-energy"],[data-telefy-theme="green-day"],[data-telefy-theme="vice-city"]) .max-hero-gradient{background:linear-gradient(125deg,color-mix(in srgb,var(--theme-accent),#000 18%),color-mix(in srgb,var(--theme-accent2),#000 32%))!important}
+/* Vice-City: the same four-stop gradient throughout the interface. */
+:root{--vice-gradient:radial-gradient(ellipse at 12% 18%,#7964f7 0%,#7964f700 58%),radial-gradient(ellipse at 88% 14%,#ff419e 0%,#ff419e00 62%),radial-gradient(ellipse at 75% 82%,#ffc05a 0%,#ffc05a00 65%),radial-gradient(ellipse at 10% 96%,#ff7855 0%,#ff785500 62%),#ed64a3}
+body[data-telefy-theme="vice-city"] #qa-flow>span:first-child,body[data-telefy-theme="vice-city"] #qa-mytelefy>span:first-child,body[data-telefy-theme="vice-city"] #qa-bot>span:first-child,body[data-telefy-theme="vice-city"] #full-player-modal #full-play-btn,body[data-telefy-theme="vice-city"] .themes-apply{background:var(--vice-gradient)!important}
+body[data-telefy-theme="vice-city"] .telefy-wave-layer{background:var(--vice-gradient)}
+body[data-telefy-theme="vice-city"] .max-hero-gradient{background:radial-gradient(#0003,#0003),var(--vice-gradient)!important}
+body[data-telefy-theme="vice-city"] #mini-play-icon{background:var(--vice-gradient);background-clip:text;-webkit-background-clip:text}
+.theme-choice[data-theme-choice="vice-city"] .theme-mini-disc{background:var(--vice-gradient)}
+body[data-telefy-theme="vice-city"] #tab-active-lens{background:var(--vice-gradient)!important;opacity:.16}
 
 body[data-telefy-theme="green-day"]{--theme-accent:#1db954;--theme-accent2:#86f6ad;--theme-accent-text:#1db954;--theme-bg:#121212;--theme-card:#1e1e1e;--theme-raised:#2c2c2c;--theme-ink:#f5f5f5;--theme-muted:#aaaaaa;--theme-on-accent:#07180d;--theme-profile-link:#087b35;--theme-border:rgba(255,255,255,.07);}
 
@@ -1433,3 +1441,12 @@ body[data-telefy-theme] .max-stars-panel{--stars-bg:var(--theme-bg);--stars-card
 body:is([data-telefy-theme="green-day"],[data-telefy-theme="orange-vibe"],[data-telefy-theme="red-energy"],[data-telefy-theme="vice-city"]) #max-stars-sheet .max-stars-pay{color:#fff!important}
 body:not(.theme-light) .max-stars-scene .max-stars-pattern{opacity:.14;filter:brightness(2)}
 #app-shell :where(.liquid-glass,.squircle-card,.tg-card,button),.tg-sheet-modal :where(.col-sheet-panel,button){box-shadow:none!important}
+/* Segmented control containers have their own stroke and inset shadow rules. */
+#search-filter-chips,.release-tabs,#search-filter-chips .search-filter-lens,.release-tabs .release-tabs-lens{border:0!important;box-shadow:none!important;outline:none!important}
+
+/* Profile action rows use one shared geometry and the same vector chevron. */
+#view-mytelefy .gift-entry,#view-mytelefy .promo-entry-profile{display:flex;align-items:center;gap:12px;min-height:64px;height:64px;padding:14px 16px;border-radius:18px;font-family:inherit;font-size:16px;line-height:22px;font-weight:600;text-align:left;box-sizing:border-box}
+#view-mytelefy .gift-entry-icon,#view-mytelefy .promo-entry-icon{display:grid;place-items:center;flex:0 0 32px;width:32px;height:32px;line-height:1;margin:0}
+.profile-action-label{flex:1;min-width:0}
+.profile-action-chevron{display:block;flex:0 0 16px;width:16px;height:16px;margin:0 0 0 auto}
+nav:has(#tab-active-lens){background:color-mix(in srgb,var(--bg-card,#17212b) 76%,transparent)!important;backdrop-filter:blur(18px) saturate(115%);-webkit-backdrop-filter:blur(18px) saturate(115%)}
